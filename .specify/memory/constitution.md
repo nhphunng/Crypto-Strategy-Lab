@@ -1,3 +1,20 @@
+<!--
+Sync Impact Report
+- Version change: 1.0.0 -> 1.1.0
+- Modified principles:
+  - Spec-Driven Development (SDD): added SRS as the approved product-requirement baseline and made
+    reading its relevant sections mandatory before feature specification.
+  - Cross-Document Consistency: added REQUIREMENT -> SRS -> feature artifact -> code traceability.
+  - AIF-SDLC Workflow: added the mandatory SRS input and traceability output to Specification Step.
+  - Feature Derivation Method: made SRS feature groups, flows and story IDs the derivation source.
+  - User Story Conventions: required preservation and mapping of canonical SRS story IDs.
+  - Definition of Done: added SRS coverage and traceability to the completion gate.
+  - Development Workflow: added an explicit SRS-read gate before speckit-specify.
+- Added sections: None.
+- Removed sections: None.
+- Follow-up TODOs: None.
+-->
+
 # Crypto Strategy Lab Constitution
 
 ## Table of Contents
@@ -41,8 +58,10 @@
 Every functionality MUST have a corresponding Spec Kit feature specification before application
 code is written.
 
-- `docs/REQUIREMENT.md` is the baseline source of truth for the project scope and architectural
+- `docs/REQUIREMENT.md` is the source of the original assignment, project scope and architectural
   drivers.
+- `docs/SRS.md` is the approved product-requirement baseline for features, actors, business flows,
+  functional requirements, non-functional requirements, User Story IDs and acceptance criteria.
 - `specs/{feature-id}-{name}/spec.md` is the source of truth for WHAT one feature does and WHY.
 - `plan.md`, `research.md`, `data-model.md` and `contracts/` are the source of truth for HOW that
   feature is designed.
@@ -52,6 +71,12 @@ code is written.
 
 Each Spec Kit feature folder maps 1:1 to a reviewable vertical slice.
 
+- Before creating or updating a feature, `$speckit-specify` MUST read `docs/SRS.md`, identify the
+  relevant feature, functional-requirement and business-flow sections, and include their IDs in the
+  feature spec's traceability references.
+- A feature spec MUST preserve the meaning and canonical User Story IDs defined by `docs/SRS.md`.
+  Splitting a story into smaller feature-spec stories is permitted only when every derived story maps
+  back to the original SRS ID and none of its acceptance criteria is silently dropped.
 - A feature MUST remain independently demonstrable and testable.
 - `spec.md`, clarification decisions, `plan.md` and `tasks.md` MUST be committed before the related
   implementation is considered complete.
@@ -73,14 +98,20 @@ insufficient, and its operational/test impact.
 
 ### Cross-Document Consistency
 
-`REQUIREMENT.md`, feature artifacts and code are different views of the same system. Any change to one
-that affects another is incomplete until all affected views are updated. Inconsistency is a defect,
-not a backlog item.
+`docs/REQUIREMENT.md`, `docs/SRS.md`, feature artifacts and code are different views of the same
+system. Any change to one that affects another is incomplete until all affected views are updated.
+Inconsistency is a defect, not a backlog item.
 
-**The requirement and active `spec.md` are the source of truth for domain language.** Terms such as
-`Candle`, `StrategyDefinition`, `BacktestRun`, `EvaluationResult` and `LeaderboardEntry` MUST be used
-consistently in plan, contracts, tests, code and UI. Alternative technical mappings MUST be documented
-in `data-model.md`.
+**The SRS and active `spec.md` are the source of truth for domain language.** Terms such as `Candle`,
+`StrategyDefinition`, `BacktestRun`, `EvaluationResult` and `LeaderboardEntry` MUST be used consistently
+in plan, contracts, tests, code and UI. Alternative technical mappings MUST be documented in
+`data-model.md`.
+
+**Traceability is end-to-end and bidirectional.** Every feature spec MUST identify its source
+`docs/SRS.md` feature section, User Story IDs, applicable business flow and functional/non-functional
+requirements. Every plan, task, test and delivered behavior MUST trace forward through the active
+feature spec. If `docs/REQUIREMENT.md` and `docs/SRS.md` conflict, work MUST stop until the SRS is
+reconciled with the original assignment and the approved decision is recorded.
 
 **Spec amendments require same-change design review.** Adding, renaming or removing an entity,
 requirement or state transition in `spec.md` MUST trigger a review of `plan.md`, `data-model.md`,
@@ -122,7 +153,9 @@ and `$speckit-analyze` MUST treat any conflict with a constitution `MUST` as CRI
 ### AIF-SDLC Workflow
 
 1. **Constitution Step** - `$speckit-constitution` establishes project-wide governance.
-2. **Specification Step** - `$speckit-specify` creates one feature and its measurable requirements.
+2. **Specification Step** - `$speckit-specify` MUST read `docs/SRS.md` and create one feature from its
+   relevant feature, User Story, flow, FR and NFR sections. The resulting `spec.md` MUST record those
+   source IDs and measurable requirements.
 3. **Clarification Step** - `$speckit-clarify` resolves high-impact ambiguity before design.
 4. **Design Step** - `$speckit-plan` creates research, data model, contracts and quickstart artifacts.
 5. **Requirements Quality Step** - `$speckit-checklist` validates the quality of written requirements.
@@ -141,9 +174,10 @@ affected documents, contracts, tasks and tests are synchronized with the deliver
 
 When creating or reviewing features, apply this method in order:
 
-1. **Start with the required MVP.** Derive vertical slices from Market Data, Multi-Timeframe Chart,
-   Strategy Plugin, Composite Strategy, Backtest, Evaluation, Search, Leaderboard, Visualization,
-   News and Sentiment requirements.
+1. **Start with the approved SRS.** Derive each vertical slice from one `docs/SRS.md` feature group in
+   section 7, together with its related functional requirement in section 3 and business flow in
+   section 6. Market Data, Multi-Timeframe Chart, Strategy Plugin, Composite Strategy, Backtest,
+   Evaluation, Search, Leaderboard, Visualization, News and Sentiment remain required MVP coverage.
 2. **Trace the complete user flow.** Every step from data acquisition through strategy generation,
    backtest, evaluation, ranking and visualization MUST belong to a feature or carry an explicit
    out-of-scope traceability note.
@@ -181,7 +215,9 @@ references MUST be reviewed in the same edit.
 
 **4. User stories and tasks remain traceable.**
 Every story is labelled `[US1]`, `[US2]`, etc. in `tasks.md`. Every functional requirement MUST map to
-at least one story or explicitly state why it is cross-cutting.
+at least one story or explicitly state why it is cross-cutting. The feature spec MUST also retain the
+canonical `docs/SRS.md` story ID, such as `MD-US-01`, as a source reference. Local `[US1]` labels do not
+replace SRS IDs; they provide ordering inside one feature artifact.
 
 **5. Prioritized stories MUST remain independently testable.**
 A feature may contain multiple P1/P2/P3 stories as supported by Spec Kit, but each story MUST have a
@@ -605,8 +641,10 @@ limit with a load test.
 A feature is not done until all of the following are true:
 
 **DOD-01: Requirement Traceability**
-Every delivered behavior traces to a `spec.md` user story and requirement ID, design artifact and
-completed task. `quickstart.md` demonstrates the primary acceptance scenario.
+Every delivered behavior traces to a canonical `docs/SRS.md` User Story ID, a `spec.md` user story and
+requirement ID, design artifact and completed task. The feature spec contains no unresolved omission
+of an applicable SRS acceptance criterion. `quickstart.md` demonstrates the primary acceptance
+scenario.
 
 **DOD-02: Contracts and Architecture Documented**
 Changed REST/WebSocket/job/provider contracts are documented and tested. Relevant architecture flow,
@@ -686,6 +724,10 @@ Approved stack - major upgrades or new core dependencies require team approval a
   Redis; API, worker and frontend may run in containers or documented local dev commands.
 - One active feature proceeds through constitution -> specify -> clarify -> plan -> checklist -> tasks
   -> analyze -> implement -> converge.
+- Before `$speckit-specify` creates or updates that feature, the workflow MUST read `docs/SRS.md`, cite
+  the selected feature/User Story IDs and identify the applicable section 3 requirements, section 6
+  flow and cross-cutting NFRs. A prompt that does not provide those references does not waive this
+  gate; the agent MUST discover them from the SRS.
 - Domain tests are written before implementation when the spec/constitution requires TDD. Contract and
   integration tests precede boundary implementations.
 - Pull requests MUST NOT merge with failing lint, type checks, tests, migrations or unresolved
@@ -711,4 +753,4 @@ Approved stack - major upgrades or new core dependencies require team approval a
 - Rate limiting and bounded resource requests protect expensive backtest/search endpoints.
 - Analysis output MUST display a non-investment-advice disclaimer and MUST NOT imply guaranteed profit.
 
-**Version**: 1.0.0 | **Ratified**: 2026-08-11 | **Last Amended**: 2026-08-11
+**Version**: 1.1.0 | **Ratified**: 2026-08-11 | **Last Amended**: 2026-08-11
