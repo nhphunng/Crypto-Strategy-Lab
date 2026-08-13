@@ -1,0 +1,326 @@
+openapi: 3.1.0
+info:
+  title: Crypto Strategy Lab Market Chart API
+  version: 1.0.0-draft
+  description: >-
+    Draft shared TV1/TV2 contract for supported market dimensions and bounded
+    historical Candle bootstrap. TV1 and TV2 must approve it before implementation.
+servers:
+  - url: /api/v1
+paths:
+  /market-data/dimensions:
+    get:
+      operationId: listMarketDimensions
+      summary: List supported providers, pairs, and timeframes
+      responses:
+        "200":
+          description: Supported market dimensions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MarketDimensionsEnvelope"
+        "503":
+          $ref: "#/components/responses/DependencyUnavailable"
+  /market-data/candles:
+    get:
+      operationId: getHistoricalCandles
+      summary: Get a bounded chronological Candle range
+      parameters:
+        - $ref: "#/components/parameters/Provider"
+        - $ref: "#/components/parameters/Pair"
+        - $ref: "#/components/parameters/Timeframe"
+        - $ref: "#/components/parameters/StartTime"
+        - $ref: "#/components/parameters/EndTime"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Complete, partial, or empty bounded range
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CandleRangeEnvelope"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "422":
+          $ref: "#/components/responses/InvalidSelection"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "503":
+          $ref: "#/components/responses/DependencyUnavailable"
+components:
+  parameters:
+    Provider:
+      name: provider
+      in: query
+      required: true
+      schema:
+        $ref: "#/components/schemas/Provider"
+    Pair:
+      name: pair
+      in: query
+      required: true
+      schema:
+        type: string
+        pattern: "^[A-Z0-9]{5,20}$"
+        example: BTCUSDT
+    Timeframe:
+      name: timeframe
+      in: query
+      required: true
+      schema:
+        $ref: "#/components/schemas/Timeframe"
+    StartTime:
+      name: startTime
+      in: query
+      required: true
+      description: Inclusive UTC range start.
+      schema:
+        type: string
+        format: date-time
+    EndTime:
+      name: endTime
+      in: query
+      required: true
+      description: Exclusive UTC range end; must be later than startTime.
+      schema:
+        type: string
+        format: date-time
+    Limit:
+      name: limit
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 1000
+        default: 500
+  schemas:
+    Provider:
+      type: string
+      enum: [BINANCE]
+    Timeframe:
+      type: string
+      enum: [1m, 5m, 15m, 30m, 1h, 2h, 4h, 1d]
+    Completeness:
+      type: string
+      enum: [COMPLETE, PARTIAL, EMPTY]
+    MarketSelection:
+      type: object
+      additionalProperties: false
+      required: [provider, pair, timeframe]
+      properties:
+        provider:
+          $ref: "#/components/schemas/Provider"
+        pair:
+          type: string
+          example: BTCUSDT
+        timeframe:
+          $ref: "#/components/schemas/Timeframe"
+    Candle:
+      type: object
+      additionalProperties: false
+      required:
+        - provider
+        - pair
+        - timeframe
+        - openTime
+        - closeTime
+        - open
+        - high
+        - low
+        - close
+        - volume
+        - closed
+        - receivedAt
+      properties:
+        provider:
+          $ref: "#/components/schemas/Provider"
+        pair:
+          type: string
+          example: BTCUSDT
+        timeframe:
+          $ref: "#/components/schemas/Timeframe"
+        openTime:
+          type: string
+          format: date-time
+        closeTime:
+          type: string
+          format: date-time
+        open:
+          $ref: "#/components/schemas/DecimalString"
+        high:
+          $ref: "#/components/schemas/DecimalString"
+        low:
+          $ref: "#/components/schemas/DecimalString"
+        close:
+          $ref: "#/components/schemas/DecimalString"
+        volume:
+          $ref: "#/components/schemas/NonNegativeDecimalString"
+        closed:
+          type: boolean
+        receivedAt:
+          type: string
+          format: date-time
+    DecimalString:
+      type: string
+      pattern: "^(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+      example: "67234.12000000"
+    NonNegativeDecimalString:
+      type: string
+      pattern: "^(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+      example: "12.50000000"
+    TimeRange:
+      type: object
+      additionalProperties: false
+      required: [startTime, endTime]
+      properties:
+        startTime:
+          type: string
+          format: date-time
+        endTime:
+          type: string
+          format: date-time
+    CandleRange:
+      type: object
+      additionalProperties: false
+      required:
+        - schemaVersion
+        - selection
+        - range
+        - completeness
+        - missingRanges
+        - candles
+      properties:
+        schemaVersion:
+          type: string
+          const: "1"
+        selection:
+          $ref: "#/components/schemas/MarketSelection"
+        range:
+          $ref: "#/components/schemas/TimeRange"
+        completeness:
+          $ref: "#/components/schemas/Completeness"
+        missingRanges:
+          type: array
+          maxItems: 100
+          items:
+            $ref: "#/components/schemas/TimeRange"
+        candles:
+          type: array
+          maxItems: 1000
+          items:
+            $ref: "#/components/schemas/Candle"
+    MarketDimensions:
+      type: object
+      additionalProperties: false
+      required: [schemaVersion, providers, pairs, timeframes]
+      properties:
+        schemaVersion:
+          type: string
+          const: "1"
+        providers:
+          type: array
+          items:
+            $ref: "#/components/schemas/Provider"
+        pairs:
+          type: array
+          items:
+            type: string
+        timeframes:
+          type: array
+          items:
+            $ref: "#/components/schemas/Timeframe"
+    SuccessEnvelopeBase:
+      type: object
+      required: [success, message, timestamp, requestId]
+      properties:
+        success:
+          type: boolean
+          const: true
+        message:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+        requestId:
+          type: string
+          minLength: 1
+    CandleRangeEnvelope:
+      allOf:
+        - $ref: "#/components/schemas/SuccessEnvelopeBase"
+        - type: object
+          required: [data]
+          properties:
+            data:
+              $ref: "#/components/schemas/CandleRange"
+    MarketDimensionsEnvelope:
+      allOf:
+        - $ref: "#/components/schemas/SuccessEnvelopeBase"
+        - type: object
+          required: [data]
+          properties:
+            data:
+              $ref: "#/components/schemas/MarketDimensions"
+    ErrorEnvelope:
+      type: object
+      additionalProperties: false
+      required: [success, message, error, timestamp, requestId]
+      properties:
+        success:
+          type: boolean
+          const: false
+        message:
+          type: string
+        error:
+          type: object
+          additionalProperties: false
+          required: [code]
+          properties:
+            code:
+              type: string
+              enum:
+                - MARKET_REQUEST_MALFORMED
+                - MARKET_PAIR_UNSUPPORTED
+                - MARKET_TIMEFRAME_UNSUPPORTED
+                - MARKET_RANGE_INVALID
+                - MARKET_RANGE_TOO_LARGE
+                - PROVIDER_RATE_LIMITED
+                - MARKET_PROVIDER_UNAVAILABLE
+            details:
+              type: object
+              additionalProperties: true
+        timestamp:
+          type: string
+          format: date-time
+        requestId:
+          type: string
+  responses:
+    BadRequest:
+      description: Malformed request
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    InvalidSelection:
+      description: Unsupported selection or invalid range
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    RateLimited:
+      description: Provider or application rate limit reached
+      headers:
+        Retry-After:
+          schema:
+            type: integer
+            minimum: 1
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    DependencyUnavailable:
+      description: Required market-data dependency unavailable
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
