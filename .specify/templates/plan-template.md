@@ -42,6 +42,12 @@
 
 [Gates determined based on constitution file]
 
+### Architecture Decision References
+
+- **Architecture baseline**: `docs/ARCHITECTURE.md` — Status: [Proposed/Accepted]
+- **Relevant ADRs**: [ADR IDs, titles and statuses, or `None` with justification]
+- **Deviations**: [None, or describe the deviation and link its Proposed/Accepted ADR]
+
 ## Project Structure
 
 ### Documentation (this feature)
