@@ -1,0 +1,346 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TV1 — Historical Market Data: Quyết định kiến trúc và trade-off</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #172033;
+      --muted: #5d6678;
+      --paper: #f4f1ea;
+      --surface: #fffdf8;
+      --navy: #142a46;
+      --teal: #087f78;
+      --teal-soft: #dff4ef;
+      --amber: #a85b12;
+      --amber-soft: #fff0d6;
+      --red: #a8323a;
+      --red-soft: #fde8e7;
+      --line: #d8d4ca;
+      --shadow: 0 18px 45px rgba(20, 42, 70, .09);
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at 85% 5%, rgba(8,127,120,.10), transparent 28rem),
+        linear-gradient(180deg, #f8f6f0 0, var(--paper) 100%);
+      font: 16px/1.65 Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    }
+    a { color: var(--teal); text-underline-offset: 3px; }
+    code { padding: .12rem .35rem; border-radius: .32rem; background: #edf0f2; font-size: .91em; }
+    .hero {
+      position: relative;
+      overflow: hidden;
+      padding: 4.8rem max(1.25rem, calc((100vw - 1180px) / 2)) 4rem;
+      color: #f8fbff;
+      background: linear-gradient(120deg, #10243e 0%, #173d50 58%, #087f78 145%);
+    }
+    .hero::after {
+      position: absolute; right: -7rem; top: -9rem; width: 30rem; height: 30rem;
+      content: ""; border: 1px solid rgba(255,255,255,.18); border-radius: 50%;
+      box-shadow: 0 0 0 4rem rgba(255,255,255,.025), 0 0 0 9rem rgba(255,255,255,.018);
+    }
+    .eyebrow { margin: 0 0 .8rem; color: #86ddd3; font-size: .78rem; font-weight: 800; letter-spacing: .15em; text-transform: uppercase; }
+    h1 { max-width: 900px; margin: 0; font: 700 clamp(2.25rem, 5vw, 4.5rem)/1.08 Georgia, serif; letter-spacing: -.035em; }
+    .hero .lead { max-width: 760px; margin: 1.3rem 0 0; color: #dbe7ed; font-size: 1.13rem; }
+    .meta { display: flex; flex-wrap: wrap; gap: .65rem; margin-top: 1.65rem; }
+    .pill { padding: .42rem .72rem; border: 1px solid rgba(255,255,255,.24); border-radius: 999px; background: rgba(255,255,255,.08); font-size: .85rem; }
+    .layout { display: grid; grid-template-columns: 235px minmax(0, 1fr); gap: 2.4rem; max-width: 1180px; margin: 0 auto; padding: 2.5rem 1.25rem 5rem; }
+    nav { position: sticky; top: 1rem; align-self: start; padding: 1rem; border: 1px solid var(--line); border-radius: 16px; background: rgba(255,253,248,.88); backdrop-filter: blur(12px); box-shadow: var(--shadow); }
+    nav strong { display: block; margin: .1rem .5rem .55rem; color: var(--navy); font-size: .78rem; letter-spacing: .1em; text-transform: uppercase; }
+    nav a { display: block; padding: .42rem .5rem; border-radius: 8px; color: var(--muted); text-decoration: none; font-size: .9rem; }
+    nav a:hover { color: var(--navy); background: var(--teal-soft); }
+    main { min-width: 0; }
+    section { margin-bottom: 2rem; padding: clamp(1.2rem, 3vw, 2.25rem); border: 1px solid var(--line); border-radius: 20px; background: var(--surface); box-shadow: var(--shadow); }
+    h2 { margin: 0 0 1rem; color: var(--navy); font: 700 clamp(1.55rem, 3vw, 2.15rem)/1.2 Georgia, serif; letter-spacing: -.018em; }
+    h3 { margin: 1.4rem 0 .55rem; color: var(--navy); font-size: 1.06rem; }
+    p { margin: .6rem 0 1rem; }
+    .summary-grid, .score-grid, .decision-grid, .evidence-grid { display: grid; gap: 1rem; }
+    .summary-grid { grid-template-columns: repeat(3, 1fr); }
+    .score-grid { grid-template-columns: 1fr 1fr; }
+    .decision-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .evidence-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    .card { padding: 1rem; border: 1px solid var(--line); border-radius: 14px; background: #fff; }
+    .card p:last-child { margin-bottom: 0; }
+    .metric { display: block; color: var(--teal); font: 700 2rem/1 Georgia, serif; }
+    .metric-label { display: block; margin-top: .45rem; color: var(--muted); font-size: .84rem; }
+    .verdict { padding: 1rem 1.15rem; border-left: 5px solid var(--teal); border-radius: 10px; background: var(--teal-soft); }
+    .warning { border-left-color: var(--amber); background: var(--amber-soft); }
+    .bad { border-left-color: var(--red); background: var(--red-soft); }
+    .score { display: flex; align-items: flex-start; gap: .8rem; padding: 1rem; border-radius: 14px; }
+    .score strong:first-child { flex: 0 0 auto; width: 2.5rem; height: 2.5rem; display: grid; place-items: center; border-radius: 50%; font-size: 1.25rem; }
+    .score.good { background: var(--teal-soft); }
+    .score.good strong:first-child { color: white; background: var(--teal); }
+    .score.wrong { background: var(--red-soft); }
+    .score.wrong strong:first-child { color: white; background: var(--red); }
+    .score p { margin: .2rem 0 0; color: var(--muted); font-size: .92rem; }
+    .flow { display: grid; grid-template-columns: 1fr auto 1fr auto 1fr auto 1fr; align-items: center; gap: .5rem; margin: 1.25rem 0; }
+    .node { min-height: 95px; display: grid; place-items: center; padding: .8rem; border: 1px solid #b9cbc8; border-radius: 13px; color: var(--navy); background: #eff8f6; text-align: center; font-weight: 700; }
+    .arrow { color: var(--teal); font-size: 1.5rem; }
+    .decision { position: relative; padding-top: 2.5rem; }
+    .decision .id { position: absolute; top: .9rem; right: .9rem; color: var(--teal); font-size: .72rem; font-weight: 800; letter-spacing: .1em; }
+    .decision h3 { margin-top: 0; }
+    .decision ul { margin: .45rem 0 0; padding-left: 1.2rem; }
+    .decision li { margin: .28rem 0; }
+    .cost { color: var(--amber); font-weight: 700; }
+    table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: .91rem; }
+    th, td { padding: .72rem .7rem; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+    th { color: var(--navy); background: #f1f4f3; font-size: .78rem; letter-spacing: .04em; text-transform: uppercase; }
+    tbody tr:hover { background: #fbfaf6; }
+    .tag { display: inline-block; padding: .18rem .48rem; border-radius: 999px; font-size: .73rem; font-weight: 800; }
+    .closed { color: #07645f; background: var(--teal-soft); }
+    .accepted { color: #805015; background: var(--amber-soft); }
+    .human { color: #6d4450; background: #efe4e8; }
+    .contract { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+    .contract pre { overflow: auto; margin: 0; padding: 1rem; border-radius: 12px; color: #e8f0f5; background: #12263f; font: .86rem/1.65 ui-monospace, SFMono-Regular, Consolas, monospace; }
+    .refs { display: flex; flex-wrap: wrap; gap: .6rem; }
+    .refs a { padding: .45rem .7rem; border: 1px solid #b7d7d2; border-radius: 999px; background: #eef8f6; text-decoration: none; font-size: .84rem; }
+    .footnote { color: var(--muted); font-size: .86rem; }
+    footer { padding: 2.2rem 1.25rem; color: #c8d3da; background: var(--navy); text-align: center; }
+    @media (max-width: 900px) {
+      .layout { grid-template-columns: 1fr; }
+      nav { position: static; display: none; }
+      .summary-grid, .evidence-grid { grid-template-columns: repeat(2, 1fr); }
+      .decision-grid, .contract { grid-template-columns: 1fr; }
+      .flow { grid-template-columns: 1fr; }
+      .arrow { transform: rotate(90deg); text-align: center; }
+    }
+    @media (max-width: 560px) {
+      .summary-grid, .score-grid, .evidence-grid { grid-template-columns: 1fr; }
+      th:nth-child(3), td:nth-child(3) { display: none; }
+    }
+    @media print {
+      body { background: white; }
+      .hero { padding: 2rem; }
+      .layout { display: block; padding: 1rem 0; }
+      nav { display: none; }
+      section { break-inside: avoid; box-shadow: none; }
+    }
+  </style>
+</head>
+<body>
+  <header class="hero">
+    <p class="eyebrow">Crypto Strategy Lab · Thành viên 1</p>
+    <h1>Historical Market Data<br>Quyết định kiến trúc &amp; trade-off</h1>
+    <p class="lead">Hồ sơ chốt phạm vi, contract, lựa chọn kỹ thuật, phương án bị loại, rủi ro đã khắc phục và bằng chứng vận hành của feature <code>001-historical-market-data</code>.</p>
+    <div class="meta">
+      <span class="pill">Branch: feat/001-market-data-spec-plan</span>
+      <span class="pill">Ngày chốt: 13/08/2026</span>
+      <span class="pill">Trạng thái kỹ thuật: Verified</span>
+      <span class="pill">Governance: chờ team duyệt ADR</span>
+    </div>
+  </header>
+
+  <div class="layout">
+    <nav aria-label="Mục lục">
+      <strong>Mục lục</strong>
+      <a href="#ket-luan">1. Kết luận</a>
+      <a href="#pham-vi">2. Phạm vi TV1</a>
+      <a href="#pass-fail">3. Lựa chọn 1/10</a>
+      <a href="#kien-truc">4. Kiến trúc</a>
+      <a href="#quyet-dinh">5. Decision log</a>
+      <a href="#contract">6. Contract đã khóa</a>
+      <a href="#rui-ro">7. Rủi ro</a>
+      <a href="#evidence">8. Bằng chứng</a>
+      <a href="#con-lai">9. Việc còn lại</a>
+      <a href="#tham-chieu">10. Tham chiếu</a>
+    </nav>
+
+    <main>
+      <section id="ket-luan">
+        <h2>Kết luận điều hành</h2>
+        <div class="verdict"><strong>Giải pháp được chọn là đúng với bài toán trade-off.</strong> TV1 không tối ưu cho “code ít nhất hôm nay”, mà tối ưu cho thay đổi provider, dữ liệu tái lập và tích hợp an toàn với realtime/strategy/backtest. Chi phí thêm nằm ở mapper, contract test, claim/lease và dataset membership — đều là chi phí có chủ đích để giảm coupling và ngăn sai lịch sử.</div>
+        <div class="summary-grid" style="margin-top:1rem">
+          <div class="card"><span class="metric">54/54</span><span class="metric-label">test pass, gồm PostgreSQL thật và performance</span></div>
+          <div class="card"><span class="metric">0</span><span class="metric-label">CRITICAL/HIGH risk còn mở</span></div>
+          <div class="card"><span class="metric">12</span><span class="metric-label">quyết định kiến trúc có trade-off rõ ràng</span></div>
+        </div>
+        <p class="footnote">“Verified” là trạng thái kỹ thuật của branch, không tự động biến các ADR <code>Proposed</code> thành <code>Accepted</code>.</p>
+      </section>
+
+      <section id="pham-vi">
+        <h2>Phạm vi đúng của thành viên 1</h2>
+        <p>TV1 là chủ sở hữu <strong>historical market data end-to-end ở backend</strong>: hợp đồng Candle, acquisition, normalization, validation, persistence, gap backfill, completeness và immutable dataset. Nhận định trước đó rằng TV1 phải định hình contract, hành vi liên quan realtime và khả năng mở rộng là đúng, nhưng cần hiểu “hành vi realtime” ở đây là <strong>ranh giới tích hợp</strong>, không phải tự triển khai WebSocket hay chart.</p>
+        <table>
+          <thead><tr><th>TV1 sở hữu</th><th>TV1 định nghĩa ranh giới</th><th>Không thuộc TV1</th></tr></thead>
+          <tbody>
+            <tr><td>Canonical Candle và Timeframe</td><td>Closed Candle dùng khi bootstrap/backfill</td><td>Kết nối Binance WebSocket</td></tr>
+            <tr><td>Historical range <code>[start,end)</code></td><td><code>COMPLETE/PARTIAL/EMPTY</code> để TV2 quyết định trạng thái</td><td><code>STALE/RECONNECTING/LIVE</code></td></tr>
+            <tr><td>PostgreSQL Candle/dataset</td><td>Open và closed dùng chung identity <code>openTime</code></td><td>Merge revision của nến đang mở</td></tr>
+            <tr><td>REST history/dataset contract</td><td>Backfill đúng khoảng sau reconnect</td><td>UI chart và tối đa bốn slot</td></tr>
+            <tr><td>Provider port và Binance adapter</td><td>Immutable dataset cho TV3/TV4</td><td>Strategy, backtest, leaderboard</td></tr>
+          </tbody>
+        </table>
+        <div class="verdict warning"><strong>Xử lý xung đột tài liệu:</strong> roadmap cũ gói “Feature 001 + single chart”, nhưng bảng phân công mới giao chart/realtime cho TV2. Chọn phân công mới tránh hai người sửa cùng frontend/merge logic. Kết quả historical chart của sản phẩm vẫn được bảo toàn khi TV2 dùng API TV1.</div>
+      </section>
+
+      <section id="pass-fail">
+        <h2>Các lựa chọn mang tính 1/10 — không được chọn sai</h2>
+        <p>Đây là những điểm mà phương án đối lập không chỉ “kém tối ưu”, mà làm sai trực tiếp câu hỏi kiến trúc trung tâm của đề. Cột 10 là lựa chọn đã implement; cột 1 là anti-pattern phải tránh.</p>
+        <div class="score-grid">
+          <div class="score good"><strong>10</strong><div><b>Frontend → API TV1 → Provider adapter</b><p>Provider đổi từ Binance sang OKX không bắt frontend/strategy/backtest hiểu DTO mới.</p></div></div>
+          <div class="score wrong"><strong>1</strong><div><b>Frontend gọi Binance trực tiếp</b><p>Sai provider-neutrality, không có shared cache, validation, recovery hay provenance.</p></div></div>
+          <div class="score good"><strong>10</strong><div><b>Decimal → NUMERIC → decimal string</b><p>Giữ equality/checksum/backtest input chính xác và tái lập.</p></div></div>
+          <div class="score wrong"><strong>1</strong><div><b>Dùng float cho OHLCV</b><p>Sai số nhị phân có thể đổi duplicate detection và kết quả tính toán sau này.</p></div></div>
+          <div class="score good"><strong>10</strong><div><b>UTC, millisecond, <code>[start,end)</code></b><p>Hai range kề nhau ghép được, không trùng nến biên.</p></div></div>
+          <div class="score wrong"><strong>1</strong><div><b>Local time hoặc inclusive end</b><p>Mơ hồ timezone và double-count tại biên pagination/backfill.</p></div></div>
+          <div class="score good"><strong>10</strong><div><b>Chỉ closed Candle vào dataset</b><p>Dataset không đổi sau khi được strategy/backtest tham chiếu.</p></div></div>
+          <div class="score wrong"><strong>1</strong><div><b>Đưa open Candle rồi update</b><p>Biến cùng <code>datasetId</code> thành input thay đổi theo thời gian.</p></div></div>
+          <div class="score good"><strong>10</strong><div><b>Exact duplicate ignore; conflict reject</b><p>Retry idempotent nhưng không che giấu sửa lịch sử.</p></div></div>
+          <div class="score wrong"><strong>1</strong><div><b>Last-write-wins</b><p>Kết quả cũ có thể bị diễn giải lại bằng giá mới mà không có version.</p></div></div>
+          <div class="score good"><strong>10</strong><div><b>Alembic migration trước API</b><p>Schema có lịch sử và rollback test; readiness phản ánh đúng database.</p></div></div>
+          <div class="score wrong"><strong>1</strong><div><b><code>create_all</code> khi startup</b><p>Schema mutation không kiểm soát, khó review và không chứng minh migration.</p></div></div>
+          <div class="score good"><strong>10</strong><div><b>Bounded page/range/retry</b><p>Giới hạn tài nguyên và lỗi upstream có điểm dừng rõ ràng.</p></div></div>
+          <div class="score wrong"><strong>1</strong><div><b>Retry/range không giới hạn</b><p>Dễ treo request, rate-limit amplification và denial of service.</p></div></div>
+          <div class="score good"><strong>10</strong><div><b>Modular monolith + ports</b><p>Chứng minh replaceability nhưng chưa trả operational tax của microservice.</p></div></div>
+          <div class="score wrong"><strong>1</strong><div><b>Microservice/Kafka ngay cho TV1</b><p>Không có evidence scale độc lập; tăng vận hành mà không giải bài toán hiện tại.</p></div></div>
+        </div>
+      </section>
+
+      <section id="kien-truc">
+        <h2>Kiến trúc đã implement</h2>
+        <div class="flow" aria-label="Luồng dữ liệu lịch sử">
+          <div class="node">FastAPI<br><small>versioned boundary</small></div><div class="arrow">→</div>
+          <div class="node">Application service<br><small>local-first + gaps</small></div><div class="arrow">→</div>
+          <div class="node">Ports<br><small>provider / repository</small></div><div class="arrow">→</div>
+          <div class="node">Binance + PostgreSQL<br><small>outer adapters</small></div>
+        </div>
+        <p>Dependency đi từ ngoài vào abstraction: domain/application không import FastAPI, SQLAlchemy, httpx, asyncpg hay Alembic. Binance array indexes và endpoint chỉ xuất hiện trong infrastructure. Điều này biến câu hỏi “thêm provider có sửa frontend không?” thành một phép thử tự động, không chỉ là lời hứa trên sơ đồ.</p>
+        <div class="contract">
+          <pre>GET /api/v1/market-data/candles
+  → local coverage first
+  → compute/coalesce exact gaps
+  → fetch pages ≤ 1,000
+  → validate + immutable insert
+  → reread canonical storage
+  → COMPLETE | PARTIAL | EMPTY</pre>
+          <pre>POST /api/v1/market-data/datasets
+  → deterministic request key
+  → atomic claim + lease + token
+  → require closed COMPLETE range
+  → freeze ordered membership
+  → SHA-256 canonical checksum
+  → provider-free paginated reads</pre>
+        </div>
+      </section>
+
+      <section id="quyet-dinh">
+        <h2>Decision log và trade-off</h2>
+        <div class="decision-grid">
+          <article class="card decision"><span class="id">D01</span><h3>Provider-neutral adapter</h3><p><b>Chọn:</b> canonical Candle + <code>MarketDataProvider</code> port; chỉ adapter biết Binance.</p><p><b>Vì sao:</b> trực tiếp trả lời scenario Binance → OKX mà consumer không đổi.</p><p class="cost">Đánh đổi: thêm mapper và fitness tests.</p><ul><li>Loại DTO Binance xuyên hệ thống: nhanh đầu kỳ nhưng coupling cao.</li><li>Loại dictionary “generic”: linh hoạt giả, mất invariant/type safety.</li></ul></article>
+          <article class="card decision"><span class="id">D02</span><h3>Exact decimal end-to-end</h3><p><b>Chọn:</b> <code>Decimal</code>, <code>NUMERIC(38,18)</code>, JSON string cố định.</p><p><b>Vì sao:</b> equality, checksum và backtest input phải tái lập.</p><p class="cost">Đánh đổi: serialization rõ ràng hơn, payload không phải JSON number.</p><ul><li>Loại float vì sai số nhị phân.</li><li>Loại scaled integer vì scale khác nhau theo asset/provider.</li></ul></article>
+          <article class="card decision"><span class="id">D03</span><h3>UTC + half-open range</h3><p><b>Chọn:</b> millisecond UTC, identity là <code>openTime</code>, range <code>[start,end)</code>.</p><p><b>Vì sao:</b> deterministic paging, expected opens và gap calculation.</p><p class="cost">Đánh đổi: client phải gửi boundary đúng timeframe.</p><ul><li>Loại inclusive end vì overlap.</li><li>Loại arrival time làm identity vì out-of-order/retry.</li></ul></article>
+          <article class="card decision"><span class="id">D04</span><h3>Closed history only</h3><p><b>Chọn:</b> dataset chỉ gồm interval đã biết là đóng; open revision thuộc TV2.</p><p><b>Vì sao:</b> immutable input không thể chứa giá đang thay đổi.</p><p class="cost">Đánh đổi: historical API không trả “nến hiện tại”.</p><ul><li>Loại cập nhật open Candle trong dataset vì phá checksum/provenance.</li></ul></article>
+          <article class="card decision"><span class="id">D05</span><h3>Immutable closed Candle</h3><p><b>Chọn:</b> duplicate cùng content là idempotent; content khác là integrity fault.</p><p><b>Vì sao:</b> không cho lịch sử âm thầm thay đổi sau backtest.</p><p class="cost">Đánh đổi: official correction cần workflow version riêng.</p><ul><li>Loại last-write-wins và “ignore mọi duplicate”.</li><li>Chưa dùng event sourcing vì chưa có use case được duyệt.</li></ul></article>
+          <article class="card decision"><span class="id">D06</span><h3>Canonical rows + membership snapshot</h3><p><b>Chọn:</b> Candle lưu một lần; dataset đóng băng ordered membership và checksum.</p><p><b>Vì sao:</b> ID có nghĩa tái lập mà không copy mọi OHLCV.</p><p class="cost">Đánh đổi: thêm join table và integrity check.</p><ul><li>Loại metadata-only vì range query sau này có thể đổi nội dung.</li><li>Loại TimescaleDB/file store vì chưa có evidence scale.</li></ul></article>
+          <article class="card decision"><span class="id">D07</span><h3>Local-first, fetch gaps only</h3><p><b>Chọn:</b> so expected opens với storage, coalesce gaps, chỉ gọi provider cho phần thiếu.</p><p><b>Vì sao:</b> giảm rate limit và dùng lại cùng primitive cho TV2 reconnect.</p><p class="cost">Đánh đổi: gap computation phức tạp hơn refetch-all.</p><ul><li>Loại cache theo query string vì không reuse overlapping ranges.</li></ul></article>
+          <article class="card decision"><span class="id">D08</span><h3>Database claim + lease</h3><p><b>Chọn:</b> request key, atomic claim, random token, lease expiry.</p><p><b>Vì sao:</b> idempotent giữa nhiều process/container, recover được sau crash.</p><p class="cost">Đánh đổi: thêm lifecycle <code>BUILDING/FAILED</code>.</p><ul><li>Loại <code>asyncio.Lock</code> vì chỉ an toàn một process.</li><li>Loại Redis lock vì PostgreSQL đã đủ.</li></ul></article>
+          <article class="card decision"><span class="id">D09</span><h3>Tách range và dataset resource</h3><p><b>Chọn:</b> range nhỏ cho chart/backfill; dataset ID + pages cho backtest.</p><p><b>Vì sao:</b> hai consumer có mục tiêu, size và provenance khác nhau.</p><p class="cost">Đánh đổi: nhiều endpoint hơn.</p><ul><li>Loại một endpoint tùy chọn metadata vì khó bound/cache/version.</li></ul></article>
+          <article class="card decision"><span class="id">D10</span><h3>Synchronous bounded first</h3><p><b>Chọn:</b> materialize đồng bộ, tối đa 10.000 expected Candles.</p><p><b>Vì sao:</b> giữ MVP đơn giản; queue dành cho scale backtest đã được đề yêu cầu.</p><p class="cost">Đánh đổi: request lớn chiếm connection lâu hơn.</p><ul><li>Revisit khi số đo vượt timeout/cap; khi đó chuyển orchestration sang job.</li></ul></article>
+          <article class="card decision"><span class="id">D11</span><h3>Bounded provider retry</h3><p><b>Chọn:</b> timeout, tối đa ba attempt, capped backoff, tôn trọng <code>Retry-After</code>.</p><p><b>Vì sao:</b> cân bằng transient reliability với resource safety.</p><p class="cost">Đánh đổi: một số lỗi tạm thời sẽ surface cho caller.</p><ul><li>Không retry semantic 4xx/invalid payload.</li></ul></article>
+          <article class="card decision"><span class="id">D12</span><h3>TV1 history; TV2 chart/realtime</h3><p><b>Chọn:</b> TV1 cung cấp contract/history/backfill; TV2 render và quản lý live state.</p><p><b>Vì sao:</b> theo phân công mới, một owner cho mỗi file/hành vi.</p><p class="cost">Đánh đổi: branch TV1 không có visual chart độc lập.</p><ul><li>Outcome chart lịch sử vẫn đạt khi tích hợp TV2.</li></ul></article>
+        </div>
+      </section>
+
+      <section id="contract">
+        <h2>Contract đã khóa</h2>
+        <table>
+          <thead><tr><th>Khía cạnh</th><th>Quy ước v1</th><th>Lý do</th></tr></thead>
+          <tbody>
+            <tr><td>Identity</td><td><code>(provider,pair,timeframe,openTime)</code></td><td>Ổn định trước retry/out-of-order</td></tr>
+            <tr><td>Timeframe</td><td><code>1m,5m,15m,30m,1h,2h,4h,1d</code></td><td>Dùng chung TV1/TV2/TV3</td></tr>
+            <tr><td>Range</td><td>UTC aligned <code>[startTime,endTime)</code></td><td>Không overlap ở biên</td></tr>
+            <tr><td>Time precision</td><td>ISO-8601 UTC, millisecond</td><td>Binance/consumer mapping xác định</td></tr>
+            <tr><td>OHLCV</td><td>Exact decimal string; volume là base asset v1</td><td>Tái lập và không float drift</td></tr>
+            <tr><td>Historical state</td><td>Closed only; <code>COMPLETE/PARTIAL/EMPTY</code></td><td>Không gọi missing data là complete</td></tr>
+            <tr><td>Missing ranges</td><td>Tối đa 500, sorted, coalesced, non-overlap</td><td>Worst case chính xác của 1.000 interval xen kẽ</td></tr>
+            <tr><td>Range limit</td><td>Mặc định 500; tối đa 1.000; reject, không truncate</td><td>Resource bound minh bạch</td></tr>
+            <tr><td>Dataset</td><td>Closed <code>COMPLETE</code>, membership + SHA-256 checksum</td><td>TV3/TV4 đọc provider-free và tái lập</td></tr>
+            <tr><td>Signal mapping</td><td><code>Signal.timestamp == Candle.openTime</code></td><td>Không drift giữa feature</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="rui-ro">
+        <h2>Rủi ro đã review và khắc phục</h2>
+        <table>
+          <thead><tr><th>Rủi ro đáng kể</th><th>Cách đóng</th><th>Trạng thái</th></tr></thead>
+          <tbody>
+            <tr><td>Partial/open data thành reusable dataset</td><td>Derive completeness từ mọi expected open; chỉ finalize closed COMPLETE</td><td><span class="tag closed">CLOSED</span></td></tr>
+            <tr><td>Concurrent duplicate build</td><td>PostgreSQL request key + claim/token/lease</td><td><span class="tag closed">CLOSED</span></td></tr>
+            <tr><td>32.767 bind-parameter limit</td><td>Chunk Candle 1.000, membership 5.000 rows</td><td><span class="tag closed">CLOSED</span></td></tr>
+            <tr><td>SSRF / URL / credential log leakage</td><td>HTTPS server config; reject userinfo; redact; suppress dependency/access URLs</td><td><span class="tag closed">CLOSED</span></td></tr>
+            <tr><td>Schema chưa migrate khi API chạy</td><td>One-shot Alembic job là dependency bắt buộc của API</td><td><span class="tag closed">CLOSED</span></td></tr>
+            <tr><td>Transitive dependency drift</td><td>Reviewed runtime closure lock + multi-stage non-root image</td><td><span class="tag closed">CLOSED</span></td></tr>
+            <tr><td>Provider page vi phạm port contract</td><td>Application revalidate và trả stable <code>MARKET_PROVIDER_PAYLOAD_INVALID</code></td><td><span class="tag closed">CLOSED</span></td></tr>
+            <tr><td>Build đồng bộ gần cap</td><td>Cap 10.000 + timeout/lease; chuyển job chỉ khi số đo yêu cầu</td><td><span class="tag accepted">ACCEPTED</span></td></tr>
+            <tr><td>Official provider correction</td><td>Fail closed; tương lai thêm revision/dataset version, không mutate cũ</td><td><span class="tag accepted">ACCEPTED</span></td></tr>
+            <tr><td>ADR vẫn Proposed</td><td>Không tự đổi status; yêu cầu TV2/TV4/team review trước merge</td><td><span class="tag human">HUMAN GATE</span></td></tr>
+          </tbody>
+        </table>
+        <p>Chi tiết severity, evidence và residual risk nằm trong <a href="../specs/001-historical-market-data/risk-review.md">risk-review.md</a>.</p>
+      </section>
+
+      <section id="evidence">
+        <h2>Bằng chứng chất lượng và vận hành</h2>
+        <div class="evidence-grid">
+          <div class="card"><span class="metric">PASS</span><span class="metric-label">Ruff format + lint</span></div>
+          <div class="card"><span class="metric">0</span><span class="metric-label">mypy strict issues / 32 source files</span></div>
+          <div class="card"><span class="metric">54</span><span class="metric-label">pytest passed / 9.57 s</span></div>
+          <div class="card"><span class="metric">PASS</span><span class="metric-label">Docker build + migrate + health</span></div>
+        </div>
+        <h3>Live container smoke</h3>
+        <ul>
+          <li>PostgreSQL 16.14 healthy; Alembic migration job exit code 0; readiness <code>UP</code>.</li>
+          <li>Binance trả ba nến <code>BTCUSDT/5m</code> đóng cho 01/01/2024; API trả canonical decimal strings và <code>COMPLETE</code>.</li>
+          <li>Lần đầu: <code>local_count=0, fetched_count=3</code>. Lần sau: <code>local_count=3, fetched_count=0</code>.</li>
+          <li>Dataset trả <code>COMPLETE</code>, count 3, SHA-256; metadata/membership đọc lại không gọi provider.</li>
+          <li><code>pageSize=2</code> trả đúng hai Candle, <code>hasMore=true</code>, opaque cursor.</li>
+        </ul>
+        <h3>Performance gates</h3>
+        <ul>
+          <li>Local PostgreSQL read 500 Candles: p95 dưới 300 ms.</li>
+          <li>Acquisition + persistence 10.000 Candles bằng deterministic provider: dưới 60 giây.</li>
+          <li>Provider page không quá 1.000; public range không quá 1.000; dataset không quá 10.000.</li>
+        </ul>
+        <p class="footnote">Reference: Python 3.12.4 · PostgreSQL 16.14 · Docker 29.4.2 · Compose 5.1.3 · AMD64 Windows host.</p>
+      </section>
+
+      <section id="con-lai">
+        <h2>Điều còn lại trước khi merge toàn team</h2>
+        <p>Không còn thiếu implementation TV1 hay high/critical code risk. Ba mục sau là coordination/governance, không nên giả vờ “đã duyệt” bằng code:</p>
+        <ol>
+          <li><strong>TV2 cross-review</strong> Candle fields, timeframe, missingRanges, bootstrap/backfill và ownership realtime.</li>
+          <li><strong>TV4 cross-review</strong> chỉ consume dataset <code>COMPLETE</code>, giữ <code>datasetId</code>/checksum/provenance trong backtest result.</li>
+          <li><strong>Team architecture review</strong> quyết định có chuyển ADR-001/002/003/005 từ <code>Proposed</code> sang <code>Accepted</code>.</li>
+        </ol>
+        <div class="verdict"><strong>Revisit có điều kiện, không over-engineer:</strong> chỉ thêm queue cho historical import khi số đo thường xuyên vượt cap/timeout; chỉ thêm Candle revision khi có provider correction thật; chỉ thêm provider/pair mới bằng adapter + registration + fitness suite.</div>
+      </section>
+
+      <section id="tham-chieu">
+        <h2>Hồ sơ truy vết</h2>
+        <div class="refs">
+          <a href="../specs/001-historical-market-data/spec.md">Specification</a>
+          <a href="../specs/001-historical-market-data/plan.md">Implementation plan</a>
+          <a href="../specs/001-historical-market-data/research.md">Research / decisions</a>
+          <a href="../specs/001-historical-market-data/data-model.md">Data model</a>
+          <a href="../specs/001-historical-market-data/contracts/openapi.yaml">OpenAPI</a>
+          <a href="../specs/001-historical-market-data/contracts/consumer-boundaries.md">Consumer boundaries</a>
+          <a href="../specs/001-historical-market-data/tasks.md">Tasks</a>
+          <a href="../specs/001-historical-market-data/quickstart.md">Quickstart evidence</a>
+          <a href="../specs/001-historical-market-data/risk-review.md">Risk review</a>
+          <a href="REQUIREMENT.md">Đề bài gốc</a>
+          <a href="extend_requirment.md">Extended requirement</a>
+          <a href="TECH_STACK_SKELETON_SPECKIT_FLOW.md">Tech stack / Spec Kit flow</a>
+        </div>
+      </section>
+    </main>
+  </div>
+  <footer>Crypto Strategy Lab · TV1 Historical Market Data · Decision &amp; Trade-off Record · 2026</footer>
+</body>
+</html>

@@ -30,7 +30,7 @@ The operation is pure with respect to its supplied values: it does not load data
 
 - All timestamps are UTC instants.
 - Candles are closed normalized observations from one provider, pair, timeframe, and immutable dataset.
-- Candles are strictly ascending by timestamp and contain no duplicate timestamp.
+- Candles are strictly ascending by canonical `openTime` and contain no duplicate `openTime`; a Signal `timestamp` equals its associated Candle `openTime`.
 - No Candle is after `decisionTimestamp`.
 - The dataset is marked complete for its declared range; a complete empty range is valid.
 - Invalid OHLCV, open, incomplete, gap-marked, unsorted, duplicate, future, or misaligned input rejects the whole operation as `INVALID_CONTEXT`.
@@ -60,7 +60,7 @@ For complete empty input, `signals` is empty and `historyState` is `EMPTY`. For 
 | strategyId / strategyType / strategyVersion | Yes | Exact behavior provenance |
 | contractVersion | Yes | Exact contract provenance |
 | datasetId / datasetVersion | Yes | Exact market-data provenance |
-| timestamp | Yes | Equals the associated Candle timestamp |
+| timestamp | Yes | Equals the associated Candle `openTime` |
 | sequence | Yes | Contiguous zero-based order within the run |
 | action | Yes | Exactly `BUY`, `SELL`, or `HOLD` |
 | phase | Yes | `WARMUP` or `EVALUATED` |
