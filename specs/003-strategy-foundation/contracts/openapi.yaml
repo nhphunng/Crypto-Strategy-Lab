@@ -1,0 +1,351 @@
+openapi: 3.1.0
+info:
+  title: Crypto Strategy Lab - Strategy Foundation API
+  version: 1.0.0
+  description: Discovery and bounded signal analysis for trusted registered strategies.
+servers:
+  - url: /api/v1
+paths:
+  /strategies:
+    get:
+      operationId: discoverStrategies
+      summary: Discover registered strategy versions and parameter metadata
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/StrategyStatus'
+      responses:
+        '200':
+          description: Deterministically ordered strategy metadata
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StrategyListResponse'
+  /strategies/{strategyId}/versions/{strategyVersion}:
+    get:
+      operationId: getStrategyVersion
+      summary: Resolve exact strategy-version metadata
+      parameters:
+        - $ref: '#/components/parameters/StrategyId'
+        - $ref: '#/components/parameters/StrategyVersion'
+      responses:
+        '200':
+          description: Exact available or deprecated strategy metadata
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StrategyResponse'
+        '404':
+          description: Unknown strategy or unavailable exact version
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Contract version is incompatible
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /strategy-analyses:
+    post:
+      operationId: analyzeStrategy
+      summary: Run one exact strategy definition against an immutable normalized dataset
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StrategyAnalysisRequest'
+      responses:
+        '200':
+          description: Deterministic ordered signal result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StrategyAnalysisResponse'
+        '404':
+          description: Unknown strategy or unavailable exact strategy version
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Deprecated version or incompatible contract
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Invalid parameters or Strategy Context
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+components:
+  parameters:
+    StrategyId:
+      name: strategyId
+      in: path
+      required: true
+      schema:
+        type: string
+        minLength: 1
+    StrategyVersion:
+      name: strategyVersion
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/SemanticVersion'
+  schemas:
+    SemanticVersion:
+      type: string
+      pattern: '^[0-9]+\.[0-9]+\.[0-9]+$'
+      examples: ['1.0.0']
+    UtcInstant:
+      type: string
+      format: date-time
+      examples: ['2026-08-13T09:00:00Z']
+    DecimalString:
+      type: string
+      pattern: '^-?(0|[1-9][0-9]*)(\.[0-9]+)?$'
+    StrategyStatus:
+      type: string
+      enum: [AVAILABLE, DEPRECATED, UNAVAILABLE]
+    SignalAction:
+      type: string
+      enum: [BUY, SELL, HOLD]
+    SignalPhase:
+      type: string
+      enum: [WARMUP, EVALUATED]
+    HistoryState:
+      type: string
+      enum: [EMPTY, INSUFFICIENT, EVALUABLE]
+    ParameterValueType:
+      type: string
+      enum: [INTEGER, DECIMAL]
+    ParameterDefinition:
+      type: object
+      additionalProperties: false
+      required: [name, description, valueType, required]
+      properties:
+        name: { type: string }
+        description: { type: string }
+        valueType: { $ref: '#/components/schemas/ParameterValueType' }
+        required: { type: boolean }
+        defaultValue: {}
+        minimum: {}
+        maximum: {}
+        minimumInclusive: { type: boolean, default: true }
+        maximumInclusive: { type: boolean, default: true }
+        relationshipRules:
+          type: array
+          items: { type: string }
+    StrategyMetadata:
+      type: object
+      additionalProperties: false
+      required:
+        - strategyId
+        - strategyType
+        - displayName
+        - strategyVersion
+        - contractVersion
+        - status
+        - parameterDefinition
+        - capabilities
+      properties:
+        strategyId: { type: string }
+        strategyType: { type: string }
+        displayName: { type: string }
+        strategyVersion: { $ref: '#/components/schemas/SemanticVersion' }
+        contractVersion: { $ref: '#/components/schemas/SemanticVersion' }
+        status: { $ref: '#/components/schemas/StrategyStatus' }
+        parameterDefinition:
+          type: array
+          items: { $ref: '#/components/schemas/ParameterDefinition' }
+        capabilities:
+          type: array
+          uniqueItems: true
+          items:
+            type: string
+            enum: [STRENGTH, REASON]
+    StrategyListResponse:
+      type: object
+      additionalProperties: false
+      required: [success, data, timestamp, requestId]
+      properties:
+        success: { const: true }
+        message: { type: string }
+        data:
+          type: array
+          items: { $ref: '#/components/schemas/StrategyMetadata' }
+        timestamp: { $ref: '#/components/schemas/UtcInstant' }
+        requestId: { type: string }
+    StrategyResponse:
+      type: object
+      additionalProperties: false
+      required: [success, data, timestamp, requestId]
+      properties:
+        success: { const: true }
+        message: { type: string }
+        data: { $ref: '#/components/schemas/StrategyMetadata' }
+        timestamp: { $ref: '#/components/schemas/UtcInstant' }
+        requestId: { type: string }
+    StrategyAnalysisRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - strategyId
+        - strategyVersion
+        - contractVersion
+        - parameters
+        - datasetId
+        - datasetVersion
+        - decisionTimestamp
+      properties:
+        strategyId: { type: string }
+        strategyVersion: { $ref: '#/components/schemas/SemanticVersion' }
+        contractVersion: { $ref: '#/components/schemas/SemanticVersion' }
+        parameters:
+          type: object
+          additionalProperties: true
+        datasetId: { type: string }
+        datasetVersion: { type: string }
+        decisionTimestamp: { $ref: '#/components/schemas/UtcInstant' }
+    StrategyDefinitionSummary:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - strategyId
+        - strategyType
+        - strategyVersion
+        - contractVersion
+        - parameters
+        - parameterSchemaFingerprint
+      properties:
+        id: { type: string, format: uuid }
+        strategyId: { type: string }
+        strategyType: { type: string }
+        strategyVersion: { $ref: '#/components/schemas/SemanticVersion' }
+        contractVersion: { $ref: '#/components/schemas/SemanticVersion' }
+        parameters: { type: object, additionalProperties: true }
+        parameterSchemaFingerprint: { type: string }
+    ContextProvenance:
+      type: object
+      additionalProperties: false
+      required:
+        - datasetId
+        - datasetVersion
+        - contextFingerprint
+        - provider
+        - pair
+        - timeframe
+        - rangeStart
+        - rangeEnd
+        - decisionTimestamp
+      properties:
+        datasetId: { type: string }
+        datasetVersion: { type: string }
+        contextFingerprint: { type: string }
+        provider: { type: string }
+        pair: { type: string }
+        timeframe: { type: string }
+        rangeStart: { $ref: '#/components/schemas/UtcInstant' }
+        rangeEnd: { $ref: '#/components/schemas/UtcInstant' }
+        decisionTimestamp: { $ref: '#/components/schemas/UtcInstant' }
+    Signal:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - strategyDefinitionId
+        - strategyId
+        - strategyType
+        - strategyVersion
+        - contractVersion
+        - datasetId
+        - datasetVersion
+        - timestamp
+        - sequence
+        - action
+        - phase
+      properties:
+        id: { type: string }
+        strategyDefinitionId: { type: string, format: uuid }
+        strategyId: { type: string }
+        strategyType: { type: string }
+        strategyVersion: { $ref: '#/components/schemas/SemanticVersion' }
+        contractVersion: { $ref: '#/components/schemas/SemanticVersion' }
+        datasetId: { type: string }
+        datasetVersion: { type: string }
+        timestamp: { $ref: '#/components/schemas/UtcInstant' }
+        sequence: { type: integer, minimum: 0 }
+        action: { $ref: '#/components/schemas/SignalAction' }
+        phase: { $ref: '#/components/schemas/SignalPhase' }
+        strength:
+          anyOf:
+            - $ref: '#/components/schemas/DecimalString'
+            - type: 'null'
+        reason:
+          type: [string, 'null']
+    StrategyAnalysisResult:
+      type: object
+      additionalProperties: false
+      required: [contractVersion, strategyDefinition, contextProvenance, historyState, signals]
+      properties:
+        contractVersion: { $ref: '#/components/schemas/SemanticVersion' }
+        strategyDefinition: { $ref: '#/components/schemas/StrategyDefinitionSummary' }
+        contextProvenance: { $ref: '#/components/schemas/ContextProvenance' }
+        historyState: { $ref: '#/components/schemas/HistoryState' }
+        signals:
+          type: array
+          items: { $ref: '#/components/schemas/Signal' }
+    StrategyAnalysisResponse:
+      type: object
+      additionalProperties: false
+      required: [success, data, timestamp, requestId]
+      properties:
+        success: { const: true }
+        message: { type: string }
+        data: { $ref: '#/components/schemas/StrategyAnalysisResult' }
+        timestamp: { $ref: '#/components/schemas/UtcInstant' }
+        requestId: { type: string }
+    ErrorIssue:
+      type: object
+      additionalProperties: false
+      required: [location, message]
+      properties:
+        location: { type: string }
+        message: { type: string }
+    ErrorData:
+      type: object
+      additionalProperties: false
+      required: [category, issues]
+      properties:
+        category:
+          type: string
+          enum:
+            - INVALID_PARAMETERS
+            - INVALID_CONTEXT
+            - UNKNOWN_STRATEGY
+            - DUPLICATE_STRATEGY_ENTRY
+            - INVALID_STRATEGY_METADATA
+            - INCOMPATIBLE_CONTRACT_VERSION
+            - STRATEGY_VERSION_UNAVAILABLE
+            - STRATEGY_VERSION_DEPRECATED
+        issues:
+          type: array
+          items: { $ref: '#/components/schemas/ErrorIssue' }
+    ErrorResponse:
+      type: object
+      additionalProperties: false
+      required: [success, message, data, timestamp, requestId]
+      properties:
+        success: { const: false }
+        message: { type: string }
+        data: { $ref: '#/components/schemas/ErrorData' }
+        timestamp: { $ref: '#/components/schemas/UtcInstant' }
+        requestId: { type: string }
