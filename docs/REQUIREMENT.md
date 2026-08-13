@@ -44,7 +44,6 @@ Các trader thường sử dụng nhiều phương pháp phân tích kỹ thuậ
 
 Tuy nhiên, một strategy đơn lẻ thường không hoạt động tốt trong mọi điều kiện thị trường.
 
-
 <!-- Page 1 -->
 
 Ví dụ:
@@ -67,6 +66,7 @@ Vì vậy, câu hỏi chính của đồ án là:
          Có thể xây dựng một hệ thống cho phép bổ sung nhiều strategy khác nhau, tự động kết hợp
          chúng thành các strategy phức hợp, đánh giá hiệu quả và liên tục tìm ra những tổ hợp
 ```
+
 strategy tốt nhất hay không?
 
 ## 2. Mục tiêu tổng thể
@@ -92,7 +92,6 @@ Trọng tâm của đồ án là Kiến trúc phần mềm, không phải tìm r
 
 Giả sử người dùng chọn:
 
-
 <!-- Page 2 -->
 
 ```text
@@ -100,6 +99,7 @@ Giả sử người dùng chọn:
 ```
 
 Timeframes:
+
 ```text
   5m
   15m
@@ -110,7 +110,7 @@ Timeframes:
 Dashboard hiển thị 4 biểu đồ:
 
 | BTCUSDT – 5m | BTCUSDT – 15m |
-|---|---|
+| --- | --- |
 | 📈 Candlestick | 📈 Candlestick |
 | **BTCUSDT – 1h** | **BTCUSDT – 4h** |
 | 📈 Candlestick | 📈 Candlestick |
@@ -142,7 +142,6 @@ Hệ thống có thể tạo:
 ```text
   MA + RSI
 ```
-
 
 <!-- Page 3 -->
 
@@ -214,7 +213,6 @@ Ví dụ:
   1 giờ
 ```
 
-
 <!-- Page 4 -->
 
 ```text
@@ -240,6 +238,7 @@ Ví dụ:
   09:10:02 BTC = 118,028
   09:10:03 BTC = 118,017
 ```
+
 ...
 
 Frontend cần nhận cập nhật mà không liên tục gọi:
@@ -260,7 +259,6 @@ flowchart TD
     D --> E[WebSocket]
     E --> F[Frontend]
 ```
-
 
 <!-- Page 5 -->
 
@@ -311,7 +309,6 @@ Ví dụ:
   Chart 4 → 4h
 ```
 
-
 <!-- Page 6 -->
 
 Mỗi chart phải có thể thay đổi timeframe riêng.
@@ -323,11 +320,13 @@ Ví dụ:
 ```
 
 Pair:
+
 ```text
   BTCUSDT
 ```
 
 Timeframe:
+
 ```text
   [1m] [5m] [15m] [1h] [4h] [1d]
 ```
@@ -369,7 +368,6 @@ Ví dụ:
      █ █ █
   ------ MA -------------------
 ```
-
 
 <!-- Page 7 -->
 
@@ -415,6 +413,7 @@ Ví dụ:
 ```
 
 return:
+
 ```text
              BUY
              SELL
@@ -430,7 +429,6 @@ context có thể chứa:
   candles
 ```
 
-
 <!-- Page 8 -->
 
 ```text
@@ -439,6 +437,7 @@ context có thể chứa:
   market state
   sentiment
 ```
+
 ...
 
 ## 7. Strategy ví dụ 1 – Moving Average
@@ -482,7 +481,6 @@ Không nên chứa:
   code vẽ chart
   code gửi notification
 ```
-
 
 <!-- Page 9 -->
 
@@ -534,7 +532,6 @@ Bollinger Bands tạo ba đường:
   Middle Band
   Lower Band
 ```
-
 
 <!-- Page 10 -->
 
@@ -591,7 +588,6 @@ Một strategy có thể là:
   → BUY
 ```
 
-
 <!-- Page 11 -->
 
 ```text
@@ -637,7 +633,6 @@ Một yêu cầu quan trọng:
 Hệ thống phải cho phép bổ sung strategy mới dễ dàng.
 
 Ví dụ ban đầu hệ thống có:
-
 
 <!-- Page 12 -->
 
@@ -687,12 +682,12 @@ Quan trọng là phải giải thích được:
 ```text
        Vì sao kiến trúc của nhóm có thể thêm strategy mới mà ảnh hưởng tối thiểu đến code hiện
 ```
+
 tại?
 
 ## 13. Module 5 – Composite Strategy
 
 Đây là phần trung tâm của bài toán.
-
 
 <!-- Page 13 -->
 
@@ -715,6 +710,7 @@ Ta có thể tạo:
   RSI + SR
   MA + RSI + SR
 ```
+
 ...
 
 Nhưng câu hỏi quan trọng là:
@@ -747,7 +743,6 @@ Một trường hợp khác:
   RSI → SELL
   SR     → BUY
 ```
-
 
 <!-- Page 14 -->
 
@@ -805,7 +800,6 @@ ta có:
   = 0.4
 ```
 
-
 <!-- Page 15 -->
 
 Quy định:
@@ -861,14 +855,15 @@ Ví dụ chỉ có 4 strategy:
   MA + RSI + BB
   MA + RSI + SR
 ```
+
 ...
 
 Nếu mỗi strategy lại có nhiều parameter:
 
-
 <!-- Page 16 -->
 
 MA:
+
 ```text
   10/20
   20/50
@@ -876,6 +871,7 @@ MA:
 ```
 
 RSI:
+
 ```text
   14/30/70
   14/20/80
@@ -913,6 +909,7 @@ Ví dụ:
   Loop 4
   MA + BB + SR
 ```
+
 ...
 
 Mỗi combination được:
@@ -931,24 +928,28 @@ Thay vì random hoàn toàn, có thể dựa trên đặc điểm domain.
 Ví dụ phân nhóm:
 
 Trend:
+
 ```text
   MA
   MACD
 ```
 
 Momentum:
+
 ```text
   RSI
   Stochastic
 ```
 
 Volatility:
+
 ```text
   Bollinger
   ATR
 ```
 
 Structure:
+
 ```text
   Support/Resistance
   SMC
@@ -956,6 +957,7 @@ Structure:
 ```
 
 Information:
+
 ```text
   News Sentiment
 ```
@@ -972,7 +974,6 @@ flowchart LR
 ```
 
 Ví dụ:
-
 
 <!-- Page 18 -->
 
@@ -1036,7 +1037,6 @@ Nhóm có thể nghiên cứu thêm:
 
 Đây là phần mở rộng, không bắt buộc.
 
-
 <!-- Page 19 -->
 
 ## 19. Module 7 – Backtesting Engine
@@ -1050,7 +1050,9 @@ Ví dụ dữ liệu:
 ```text
   01/01 BTC = $80,000
 ```
+
 ...
+
 ```text
   01/03 BTC = $95,000
 ```
@@ -1089,7 +1091,6 @@ Ví dụ:
 
 Strategy không được đánh giá chỉ bằng:
 
-
 <!-- Page 20 -->
 
 ```text
@@ -1105,6 +1106,7 @@ Ví dụ:
 ```
 
 nhưng từng có lúc:
+
 ```text
   -45%
 ```
@@ -1116,6 +1118,7 @@ nhưng từng có lúc:
 ```
 
 nhưng Max Drawdown:
+
 ```text
   -8%
 ```
@@ -1144,7 +1147,6 @@ Strategy Evaluation phải tách biệt khỏi Strategy Implementation.
 
 Sau mỗi lần backtest, kết quả được đưa vào Leaderboard.
 
-
 <!-- Page 21 -->
 
 Ví dụ:
@@ -1172,6 +1174,7 @@ Ví dụ:
 Có thể cho phép:
 
 Sort by:
+
 ```text
   Return
   Win Rate
@@ -1205,7 +1208,6 @@ Ví dụ:
 ```text
   Top K = 10
 ```
-
 
 <!-- Page 22 -->
 
@@ -1274,6 +1276,7 @@ Ví dụ:
 ```text
   #185
 ```
+
 ...
 
 Loop có thể chạy:
@@ -1299,7 +1302,6 @@ Loop có thể chạy:
 Nhóm phải thiết kế Stop Condition.
 
 Không được để:
-
 
 <!-- Page 24 -->
 
@@ -1347,7 +1349,6 @@ Qua đó có thể:
 - theo dõi tiến trình;
 - thay search algorithm;
 
-
 <!-- Page 25 -->
 
 - scale trong tương lai.
@@ -1390,6 +1391,7 @@ Ví dụ:
 Người dùng click:
 
 Strategy:
+
 ```text
   MA20 + RSI14 + SupportResistance
 ```
@@ -1411,7 +1413,6 @@ chart hiển thị:
 ```text
   Buy points
 ```
-
 
 <!-- Page 26 -->
 
@@ -1479,7 +1480,6 @@ Ví dụ:
   New blockchain upgrade
 ```
 
-
 <!-- Page 27 -->
 
 ```text
@@ -1517,16 +1517,19 @@ title:
 Bitcoin rises after ...
 
 publishedAt:
+
 ```text
   2026-07-28 08:15
 ```
 
 relatedCoins:
+
 ```text
   BTC
 ```
 
 source:
+
 ```text
   XXX
 ```
@@ -1534,7 +1537,6 @@ source:
 ## 28. News không được gắn cứng với một crawler
 
 Không nên thiết kế:
-
 
 <!-- Page 28 -->
 
@@ -1584,7 +1586,6 @@ Tin:
 
 có thể là:
 
-
 <!-- Page 29 -->
 
 ```text
@@ -1610,11 +1611,13 @@ Kết quả lưu:
 ```
 
 sentiment:
+
 ```text
   POSITIVE
 ```
 
 score:
+
 ```text
   0.82
 ```
@@ -1639,7 +1642,6 @@ Sau này có thể có:
 ```
 
 Ví dụ:
-
 
 <!-- Page 30 -->
 
@@ -1712,7 +1714,6 @@ Sinh viên cần xem đây là các architectural drivers.
 
 Có thể thêm:
 
-
 <!-- Page 32 -->
 
 ```text
@@ -1766,7 +1767,6 @@ Retry?
 
 Có mất candles không?
 
-
 <!-- Page 33 -->
 
 ### 32.5 Performance
@@ -1776,6 +1776,7 @@ Có 1.000 strategy cần backtest.
 Có nên chạy tuần tự:
 
 ...
+
 ```text
   1000
 ```
@@ -1816,7 +1817,6 @@ Loop đang chạy hay dừng?
 Đã thử bao nhiêu strategy?
 
 Backtest mất bao lâu?
-
 
 <!-- Page 34 -->
 
@@ -1863,7 +1863,6 @@ Chạy trên:
   01/01 → 01/07
   5m
 ```
-
 
 <!-- Page 35 -->
 
@@ -1914,7 +1913,6 @@ Bước 9
 Leaderboard tự cập nhật.
 
 Không cần refresh trang.
-
 
 <!-- Page 36 -->
 
@@ -1980,7 +1978,6 @@ Ranking Service nhận event đó.
 
 Điều này giúp giảm coupling giữa các module.
 
-
 <!-- Page 37 -->
 
 ## 35. Database
@@ -2028,7 +2025,6 @@ Trades
   Profit
   Strategy
 ```
-
 
 <!-- Page 38 -->
 
@@ -2085,7 +2081,6 @@ Sau đó sửa:
   RSI21
 ```
 
-
 <!-- Page 39 -->
 
 Không nên overwrite kết quả cũ.
@@ -2136,7 +2131,6 @@ Có khả năng giả lập giao dịch trên historical data.
 
 Tối thiểu:
 
-
 <!-- Page 40 -->
 
 ```text
@@ -2183,6 +2177,7 @@ Có pipeline:
 
 Các nhóm có thể mở rộng bằng:
 
+> **Ghi chú đối chiếu PDF:** Mục `ML → Sentiment` bên dưới không làm cho sentiment trở thành tùy chọn. Mục tiêu tổng thể yêu cầu phân tích sentiment bằng Machine Learning, mục MVP yêu cầu pipeline `Collect → Store → Analyze sentiment`, và demo tối thiểu gồm News/Sentiment. Vì vậy, phần mở rộng này được hiểu là các năng lực ML/sentiment nâng cao hơn lát cắt phân loại tối thiểu.
 
 <!-- Page 41 -->
 
@@ -2228,7 +2223,6 @@ Event Sourcing
 
 Plugin Architecture
 
-
 <!-- Page 42 -->
 
 Không được cộng điểm chỉ vì sử dụng công nghệ phức tạp.
@@ -2248,6 +2242,7 @@ Mà phải hiểu là:
 ```text
        Thiết kế một hệ thống mà hôm nay có MA + RSI, ngày mai có thể thêm SMC, Wyckoff,
 ```
+
 Sentiment hoặc một strategy hoàn toàn mới mà kiến trúc cũ vẫn hoạt động.
 
 Tương tự, hôm nay hệ thống dùng:
@@ -2278,7 +2273,6 @@ không cần viết lại.
 ## 40. Câu hỏi kiến trúc trung tâm
 
 Trong báo cáo, nhóm phải trả lời được các câu hỏi:
-
 
 <!-- Page 43 -->
 
@@ -2332,7 +2326,6 @@ có phải sửa frontend không?
 
 ## 7. Nếu Binance WebSocket disconnect thì hệ thống phục hồi như thế nào?
 
-
 <!-- Page 44 -->
 
 ## 8. Làm sao kiểm tra một kết quả trên Leaderboard được tạo ra bởi version strategy nào?
@@ -2379,7 +2372,6 @@ Hiện tại:
 ```
 
 Giảng viên yêu cầu thêm:
-
 
 <!-- Page 45 -->
 
@@ -2434,12 +2426,11 @@ mất:
   2 giây / candidate
 ```
 
-### 10.000 candidate cần:
+### 10.000 candidate cần
 
 ```text
   20.000 giây
 ```
-
 
 <!-- Page 46 -->
 
@@ -2490,7 +2481,6 @@ vừa:
 
 Không nên:
 
-
 <!-- Page 47 -->
 
 ```text
@@ -2540,7 +2530,6 @@ Sentiment Service xử lý:
 ```text
   analyze news
 ```
-
 
 <!-- Page 48 -->
 
@@ -2602,12 +2591,12 @@ Ví dụ:
 ```text
   ADR-001
 ```
+
 Tại sao dùng WebSocket?
 
 ```text
   ADR-002
 ```
-
 
 <!-- Page 49 -->
 
@@ -2616,11 +2605,13 @@ Tại sao dùng Plugin Architecture cho Strategy?
 ```text
   ADR-003
 ```
+
 Tại sao dùng Queue cho Backtesting?
 
 ```text
   ADR-004
 ```
+
 Tại sao tách Sentiment Service?
 
 ## 5. Demo
@@ -2677,7 +2668,6 @@ Mở BTCUSDT.
 
 4 chart realtime.
 
-
 <!-- Page 50 -->
 
 Bước 2
@@ -2708,6 +2698,7 @@ Màn hình hiển thị:
 ```
 
 Current:
+
 ```text
   MA20 + RSI14 + SR
 ```
@@ -2729,7 +2720,6 @@ Bước 6
 Click Top #1.
 
 Chart hiển thị:
-
 
 <!-- Page 51 -->
 
@@ -2787,7 +2777,6 @@ Chạy lại loop:
 ```text
   MA + SR + Sentiment
 ```
-
 
 <!-- Page 52 -->
 
@@ -2849,6 +2838,5 @@ Sinh viên được tự do lựa chọn framework, database, message queue, mô
 Kiến trúc được thiết kế như thế nào để các thành phần có thể thay đổi, mở rộng và hoạt động
 độc lập trong khi toàn bộ hệ thống vẫn duy trì được tính đúng đắn, khả năng quan sát và khả
 năng phát triển lâu dài.
-
 
 <!-- Page 54 -->
