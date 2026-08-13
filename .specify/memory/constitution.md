@@ -1,18 +1,18 @@
 <!--
 Sync Impact Report
-- Version change: 1.0.0 -> 1.1.0
+- Version change: 1.1.0 -> 1.2.0
 - Modified principles:
-  - Spec-Driven Development (SDD): added SRS as the approved product-requirement baseline and made
-    reading its relevant sections mandatory before feature specification.
-  - Cross-Document Consistency: added REQUIREMENT -> SRS -> feature artifact -> code traceability.
-  - AIF-SDLC Workflow: added the mandatory SRS input and traceability output to Specification Step.
-  - Feature Derivation Method: made SRS feature groups, flows and story IDs the derivation source.
-  - User Story Conventions: required preservation and mapping of canonical SRS story IDs.
-  - Definition of Done: added SRS coverage and traceability to the completion gate.
-  - Development Workflow: added an explicit SRS-read gate before speckit-specify.
-- Added sections: None.
+  - Spec-Driven Development (SDD): added the project architecture and ADRs as planning inputs.
+  - Cross-Document Consistency: added architecture and decision records to the consistency chain.
+  - Technology Stack: made the job broker and worker implementation subject to an Accepted ADR.
+  - Development Workflow: added the architecture/ADR review gate before speckit-plan.
+- Added sections:
+  - Architecture and ADR Governance.
 - Removed sections: None.
-- Follow-up TODOs: None.
+- Dependent templates updated:
+  - `.specify/templates/plan-template.md`: added explicit Architecture Decision References.
+- Follow-up TODOs:
+  - Team must review the Proposed architecture and ADRs before accepting them for implementation.
 -->
 
 # Crypto Strategy Lab Constitution
@@ -25,6 +25,7 @@ Sync Impact Report
     - [Spec-Driven Development (SDD)](#spec-driven-development-sdd)
     - [Simplicity Over Premature Scale](#simplicity-over-premature-scale)
     - [Cross-Document Consistency](#cross-document-consistency)
+    - [Architecture and ADR Governance](#architecture-and-adr-governance)
     - [Governance](#governance)
     - [AIF-SDLC Workflow](#aif-sdlc-workflow)
     - [Feature Derivation Method](#feature-derivation-method)
@@ -62,6 +63,10 @@ code is written.
   drivers.
 - `docs/SRS.md` is the approved product-requirement baseline for features, actors, business flows,
   functional requirements, non-functional requirements, User Story IDs and acceptance criteria.
+- `docs/ARCHITECTURE.md` is the project-wide architecture baseline for system boundaries, module
+  responsibilities, dependency rules, data flows and deployment shape.
+- `docs/ADR/README.md` indexes architectural decisions. Only ADRs with `Accepted` status are binding;
+  `Proposed` ADRs are review inputs and MUST NOT be treated as approved implementation decisions.
 - `specs/{feature-id}-{name}/spec.md` is the source of truth for WHAT one feature does and WHY.
 - `plan.md`, `research.md`, `data-model.md` and `contracts/` are the source of truth for HOW that
   feature is designed.
@@ -98,9 +103,9 @@ insufficient, and its operational/test impact.
 
 ### Cross-Document Consistency
 
-`docs/REQUIREMENT.md`, `docs/SRS.md`, feature artifacts and code are different views of the same
-system. Any change to one that affects another is incomplete until all affected views are updated.
-Inconsistency is a defect, not a backlog item.
+`docs/REQUIREMENT.md`, `docs/SRS.md`, `docs/ARCHITECTURE.md`, ADRs, feature artifacts and code are
+different views of the same system. Any change to one that affects another is incomplete until all
+affected views are updated. Inconsistency is a defect, not a backlog item.
 
 **The SRS and active `spec.md` are the source of truth for domain language.** Terms such as `Candle`,
 `StrategyDefinition`, `BacktestRun`, `EvaluationResult` and `LeaderboardEntry` MUST be used consistently
@@ -127,6 +132,25 @@ section or contract requires updating links and traceability references in all s
 **The complete feature set remains internally consistent.** Market data, strategy, composite,
 backtest, evaluation, search, leaderboard, news and sentiment artifacts MUST use compatible contracts.
 A change that crosses a boundary is incomplete without contract and integration-test updates.
+
+### Architecture and ADR Governance
+
+Architecture guides how approved requirements are implemented without replacing those requirements.
+Before `$speckit-plan`, the feature owner MUST read `docs/ARCHITECTURE.md`, `docs/ADR/README.md` and
+every ADR relevant to the feature.
+
+- `plan.md` MUST identify the architecture baseline, the relevant ADR IDs and statuses, and any
+  proposed deviation. A link alone is insufficient when the plan changes a documented boundary.
+- An `Accepted` ADR is binding. A `Proposed` ADR supports discussion but does not approve an
+  implementation choice.
+- The Constitution and approved SRS take precedence over architecture documents. If they conflict,
+  planning MUST stop until the documents and decision are reconciled.
+- A cross-feature, costly-to-reverse or infrastructure-level decision MUST be recorded in an ADR.
+  Feature-local and reversible choices belong in that feature's `research.md` or `plan.md`.
+- A deviation from an Accepted architecture baseline requires a new or superseding ADR before plan
+  approval. Code MUST NOT silently establish a new architecture.
+- Moving an ADR from `Proposed` to `Accepted` requires team review. Replacing an Accepted ADR requires
+  marking it `Superseded` and linking both the old and replacement records.
 
 ### Governance
 
@@ -688,7 +712,8 @@ Approved stack - major upgrades or new core dependencies require team approval a
 - FastAPI and Pydantic
 - SQLAlchemy 2 and Alembic
 - PostgreSQL 16
-- Redis and Celery workers
+- A durable job broker and horizontally scalable worker implementation selected by the relevant
+  Accepted ADR; Redis and Celery remain candidates until that ADR is accepted
 - NumPy and Pandas; Polars/Numba only after profiling evidence
 - httpx and websockets for provider adapters
 - pytest, pytest-asyncio and Testcontainers
@@ -708,7 +733,7 @@ Approved stack - major upgrades or new core dependencies require team approval a
 **Infrastructure**
 
 - Docker Desktop and Docker Compose for local orchestration
-- PostgreSQL and Redis as managed containers/services
+- PostgreSQL and feature-required broker/cache services selected by Accepted ADRs
 - Multi-stage Dockerfiles with non-root runtime users
 - GitHub Actions for lint, type-check, test, migration and build gates
 - k6 for realtime/API/worker submission load tests
@@ -721,13 +746,16 @@ Approved stack - major upgrades or new core dependencies require team approval a
 ### Development Workflow
 
 - Local development MUST start from a documented clean setup using Docker Compose for PostgreSQL and
-  Redis; API, worker and frontend may run in containers or documented local dev commands.
+  infrastructure required by the active feature's Accepted ADRs; API, worker and frontend may run in
+  containers or documented local dev commands.
 - One active feature proceeds through constitution -> specify -> clarify -> plan -> checklist -> tasks
   -> analyze -> implement -> converge.
 - Before `$speckit-specify` creates or updates that feature, the workflow MUST read `docs/SRS.md`, cite
   the selected feature/User Story IDs and identify the applicable section 3 requirements, section 6
   flow and cross-cutting NFRs. A prompt that does not provide those references does not waive this
   gate; the agent MUST discover them from the SRS.
+- Before `$speckit-plan`, the workflow MUST complete the Architecture and ADR Governance gate and
+  record its references and compliance results in `plan.md`.
 - Domain tests are written before implementation when the spec/constitution requires TDD. Contract and
   integration tests precede boundary implementations.
 - Pull requests MUST NOT merge with failing lint, type checks, tests, migrations or unresolved
@@ -753,4 +781,4 @@ Approved stack - major upgrades or new core dependencies require team approval a
 - Rate limiting and bounded resource requests protect expensive backtest/search endpoints.
 - Analysis output MUST display a non-investment-advice disclaimer and MUST NOT imply guaranteed profit.
 
-**Version**: 1.1.0 | **Ratified**: 2026-08-11 | **Last Amended**: 2026-08-11
+**Version**: 1.2.0 | **Ratified**: 2026-08-11 | **Last Amended**: 2026-08-13
