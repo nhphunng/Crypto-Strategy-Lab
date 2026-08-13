@@ -1,0 +1,504 @@
+openapi: 3.1.0
+info:
+  title: Crypto Strategy Lab - Leaderboard and Visualization API
+  version: 1.0.0
+  description: TV5 REST snapshot and ranked-result detail contract. WebSocket events are documented in leaderboard-events.md.
+servers:
+  - url: /api/v1
+tags:
+  - name: Leaderboards
+  - name: Ranked Results
+paths:
+  /leaderboards:
+    get:
+      tags: [Leaderboards]
+      operationId: listLeaderboardEntries
+      summary: Return the authoritative current leaderboard snapshot
+      description: Pair, timeframe, and runId define comparison scope; policy/version, rankBy, and K define projection identity. Metric-range filters, sortBy, sortDirection, and pagination affect only the returned view of that Top-K.
+      parameters:
+        - $ref: '#/components/parameters/ScoringPolicyId'
+        - $ref: '#/components/parameters/ScoringPolicyVersion'
+        - $ref: '#/components/parameters/Pair'
+        - $ref: '#/components/parameters/Timeframe'
+        - $ref: '#/components/parameters/RunId'
+        - $ref: '#/components/parameters/RankBy'
+        - name: k
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 200, default: 10 }
+        - $ref: '#/components/parameters/MinScore'
+        - $ref: '#/components/parameters/MinTotalReturn'
+        - $ref: '#/components/parameters/MinWinRate'
+        - $ref: '#/components/parameters/MaxDrawdown'
+        - $ref: '#/components/parameters/MinSharpeRatio'
+        - name: sortBy
+          in: query
+          schema:
+            $ref: '#/components/schemas/LeaderboardSortField'
+        - name: sortDirection
+          in: query
+          description: When omitted, rank sorts ascending and metrics use their documented semantic direction.
+          schema: { $ref: '#/components/schemas/SortDirection' }
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Snapshot returned
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LeaderboardResponseEnvelope' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '503': { $ref: '#/components/responses/DependencyUnavailable' }
+  /leaderboards/{leaderboardId}/entries/{evaluationResultId}:
+    get:
+      tags: [Ranked Results]
+      operationId: getRankedResultDetail
+      summary: Return ranking, evaluation, strategy, dataset, and visualization availability
+      parameters:
+        - $ref: '#/components/parameters/LeaderboardId'
+        - $ref: '#/components/parameters/EvaluationResultId'
+      responses:
+        '200':
+          description: Ranked result detail returned
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RankedResultResponseEnvelope' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '503': { $ref: '#/components/responses/DependencyUnavailable' }
+  /leaderboards/{leaderboardId}/entries/{evaluationResultId}/visualization:
+    get:
+      tags: [Ranked Results]
+      operationId: getRankedResultVisualization
+      summary: Return bounded Candles, generic overlays, and Signal/Trade markers
+      parameters:
+        - $ref: '#/components/parameters/LeaderboardId'
+        - $ref: '#/components/parameters/EvaluationResultId'
+        - name: startTime
+          in: query
+          required: true
+          description: Inclusive UTC range start. The requested range may contain at most 5000 Candle intervals.
+          schema: { type: string, format: date-time }
+        - name: endTime
+          in: query
+          required: true
+          description: Inclusive UTC range end. Oversized or reversed ranges return LEADERBOARD_RANGE_INVALID.
+          schema: { type: string, format: date-time }
+      responses:
+        '200':
+          description: Bounded visualization data returned
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/VisualizationResponseEnvelope' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '503': { $ref: '#/components/responses/DependencyUnavailable' }
+  /leaderboards/{leaderboardId}/entries/{evaluationResultId}/trades:
+    get:
+      tags: [Ranked Results]
+      operationId: listRankedResultTrades
+      summary: Return pageable simulated Trade detail
+      parameters:
+        - $ref: '#/components/parameters/LeaderboardId'
+        - $ref: '#/components/parameters/EvaluationResultId'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - name: sortBy
+          in: query
+          schema:
+            type: string
+            enum: [ENTRY_TIME, EXIT_TIME, RETURN_PERCENT]
+            default: ENTRY_TIME
+        - name: sortDirection
+          in: query
+          schema: { $ref: '#/components/schemas/SortDirection' }
+      responses:
+        '200':
+          description: Trade page returned
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TradePageResponseEnvelope' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '503': { $ref: '#/components/responses/DependencyUnavailable' }
+components:
+  parameters:
+    LeaderboardId:
+      name: leaderboardId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    EvaluationResultId:
+      name: evaluationResultId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    ScoringPolicyId:
+      name: scoringPolicyId
+      in: query
+      required: true
+      schema: { type: string, minLength: 1, maxLength: 100 }
+    ScoringPolicyVersion:
+      name: scoringPolicyVersion
+      in: query
+      required: true
+      schema: { type: string, minLength: 1, maxLength: 50 }
+    Pair:
+      name: pair
+      in: query
+      schema: { type: string, pattern: '^[A-Z0-9]{5,20}$' }
+    Timeframe:
+      name: timeframe
+      in: query
+      schema: { type: string, enum: [1m, 5m, 15m, 30m, 1h, 2h, 4h, 1d] }
+    RunId:
+      name: runId
+      in: query
+      schema: { type: string, format: uuid }
+    RankBy:
+      name: rankBy
+      in: query
+      required: true
+      description: Metric that determines Top-K membership and authoritative rank.
+      schema: { $ref: '#/components/schemas/RankMetric' }
+    MinScore:
+      name: minScore
+      in: query
+      schema: { $ref: '#/components/schemas/Decimal' }
+    MinTotalReturn:
+      name: minTotalReturn
+      in: query
+      schema: { $ref: '#/components/schemas/Decimal' }
+    MinWinRate:
+      name: minWinRate
+      in: query
+      schema: { $ref: '#/components/schemas/Decimal' }
+    MaxDrawdown:
+      name: maxDrawdown
+      in: query
+      description: Maximum accepted drawdown using the selected policy's documented unit/sign convention.
+      schema: { $ref: '#/components/schemas/Decimal' }
+    MinSharpeRatio:
+      name: minSharpeRatio
+      in: query
+      schema: { $ref: '#/components/schemas/Decimal' }
+    Page:
+      name: page
+      in: query
+      schema: { type: integer, minimum: 1, default: 1 }
+    PageSize:
+      name: pageSize
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 200, default: 25 }
+  responses:
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+    ValidationError:
+      description: Semantically invalid parameters
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+    DependencyUnavailable:
+      description: Required persistence dependency unavailable
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+  schemas:
+    RankMetric:
+      type: string
+      enum: [OVERALL_SCORE, TOTAL_RETURN, WIN_RATE, MAX_DRAWDOWN, SHARPE_RATIO]
+    LeaderboardSortField:
+      type: string
+      enum: [RANK, OVERALL_SCORE, TOTAL_RETURN, WIN_RATE, MAX_DRAWDOWN, SHARPE_RATIO]
+      default: RANK
+    MetricName:
+      type: string
+      enum: [OVERALL_SCORE, TOTAL_RETURN, WIN_RATE, MAX_DRAWDOWN, NUMBER_OF_TRADES, SHARPE_RATIO]
+    SortDirection:
+      type: string
+      enum: [ASC, DESC]
+    Decimal:
+      type: string
+      pattern: '^-?[0-9]+(\.[0-9]+)?$'
+    ResponseMeta:
+      type: object
+      required: [success, message, timestamp, requestId]
+      properties:
+        success: { type: boolean, const: true }
+        message: { type: string }
+        timestamp: { type: string, format: date-time }
+        requestId: { type: string }
+    PageMeta:
+      type: object
+      required: [page, pageSize, total]
+      properties:
+        page: { type: integer, minimum: 1 }
+        pageSize: { type: integer, minimum: 1, maximum: 200 }
+        total: { type: integer, minimum: 0 }
+    MetricSet:
+      type: object
+      required: [totalReturn, winRate, maxDrawdown, numberOfTrades]
+      properties:
+        totalReturn: { $ref: '#/components/schemas/Decimal' }
+        winRate: { $ref: '#/components/schemas/Decimal' }
+        maxDrawdown: { $ref: '#/components/schemas/Decimal' }
+        numberOfTrades: { type: integer, minimum: 0 }
+        sharpeRatio:
+          oneOf: [{ $ref: '#/components/schemas/Decimal' }, { type: 'null' }]
+    MetricDescriptor:
+      type: object
+      required: [metric, direction, unit]
+      properties:
+        metric: { $ref: '#/components/schemas/MetricName' }
+        direction: { $ref: '#/components/schemas/SortDirection' }
+        unit: { type: string, enum: [PERCENT, RATIO, COUNT, SCORE] }
+    StrategySummary:
+      type: object
+      required: [strategyId, strategyVersion, displayName, members]
+      properties:
+        strategyId: { type: string }
+        strategyVersion: { type: string }
+        displayName: { type: string }
+        members:
+          type: array
+          items:
+            type: object
+            required: [strategyId, strategyVersion]
+            properties:
+              strategyId: { type: string }
+              strategyVersion: { type: string }
+              displayName: { type: string }
+    LeaderboardEntry:
+      type: object
+      required: [evaluationResultId, rank, projectionVersion, score, strategy, pair, timeframe, datasetId, startTime, endTime, metrics, scoringPolicyId, scoringPolicyVersion, updatedAt]
+      properties:
+        evaluationResultId: { type: string, format: uuid }
+        rank: { type: integer, minimum: 1 }
+        projectionVersion: { type: integer, minimum: 0 }
+        score: { $ref: '#/components/schemas/Decimal' }
+        strategy: { $ref: '#/components/schemas/StrategySummary' }
+        pair: { type: string }
+        timeframe: { type: string }
+        datasetId: { type: string, format: uuid }
+        startTime: { type: string, format: date-time }
+        endTime: { type: string, format: date-time }
+        metrics: { $ref: '#/components/schemas/MetricSet' }
+        scoringPolicyId: { type: string }
+        scoringPolicyVersion: { type: string }
+        updatedAt: { type: string, format: date-time }
+    LeaderboardSnapshot:
+      type: object
+      required: [leaderboardId, scopeKey, scoringPolicyId, scoringPolicyVersion, rankBy, k, projectionVersion, updatedAt, metricMetadata, entries, pagination]
+      properties:
+        leaderboardId: { type: string, format: uuid }
+        scopeKey: { type: string }
+        scoringPolicyId: { type: string }
+        scoringPolicyVersion: { type: string }
+        rankBy: { $ref: '#/components/schemas/RankMetric' }
+        k: { type: integer, minimum: 1, maximum: 200 }
+        projectionVersion: { type: integer, minimum: 0 }
+        updatedAt: { type: string, format: date-time }
+        runState: { type: [string, 'null'], enum: [QUEUED, RUNNING, COMPLETED, FAILED, CANCELLED, null] }
+        metricMetadata:
+          type: array
+          items: { $ref: '#/components/schemas/MetricDescriptor' }
+        entries:
+          type: array
+          items: { $ref: '#/components/schemas/LeaderboardEntry' }
+        pagination: { $ref: '#/components/schemas/PageMeta' }
+    LeaderboardResponseEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/ResponseMeta'
+        - type: object
+          required: [data]
+          properties:
+            data: { $ref: '#/components/schemas/LeaderboardSnapshot' }
+    Provenance:
+      type: object
+      required: [evaluationResultId, backtestResultId, runId, jobId, strategyId, strategyVersion, datasetId, executionConfig, resultChecksum, scoringPolicyId, scoringPolicyVersion]
+      properties:
+        evaluationResultId: { type: string, format: uuid }
+        backtestResultId: { type: string, format: uuid }
+        runId: { type: string, format: uuid }
+        jobId: { type: string, format: uuid }
+        strategyId: { type: string }
+        strategyVersion: { type: string }
+        datasetId: { type: string, format: uuid }
+        executionConfig: { type: object, additionalProperties: true }
+        resultChecksum: { type: string }
+        scoringPolicyId: { type: string }
+        scoringPolicyVersion: { type: string }
+    Availability:
+      type: object
+      required: [state]
+      properties:
+        state: { type: string, enum: [AVAILABLE, EMPTY, PARTIAL, UNAVAILABLE] }
+        count: { type: integer, minimum: 0 }
+        reason: { type: [string, 'null'] }
+    VisualizationAvailability:
+      type: object
+      required: [candles, overlays, signals, trades]
+      properties:
+        candles: { $ref: '#/components/schemas/Availability' }
+        overlays: { $ref: '#/components/schemas/Availability' }
+        signals: { $ref: '#/components/schemas/Availability' }
+        trades: { $ref: '#/components/schemas/Availability' }
+    RankedResultDetail:
+      type: object
+      required: [entry, provenance, candles, overlays, signals, trades]
+      properties:
+        entry: { $ref: '#/components/schemas/LeaderboardEntry' }
+        provenance: { $ref: '#/components/schemas/Provenance' }
+        candles: { $ref: '#/components/schemas/Availability' }
+        overlays: { $ref: '#/components/schemas/Availability' }
+        signals: { $ref: '#/components/schemas/Availability' }
+        trades: { $ref: '#/components/schemas/Availability' }
+    RankedResultResponseEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/ResponseMeta'
+        - type: object
+          required: [data]
+          properties:
+            data: { $ref: '#/components/schemas/RankedResultDetail' }
+    Candle:
+      type: object
+      required: [openTime, open, high, low, close, volume]
+      properties:
+        openTime: { type: string, format: date-time }
+        open: { $ref: '#/components/schemas/Decimal' }
+        high: { $ref: '#/components/schemas/Decimal' }
+        low: { $ref: '#/components/schemas/Decimal' }
+        close: { $ref: '#/components/schemas/Decimal' }
+        volume: { $ref: '#/components/schemas/Decimal' }
+    Overlay:
+      type: object
+      required: [id, kind, label, styleToken, sourceStrategyId, sourceStrategyVersion, points]
+      properties:
+        id: { type: string }
+        kind: { type: string, enum: [LINE, BAND, ZONE] }
+        label: { type: string }
+        styleToken: { type: string }
+        sourceStrategyId: { type: string }
+        sourceStrategyVersion: { type: string }
+        points:
+          type: array
+          items:
+            oneOf:
+              - $ref: '#/components/schemas/LinePoint'
+              - $ref: '#/components/schemas/BandPoint'
+              - $ref: '#/components/schemas/ZonePoint'
+    LinePoint:
+      type: object
+      required: [time, value]
+      properties:
+        time: { type: string, format: date-time }
+        value: { $ref: '#/components/schemas/Decimal' }
+      additionalProperties: false
+    BandPoint:
+      type: object
+      required: [time, upper, lower]
+      properties:
+        time: { type: string, format: date-time }
+        upper: { $ref: '#/components/schemas/Decimal' }
+        middle:
+          oneOf: [{ $ref: '#/components/schemas/Decimal' }, { type: 'null' }]
+        lower: { $ref: '#/components/schemas/Decimal' }
+      additionalProperties: false
+    ZonePoint:
+      type: object
+      required: [startTime, endTime, upper, lower]
+      properties:
+        startTime: { type: string, format: date-time }
+        endTime: { type: string, format: date-time }
+        upper: { $ref: '#/components/schemas/Decimal' }
+        lower: { $ref: '#/components/schemas/Decimal' }
+      additionalProperties: false
+    Marker:
+      type: object
+      required: [id, type, time, price, label, shape, sourceStrategyId, sourceStrategyVersion]
+      properties:
+        id: { type: string }
+        type: { type: string, enum: [BUY, SELL, HOLD, ENTRY, EXIT] }
+        time: { type: string, format: date-time }
+        price:
+          description: Required decimal value for aligned markers; null only for an unaligned marker carrying a reason.
+          oneOf: [{ $ref: '#/components/schemas/Decimal' }, { type: 'null' }]
+        label: { type: string }
+        shape: { type: string, enum: [ARROW_UP, ARROW_DOWN, TRIANGLE_UP, TRIANGLE_DOWN, DIAMOND, DOT, ENTRY_OUTLINED, EXIT_OUTLINED] }
+        tone: { type: string, enum: [POSITIVE, NEGATIVE, NEUTRAL, INFO] }
+        sourceStrategyId: { type: string }
+        sourceStrategyVersion: { type: string }
+        signalId: { type: [string, 'null'], format: uuid }
+        tradeId: { type: [string, 'null'], format: uuid }
+    VisualizationData:
+      type: object
+      required: [pair, timeframe, startTime, endTime, availability, candles, overlays, markers, unalignedMarkers]
+      properties:
+        pair: { type: string }
+        timeframe: { type: string }
+        startTime: { type: string, format: date-time }
+        endTime: { type: string, format: date-time }
+        availability: { $ref: '#/components/schemas/VisualizationAvailability' }
+        candles: { type: array, items: { $ref: '#/components/schemas/Candle' } }
+        overlays: { type: array, items: { $ref: '#/components/schemas/Overlay' } }
+        markers: { type: array, items: { $ref: '#/components/schemas/Marker' } }
+        unalignedMarkers:
+          type: array
+          items:
+            type: object
+            required: [marker, reason]
+            properties:
+              marker: { $ref: '#/components/schemas/Marker' }
+              reason: { type: string }
+    VisualizationResponseEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/ResponseMeta'
+        - type: object
+          required: [data]
+          properties:
+            data: { $ref: '#/components/schemas/VisualizationData' }
+    Trade:
+      type: object
+      required: [tradeId, entryTime, entryPrice, exitTime, exitPrice, side, quantity, profitLoss, returnPercent]
+      properties:
+        tradeId: { type: string, format: uuid }
+        entrySignalId: { type: [string, 'null'], format: uuid }
+        exitSignalId: { type: [string, 'null'], format: uuid }
+        entryTime: { type: string, format: date-time }
+        entryPrice: { $ref: '#/components/schemas/Decimal' }
+        exitTime: { type: string, format: date-time }
+        exitPrice: { $ref: '#/components/schemas/Decimal' }
+        side: { type: string }
+        quantity: { $ref: '#/components/schemas/Decimal' }
+        profitLoss: { $ref: '#/components/schemas/Decimal' }
+        returnPercent: { $ref: '#/components/schemas/Decimal' }
+    TradePage:
+      type: object
+      required: [items, pagination]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/Trade' } }
+        pagination: { $ref: '#/components/schemas/PageMeta' }
+    TradePageResponseEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/ResponseMeta'
+        - type: object
+          required: [data]
+          properties:
+            data: { $ref: '#/components/schemas/TradePage' }
+    ErrorEnvelope:
+      type: object
+      required: [success, message, data, timestamp, requestId]
+      properties:
+        success: { type: boolean, const: false }
+        message: { type: string }
+        data:
+          type: object
+          required: [code]
+          properties:
+            code:
+              type: string
+              enum: [LEADERBOARD_NOT_FOUND, LEADERBOARD_ENTRY_NOT_FOUND, LEADERBOARD_QUERY_INVALID, LEADERBOARD_RANGE_INVALID, LEADERBOARD_DEPENDENCY_UNAVAILABLE]
+            details: { type: object, additionalProperties: true }
+        timestamp: { type: string, format: date-time }
+        requestId: { type: string }

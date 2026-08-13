@@ -938,7 +938,7 @@ Không coi `ANALYST`, `STRATEGY_DEVELOPER`, `OPERATOR` là security role cho t�
 
 ### <span style="color:#9A3412;">7.9 Leaderboard and Visualization (LV) 🏆</span> <a id="79-leaderboard-and-visualization-lv"></a>
 
-> Planned Spec: [specs/009-leaderboard-visualization/spec.md](../specs/009-leaderboard-visualization/spec.md)
+> Planned Spec: [specs/005-leaderboard-visualization/spec.md](../specs/005-leaderboard-visualization/spec.md)
 
 #### <span style="color:#9A3412;">7.9.1 LV-US-01: View Top-K Strategies</span> <a id="791-lv-us-01-view-top-k-strategies"></a>
 
