@@ -182,7 +182,7 @@
 ## Parallel Opportunities
 
 - T002–T003 can run in parallel; T004 depends on Feature 001 merge.
-- T006–T012, T14–T16, and T19–T20 are parallel after shared conventions T005.
+- T006–T012, T014–T016, and T019–T020 are parallel after shared conventions T005.
 - Each story's test tasks marked `[P]` can be written in parallel before its implementation.
 - US2 detail queries and US3 metric work can proceed in parallel after US1 stabilizes the Backtest Result contract.
 - T057–T060 can proceed in parallel after all public contracts stabilize.
