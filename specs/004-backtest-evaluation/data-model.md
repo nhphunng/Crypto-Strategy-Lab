@@ -63,7 +63,7 @@ One point per input Candle, ordered by position. Stores Candle open time, close 
 | jobId / runId | UUID | Unique correlation/idempotency |
 | inputFingerprint | SHA-256 | Canonical complete input identity |
 | resultChecksum | SHA-256 | Canonical provenance, Signals, Trades, Equity Curve, final equity |
-| historyState | enum | `EMPTY`, `INSUFFICIENT`, `EVALUABLE` |
+| historyState | enum | `INSUFFICIENT`, `EVALUABLE`; zero-Candle datasets are rejected before a Result is created |
 | tradeState | enum | `NO_TRADES`, `HAS_TRADES` |
 | initialCapital / finalEquity | decimal | Positive/reconcilable |
 | signalCount / tradeCount / equityPointCount | integer | Exact child counts |

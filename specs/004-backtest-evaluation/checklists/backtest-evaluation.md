@@ -45,7 +45,7 @@
 ## Scenario and Edge-Case Coverage
 
 - [x] CHK025 Are all five canonical included SRS stories represented as independently testable user stories? [Coverage, Spec US1–US5]
-- [x] CHK026 Are empty, insufficient-history, all-HOLD/WARMUP, final-Candle Signal, and no-trade scenarios addressed? [Coverage, Spec §Edge Cases]
+- [x] CHK026 Are zero-Candle dataset rejection, insufficient-history, all-HOLD/WARMUP, final-Candle Signal, and no-trade scenarios addressed? [Coverage, Spec §Edge Cases]
 - [x] CHK027 Are redundant Signals, insufficient capital after costs, and forced final closure addressed? [Coverage, Spec §Edge Cases]
 - [x] CHK028 Are duplicate run/evaluation submissions, conflicting identity reuse, and partial-failure behavior addressed? [Coverage, Spec §FR-016, FR-020]
 - [x] CHK029 Are incompatible contract versions, unavailable Strategy versions, Dataset integrity failure, and unavailable required context covered? [Coverage, Spec US1; Edge Cases]

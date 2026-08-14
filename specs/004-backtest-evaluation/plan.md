@@ -90,6 +90,7 @@ specs/004-backtest-evaluation/
 ├── plan.md
 ├── research.md
 ├── data-model.md
+├── database-review.md
 ├── quickstart.md
 ├── contracts/
 │   ├── openapi.yaml

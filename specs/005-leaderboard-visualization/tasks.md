@@ -18,7 +18,7 @@
 
 **Purpose**: Establish feature folders, deterministic fixtures, and contract tooling without adding a service.
 
-- [ ] T001 Create backend leaderboard package initializers in `backend/src/crypto_lab/domain/leaderboard/__init__.py` and `backend/src/crypto_lab/application/leaderboard/__init__.py`
+- [X] T001 Create backend leaderboard package initializers in `backend/src/crypto_lab/domain/leaderboard/__init__.py` and `backend/src/crypto_lab/application/leaderboard/__init__.py`
 - [ ] T002 [P] Create the frontend feature barrel and minimal route shell in `frontend/src/features/leaderboard/index.ts` and `frontend/src/app/routes/leaderboard.tsx`
 - [ ] T003 [P] Add the deterministic 12-result, tie, no-trade, and partial-marker TV5 fixture in `backend/tests/fixtures/leaderboard.py`
 - [ ] T004 [P] Configure OpenAPI-derived leaderboard type generation and runtime contract validation entry in `frontend/package.json` and `frontend/src/features/leaderboard/schemas.ts`
@@ -35,11 +35,11 @@
 - [ ] T006 [P] Define framework-independent `LeaderboardEntry` and projection invariants in `backend/src/crypto_lab/domain/leaderboard/entry.py`
 - [ ] T007 [P] Define typed repository, Evaluation Result reader, ranked-result reader, and update-publisher ports in `backend/src/crypto_lab/application/leaderboard/ports.py`
 - [ ] T008 [P] Add Pydantic request, response, and event DTOs aligned to TV5 contracts in `backend/src/crypto_lab/api/schemas/leaderboards.py`
-- [ ] T009 Add `leaderboards`, `leaderboard_entries`, and durable update-record SQLAlchemy mappings and constraints in `backend/src/crypto_lab/infrastructure/persistence/models.py`
+- [ ] T009 Add `leaderboards`, `leaderboard_entries`, and durable update-record SQLAlchemy mappings and constraints in `backend/src/crypto_lab/infrastructure/persistence/leaderboard_models.py`
 - [ ] T010 Create immutable Alembic upgrade/downgrade for leaderboard projection tables, constraints, and indices in `backend/migrations/versions/005_add_leaderboard_projection.py`
 - [ ] T011 Implement transactional repository primitives, projection locking, bounded queries, and durable update records in `backend/src/crypto_lab/infrastructure/persistence/repositories/leaderboard_repository.py`
 - [ ] T012 [P] Add structured leaderboard log context and current Top-1/update-latency metrics in `backend/src/crypto_lab/infrastructure/observability/leaderboard.py`
-- [ ] T013 Define repository, reader, publisher, and use-case dependency providers without route imports or business logic in `backend/src/crypto_lab/api/dependencies/leaderboard.py`
+- [ ] T013 Define repository, reader, publisher, and use-case dependency providers without route imports or business logic in `backend/src/crypto_lab/api/leaderboard_dependencies.py`
 
 **Checkpoint**: Shared types compile, migration round-trips against PostgreSQL, and boundaries can be constructed.
 
