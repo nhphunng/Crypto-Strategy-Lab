@@ -3,8 +3,9 @@ info:
   title: Crypto Strategy Lab Market Chart API
   version: 1.0.0-draft
   description: >-
-    Draft shared TV1/TV2 contract for supported market dimensions and bounded
-    historical Candle bootstrap. TV1 and TV2 must approve it before implementation.
+    TV2 compatibility projection for supported market dimensions and bounded
+    historical Candle bootstrap. Feature 001 owns the authoritative historical
+    REST contract; this projection must remain compatible with its version 1 semantics.
 servers:
   - url: /api/v1
 paths:
@@ -202,7 +203,7 @@ components:
           $ref: "#/components/schemas/Completeness"
         missingRanges:
           type: array
-          maxItems: 100
+          maxItems: 500
           items:
             $ref: "#/components/schemas/TimeRange"
         candles:

@@ -699,7 +699,7 @@ Không coi `ANALYST`, `STRATEGY_DEVELOPER`, `OPERATOR` là security role cho t�
 
 ### <span style="color:#9A3412;">7.1 Market Data (MD) 📡</span> <a id="71-market-data-md"></a>
 
-> Planned Spec: [specs/001-market-data/spec.md](../specs/001-market-data/spec.md)
+> Planned Spec: [specs/001-historical-market-data/spec.md](../specs/001-historical-market-data/spec.md)
 
 #### <span style="color:#9A3412;">7.1.1 MD-US-01: Load Historical Candles</span> <a id="711-md-us-01-load-historical-candles"></a>
 

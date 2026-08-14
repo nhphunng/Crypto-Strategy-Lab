@@ -105,11 +105,11 @@ An upstream immutable market observation consumed by Strategy Context.
 | provider | string | Matches the owning dataset |
 | pair | string | Canonical Market Pair such as `BTCUSDT` |
 | timeframe | canonical value | Matches the owning dataset |
-| timestamp | UTC instant | Strictly increasing within the context |
+| openTime | UTC instant | Strictly increasing within the context; this is the canonical Candle interval-opening timestamp owned by Feature 001 |
 | open / high / low / close / volume | decimal | Valid upstream OHLCV invariants; volume non-negative |
 | closed | boolean | Strategy analysis uses normalized closed historical observations for this feature |
 
-**Identity**: `(provider, pair, timeframe, timestamp)` within the upstream normalized-data contract.
+**Identity**: `(provider, pair, timeframe, openTime)` within the upstream normalized-data contract. Strategy `Signal.timestamp` equals the associated Candle `openTime`; `timestamp` is not a second Candle identity field.
 
 ## Entity: Strategy Context
 

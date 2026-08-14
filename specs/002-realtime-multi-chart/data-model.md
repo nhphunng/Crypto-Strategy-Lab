@@ -44,7 +44,7 @@
 | `rangeEnd` | UTC instant | Exclusive |
 | `completeness` | enum | `COMPLETE`, `PARTIAL`, `EMPTY` |
 | `candles` | ordered Candle list | Unique, chronological, maximum 1,000 |
-| `missingRanges` | range list | Empty when complete; bounded explanation when partial |
+| `missingRanges` | range list | Empty when complete; exact sorted non-overlapping explanation when partial, bounded to at most 500 by the 1,000-Candle request limit |
 
 ## Chart Slot *(client-session state)*
 
