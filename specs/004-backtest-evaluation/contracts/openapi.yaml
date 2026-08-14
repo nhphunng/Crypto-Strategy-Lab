@@ -1,0 +1,336 @@
+openapi: 3.1.0
+info:
+  title: Backtest and Evaluation API
+  version: 1.0.0
+servers:
+  - url: /api/v1
+paths:
+  /backtest-runs:
+    post:
+      operationId: createBacktestRun
+      summary: Create one requested Backtest Run from exact immutable inputs
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateBacktestRunRequest' }
+      responses:
+        '201':
+          description: Run created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BacktestRunEnvelope' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /backtest-runs/{runId}/start:
+    post:
+      operationId: startBacktestRun
+      summary: Execute a requested run directly in the bounded Feature 004 slice
+      parameters: [{ $ref: '#/components/parameters/RunId' }]
+      responses:
+        '200':
+          description: Run completed idempotently
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BacktestResultEnvelope' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '503': { $ref: '#/components/responses/DependencyUnavailable' }
+  /backtest-runs/{runId}:
+    get:
+      operationId: getBacktestRun
+      parameters: [{ $ref: '#/components/parameters/RunId' }]
+      responses:
+        '200':
+          description: Run returned
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BacktestRunEnvelope' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /backtest-results/{resultId}:
+    get:
+      operationId: getBacktestResult
+      parameters: [{ $ref: '#/components/parameters/ResultId' }]
+      responses:
+        '200':
+          description: Result returned
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BacktestResultEnvelope' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /backtest-results/{resultId}/trades:
+    get:
+      operationId: listBacktestTrades
+      parameters:
+        - $ref: '#/components/parameters/ResultId'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Trade page returned
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TradePageEnvelope' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /backtest-results/{resultId}/equity-curve:
+    get:
+      operationId: listBacktestEquity
+      parameters:
+        - $ref: '#/components/parameters/ResultId'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Equity page returned
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EquityPageEnvelope' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /evaluation-results:
+    post:
+      operationId: evaluateBacktestResult
+      summary: Calculate metrics and apply exact versioned policies
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateEvaluationRequest' }
+      responses:
+        '201':
+          description: Evaluation created or resolved idempotently
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EvaluationResultEnvelope' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /evaluation-results/{evaluationResultId}:
+    get:
+      operationId: getEvaluationResult
+      parameters: [{ $ref: '#/components/parameters/EvaluationResultId' }]
+      responses:
+        '200':
+          description: Evaluation returned
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EvaluationResultEnvelope' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /evaluation-comparisons:
+    post:
+      operationId: compareEvaluationResults
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ComparisonRequest' }
+      responses:
+        '200':
+          description: Comparison returned with compatibility findings
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ComparisonEnvelope' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+components:
+  parameters:
+    RunId: { name: runId, in: path, required: true, schema: { type: string, format: uuid } }
+    ResultId: { name: resultId, in: path, required: true, schema: { type: string, format: uuid } }
+    EvaluationResultId: { name: evaluationResultId, in: path, required: true, schema: { type: string, format: uuid } }
+    Page: { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
+    PageSize: { name: pageSize, in: query, schema: { type: integer, minimum: 1, maximum: 200, default: 25 } }
+  schemas:
+    Decimal: { type: string, pattern: '^-?[0-9]+(\.[0-9]+)?$' }
+    NonNegativeDecimal: { type: string, pattern: '^(?:0|[1-9][0-9]*)(?:\.[0-9]+)?$' }
+    PositiveDecimal: { type: string, pattern: '^(?:0\.[0-9]*[1-9][0-9]*|[1-9][0-9]*(?:\.[0-9]+)?)$' }
+    CreateBacktestRunRequest:
+      type: object
+      required: [jobId, datasetId, datasetSchemaVersion, datasetChecksum, strategyDefinitionId, strategyVersion, contractVersion, executionPolicyId, executionPolicyVersion, initialCapital, feeRate, slippageRate, randomSeed]
+      properties:
+        jobId: { type: string, format: uuid }
+        datasetId: { type: string, format: uuid }
+        datasetSchemaVersion: { type: string, const: '1' }
+        datasetChecksum: { type: string, pattern: '^[0-9a-f]{64}$' }
+        strategyDefinitionId: { type: string, format: uuid }
+        strategyVersion: { type: string }
+        contractVersion: { type: string, const: '1.0.0' }
+        executionPolicyId: { type: string }
+        executionPolicyVersion: { type: string }
+        initialCapital: { $ref: '#/components/schemas/Decimal' }
+        feeRate: { $ref: '#/components/schemas/Decimal' }
+        slippageRate: { $ref: '#/components/schemas/Decimal' }
+        randomSeed: { type: integer }
+    BacktestRun:
+      type: object
+      required: [id, jobId, status, datasetId, strategyDefinitionId, executionPolicyId, executionPolicyVersion, initialCapital, feeRate, slippageRate, randomSeed, requestedAt]
+      properties:
+        id: { type: string, format: uuid }
+        jobId: { type: string, format: uuid }
+        status: { type: string, enum: [REQUESTED, RUNNING, COMPLETED, FAILED] }
+        datasetId: { type: string, format: uuid }
+        strategyDefinitionId: { type: string, format: uuid }
+        executionPolicyId: { type: string }
+        executionPolicyVersion: { type: string }
+        initialCapital: { $ref: '#/components/schemas/Decimal' }
+        feeRate: { $ref: '#/components/schemas/Decimal' }
+        slippageRate: { $ref: '#/components/schemas/Decimal' }
+        randomSeed: { type: integer }
+        requestedAt: { type: string, format: date-time }
+        completedAt: { type: [string, 'null'], format: date-time }
+        failureCode: { type: [string, 'null'] }
+    Provenance:
+      type: object
+      required: [datasetId, datasetSchemaVersion, datasetChecksum, strategyDefinitionId, strategyId, strategyVersion, contractVersion, executionPolicyId, executionPolicyVersion, executionConfigFingerprint]
+      properties:
+        datasetId: { type: string, format: uuid }
+        datasetSchemaVersion: { type: string }
+        datasetChecksum: { type: string }
+        strategyDefinitionId: { type: string, format: uuid }
+        strategyId: { type: string }
+        strategyVersion: { type: string }
+        contractVersion: { type: string }
+        executionPolicyId: { type: string }
+        executionPolicyVersion: { type: string }
+        executionConfigFingerprint: { type: string }
+    BacktestResult:
+      type: object
+      required: [id, runId, jobId, resultChecksum, historyState, tradeState, initialCapital, finalEquity, signalCount, tradeCount, equityPointCount, provenance, analysisType, disclaimer]
+      properties:
+        id: { type: string, format: uuid }
+        runId: { type: string, format: uuid }
+        jobId: { type: string, format: uuid }
+        resultChecksum: { type: string, pattern: '^[0-9a-f]{64}$' }
+        historyState: { type: string, enum: [EMPTY, INSUFFICIENT, EVALUABLE] }
+        tradeState: { type: string, enum: [NO_TRADES, HAS_TRADES] }
+        initialCapital: { $ref: '#/components/schemas/Decimal' }
+        finalEquity: { $ref: '#/components/schemas/Decimal' }
+        signalCount: { type: integer, minimum: 0 }
+        tradeCount: { type: integer, minimum: 0 }
+        equityPointCount: { type: integer, minimum: 0 }
+        provenance: { $ref: '#/components/schemas/Provenance' }
+        analysisType: { type: string, const: HISTORICAL_SIMULATION }
+        disclaimer: { type: string, minLength: 1 }
+    Trade:
+      type: object
+      required: [id, sequence, entryTime, exitTime, entryPrice, exitPrice, side, quantity, entryFee, exitFee, profitLoss, returnPercent, closeReason]
+      properties:
+        id: { type: string, format: uuid }
+        sequence: { type: integer, minimum: 0 }
+        entrySignalId: { type: [string, 'null'], format: uuid }
+        exitSignalId: { type: [string, 'null'], format: uuid }
+        entryTime: { type: string, format: date-time }
+        exitTime: { type: string, format: date-time }
+        entryPrice: { $ref: '#/components/schemas/Decimal' }
+        exitPrice: { $ref: '#/components/schemas/Decimal' }
+        side: { type: string, const: LONG }
+        quantity: { $ref: '#/components/schemas/Decimal' }
+        entryFee: { $ref: '#/components/schemas/Decimal' }
+        exitFee: { $ref: '#/components/schemas/Decimal' }
+        profitLoss: { $ref: '#/components/schemas/Decimal' }
+        returnPercent: { $ref: '#/components/schemas/Decimal' }
+        closeReason: { type: string, enum: [SELL_SIGNAL, END_OF_RANGE] }
+    EquityPoint:
+      type: object
+      required: [position, candleOpenTime, closePrice, cash, quantity, positionValue, equity]
+      properties:
+        position: { type: integer, minimum: 0 }
+        candleOpenTime: { type: string, format: date-time }
+        closePrice: { $ref: '#/components/schemas/Decimal' }
+        cash: { $ref: '#/components/schemas/Decimal' }
+        quantity: { $ref: '#/components/schemas/Decimal' }
+        positionValue: { $ref: '#/components/schemas/Decimal' }
+        equity: { $ref: '#/components/schemas/Decimal' }
+    MetricSet:
+      type: object
+      required: [totalReturn, winRate, maxDrawdown, numberOfTrades, profitFactor, sharpeRatio]
+      properties:
+        totalReturn: { $ref: '#/components/schemas/Decimal' }
+        winRate: { $ref: '#/components/schemas/Decimal' }
+        maxDrawdown: { $ref: '#/components/schemas/Decimal' }
+        numberOfTrades: { type: integer, minimum: 0 }
+        profitFactor: { oneOf: [{ $ref: '#/components/schemas/Decimal' }, { type: 'null' }] }
+        sharpeRatio: { oneOf: [{ $ref: '#/components/schemas/Decimal' }, { type: 'null' }] }
+    CreateEvaluationRequest:
+      type: object
+      required: [backtestResultId, evaluationPolicyId, evaluationPolicyVersion, scoringPolicyId, scoringPolicyVersion]
+      properties:
+        backtestResultId: { type: string, format: uuid }
+        evaluationPolicyId: { type: string }
+        evaluationPolicyVersion: { type: string }
+        scoringPolicyId: { type: string }
+        scoringPolicyVersion: { type: string }
+    EvaluationResult:
+      type: object
+      required: [id, backtestResultId, jobId, runId, strategyId, strategyVersion, datasetId, pair, timeframe, startTime, endTime, executionConfig, metrics, score, eligible, exclusionReasons, evaluationPolicyId, evaluationPolicyVersion, scoringPolicyId, scoringPolicyVersion, evaluatedAt, analysisType, disclaimer]
+      properties:
+        id: { type: string, format: uuid }
+        backtestResultId: { type: string, format: uuid }
+        jobId: { type: string, format: uuid }
+        runId: { type: string, format: uuid }
+        strategyId: { type: string }
+        strategyVersion: { type: string }
+        datasetId: { type: string, format: uuid }
+        pair: { type: string }
+        timeframe: { type: string }
+        startTime: { type: string, format: date-time }
+        endTime: { type: string, format: date-time }
+        executionConfig: { type: object, additionalProperties: true }
+        metrics: { $ref: '#/components/schemas/MetricSet' }
+        score: { $ref: '#/components/schemas/Decimal' }
+        eligible: { type: boolean }
+        exclusionReasons: { type: array, items: { type: string } }
+        evaluationPolicyId: { type: string }
+        evaluationPolicyVersion: { type: string }
+        scoringPolicyId: { type: string }
+        scoringPolicyVersion: { type: string }
+        evaluatedAt: { type: string, format: date-time }
+        analysisType: { type: string, const: HISTORICAL_SIMULATION }
+        disclaimer: { type: string, minLength: 1 }
+    ComparisonRequest:
+      type: object
+      required: [evaluationResultIds, mode]
+      properties:
+        evaluationResultIds: { type: array, minItems: 2, maxItems: 200, uniqueItems: true, items: { type: string, format: uuid } }
+        mode: { type: string, enum: [STRICT, CONTEXTUAL] }
+    Comparison:
+      type: object
+      required: [compatible, differences, results]
+      properties:
+        compatible: { type: boolean }
+        differences: { type: array, items: { type: object, required: [dimension, values], properties: { dimension: { type: string }, values: { type: array, items: {} } } } }
+        results: { type: array, items: { $ref: '#/components/schemas/EvaluationResult' } }
+    PageMeta:
+      type: object
+      required: [page, pageSize, total]
+      properties:
+        page: { type: integer }
+        pageSize: { type: integer }
+        total: { type: integer }
+    ResponseMeta:
+      type: object
+      required: [success, message, timestamp, requestId]
+      properties:
+        success: { type: boolean, const: true }
+        message: { type: string }
+        timestamp: { type: string, format: date-time }
+        requestId: { type: string }
+    BacktestRunEnvelope: { allOf: [{ $ref: '#/components/schemas/ResponseMeta' }, { type: object, required: [data], properties: { data: { $ref: '#/components/schemas/BacktestRun' } } }] }
+    BacktestResultEnvelope: { allOf: [{ $ref: '#/components/schemas/ResponseMeta' }, { type: object, required: [data], properties: { data: { $ref: '#/components/schemas/BacktestResult' } } }] }
+    EvaluationResultEnvelope: { allOf: [{ $ref: '#/components/schemas/ResponseMeta' }, { type: object, required: [data], properties: { data: { $ref: '#/components/schemas/EvaluationResult' } } }] }
+    ComparisonEnvelope: { allOf: [{ $ref: '#/components/schemas/ResponseMeta' }, { type: object, required: [data], properties: { data: { $ref: '#/components/schemas/Comparison' } } }] }
+    TradePage: { type: object, required: [items, pagination], properties: { items: { type: array, items: { $ref: '#/components/schemas/Trade' } }, pagination: { $ref: '#/components/schemas/PageMeta' } } }
+    TradePageEnvelope: { allOf: [{ $ref: '#/components/schemas/ResponseMeta' }, { type: object, required: [data], properties: { data: { $ref: '#/components/schemas/TradePage' } } }] }
+    EquityPage: { type: object, required: [items, pagination], properties: { items: { type: array, items: { $ref: '#/components/schemas/EquityPoint' } }, pagination: { $ref: '#/components/schemas/PageMeta' } } }
+    EquityPageEnvelope: { allOf: [{ $ref: '#/components/schemas/ResponseMeta' }, { type: object, required: [data], properties: { data: { $ref: '#/components/schemas/EquityPage' } } }] }
+    ErrorEnvelope:
+      type: object
+      required: [success, message, data, timestamp, requestId]
+      properties:
+        success: { type: boolean, const: false }
+        message: { type: string }
+        data: { type: object, required: [code], properties: { code: { type: string }, issues: { type: array, items: { type: object } } } }
+        timestamp: { type: string, format: date-time }
+        requestId: { type: string }
+  responses:
+    NotFound: { description: Resource not found, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorEnvelope' } } } }
+    Conflict: { description: Identity or state conflict, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorEnvelope' } } } }
+    ValidationError: { description: Semantic validation failed, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorEnvelope' } } } }
+    DependencyUnavailable: { description: Required dependency unavailable, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorEnvelope' } } } }
