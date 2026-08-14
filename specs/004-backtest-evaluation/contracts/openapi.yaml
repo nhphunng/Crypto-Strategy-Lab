@@ -139,6 +139,8 @@ components:
     PageSize: { name: pageSize, in: query, schema: { type: integer, minimum: 1, maximum: 200, default: 25 } }
   schemas:
     Decimal: { type: string, pattern: '^-?[0-9]+(\.[0-9]+)?$' }
+    NonNegativeDecimal: { type: string, pattern: '^(?:0|[1-9][0-9]*)(?:\.[0-9]+)?$' }
+    PositiveDecimal: { type: string, pattern: '^(?:0\.[0-9]*[1-9][0-9]*|[1-9][0-9]*(?:\.[0-9]+)?)$' }
     CreateBacktestRunRequest:
       type: object
       required: [jobId, datasetId, datasetSchemaVersion, datasetChecksum, strategyDefinitionId, strategyVersion, contractVersion, executionPolicyId, executionPolicyVersion, initialCapital, feeRate, slippageRate, randomSeed]
