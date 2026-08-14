@@ -22,8 +22,8 @@ cd backend
 ruff check src tests
 mypy src
 pytest tests/unit/backtest tests/unit/evaluation
-pytest tests/contract/test_backtest_contract.py tests/contract/test_evaluation_result_contract.py
-pytest tests/integration/test_backtest_persistence.py tests/integration/test_evaluation_persistence.py tests/integration/test_backtest_api.py
+pytest tests/contract/test_backtest_market_data_contract.py tests/contract/test_backtest_strategy_contract.py tests/contract/test_backtest_api.py tests/contract/test_evaluation_result_contract.py
+pytest tests/integration/test_backtest_persistence.py tests/integration/test_evaluation_persistence.py
 pytest tests/performance/test_backtest_evaluation.py -m performance
 ```
 
