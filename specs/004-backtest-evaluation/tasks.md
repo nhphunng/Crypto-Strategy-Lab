@@ -31,9 +31,9 @@
 - [ ] T012 [P] Define immutable Evaluation Result and comparison-context values in `backend/src/crypto_lab/domain/evaluation/result.py`
 - [ ] T013 Define typed Dataset reader, Strategy analyzer, Backtest repository, and clock ports in `backend/src/crypto_lab/application/backtests/ports.py`
 - [ ] T014 [P] Define typed Backtest reader, Evaluation repository, and policy reader ports in `backend/src/crypto_lab/application/evaluations/ports.py`
-- [ ] T015 [P] Add SQLAlchemy mappings/constraints for policies, runs, results, Signal snapshots, Trades, and Equity Points in `backend/src/crypto_lab/infrastructure/persistence/backtest_models.py`
-- [ ] T016 [P] Add SQLAlchemy mappings/constraints for Evaluation Results and policies in `backend/src/crypto_lab/infrastructure/persistence/evaluation_models.py`
-- [ ] T017 Create immutable Alembic upgrade/downgrade for all Feature 004 tables, constraints, and indexes in `backend/migrations/versions/20260813_004_create_backtest_evaluation.py`
+- [X] T015 [P] Add SQLAlchemy mappings/constraints for policies, runs, results, Signal snapshots, Trades, and Equity Points in `backend/src/crypto_lab/infrastructure/persistence/backtest_models.py`
+- [X] T016 [P] Add SQLAlchemy mappings/constraints for Evaluation Results and policies in `backend/src/crypto_lab/infrastructure/persistence/evaluation_models.py`
+- [X] T017 Create immutable Alembic upgrade/downgrade for all Feature 004 tables, constraints, and indexes in `backend/migrations/versions/20260813_004_create_backtest_evaluation.py`
 - [ ] T018 Implement atomic append-only Backtest repository primitives and paginated reads in `backend/src/crypto_lab/infrastructure/persistence/repositories/backtest_repository.py`
 - [ ] T019 [P] Implement immutable Evaluation repository and policy lookup primitives in `backend/src/crypto_lab/infrastructure/persistence/repositories/evaluation_repository.py`
 - [ ] T020 [P] Add Pydantic request/response/error DTOs aligned to OpenAPI in `backend/src/crypto_lab/api/schemas/backtest_evaluation.py`
