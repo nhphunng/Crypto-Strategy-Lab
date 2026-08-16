@@ -137,7 +137,7 @@ backend/
 │   │           ├── moving_average.py
 │   │           └── rsi.py
 │   └── infrastructure/persistence/
-│       ├── models/strategy_definition.py
+│       ├── strategy_models.py
 │       └── repositories/strategy_definition_repository.py
 ├── migrations/versions/20260813_003_create_strategy_definitions.py
 └── tests/

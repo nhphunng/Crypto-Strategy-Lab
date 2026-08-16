@@ -143,7 +143,7 @@ description: "Dependency-ordered implementation tasks for Strategy Foundation"
 ### Implementation for User Story 4
 
 - [ ] T043 [US4] Add the append-only `strategy_definitions` table, unique content fingerprint, and exact-version index for FR-031 through FR-034 in `backend/migrations/versions/20260813_003_create_strategy_definitions.py`
-- [ ] T044 [US4] Implement the immutable SQLAlchemy Strategy Definition persistence mapping for FR-031 through FR-034 in `backend/src/crypto_lab/infrastructure/persistence/models/strategy_definition.py`
+- [ ] T044 [US4] Implement the immutable SQLAlchemy Strategy Definition persistence mapping for FR-031 through FR-034 in `backend/src/crypto_lab/infrastructure/persistence/strategy_models.py`
 - [ ] T045 [US4] Implement create-or-resolve, exact lookup, and conflict-safe repository operations for FR-031 through FR-034 in `backend/src/crypto_lab/infrastructure/persistence/repositories/strategy_definition_repository.py`
 - [ ] T046 [US4] Enforce deprecated/unavailable/incompatible execution states and historical metadata resolution for FR-034 through FR-036 in `backend/src/crypto_lab/application/strategies/analyze_strategy.py`
 - [ ] T047 [US4] Map exact version-state failures to 404/409 categorized API responses from `contracts/openapi.yaml` for FR-035 through FR-038 in `backend/src/crypto_lab/api/routes/strategies.py`

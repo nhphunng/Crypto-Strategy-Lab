@@ -118,10 +118,10 @@ backend/
 │   │   ├── query_leaderboard.py
 │   │   └── get_ranked_result.py
 │   ├── infrastructure/persistence/
-│   │   ├── models.py
+│   │   ├── leaderboard_models.py
 │   │   └── repositories/leaderboard_repository.py
 │   ├── api/
-│   │   ├── dependencies/leaderboard.py
+│   │   ├── leaderboard_dependencies.py
 │   │   ├── routes/leaderboards.py
 │   │   ├── schemas/leaderboards.py
 │   │   └── websocket/leaderboard_channel.py

@@ -33,3 +33,4 @@
 
 - Initial quality validation and the five-question `$speckit-clarify` pass are complete; all recommended execution and metric-edge semantics are recorded in the spec.
 - TV1's version `1` Candle Dataset contract was reviewed from `origin/feat/001-market-data-spec-plan`; it remains an explicit merge/re-review dependency rather than being silently treated as part of `main`.
+- Temporary integration alignment: Feature 004 rejects a `COMPLETE` dataset with zero Candles, matching Feature 001's `candle_count > 0` invariant until the team revisits both contracts together.

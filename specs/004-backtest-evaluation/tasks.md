@@ -8,7 +8,7 @@
 
 **Purpose**: Establish feature-owned modules and deterministic fixtures without implementing behavior.
 
-- [ ] T001 Create Backtest/Evaluation package initializers in `backend/src/crypto_lab/domain/backtest/__init__.py`, `backend/src/crypto_lab/domain/evaluation/__init__.py`, `backend/src/crypto_lab/application/backtests/__init__.py`, and `backend/src/crypto_lab/application/evaluations/__init__.py`
+- [X] T001 Create Backtest/Evaluation package initializers in `backend/src/crypto_lab/domain/backtest/__init__.py`, `backend/src/crypto_lab/domain/evaluation/__init__.py`, `backend/src/crypto_lab/application/backtests/__init__.py`, and `backend/src/crypto_lab/application/evaluations/__init__.py`
 - [ ] T002 [P] Add canonical profitable, losing, no-trade, no-loss, zero-variance, redundant-Signal, and forced-close fixtures in `backend/tests/fixtures/backtest_evaluation/scenarios.py`
 - [ ] T003 [P] Add the shared TV1 Dataset/TV3 Strategy Analysis determinism fixture in `backend/tests/fixtures/backtest_evaluation/cross_feature.py`
 - [ ] T004 Reconcile Feature 001 after merge and update TV1/TV3/TV5 compatibility references if its merged contract differs in `specs/004-backtest-evaluation/contracts/backtest-domain-contract.md`

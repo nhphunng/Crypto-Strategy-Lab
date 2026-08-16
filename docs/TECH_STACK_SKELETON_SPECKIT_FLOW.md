@@ -55,8 +55,8 @@ flowchart LR
 | Validation | Pydantic | Hợp đồng request/event rõ ràng, kiểm tra dữ liệu tại boundary |
 | ORM/migration | SQLAlchemy 2 + Alembic | Data access và schema migration ổn định |
 | Database | PostgreSQL | Lưu candles, news, sentiment result, strategy definition/version, backtest run/result, trade và leaderboard |
-| Queue/cache | Redis | Broker cho job queue, cache và realtime fan-out ở quy mô đồ án |
-| Job worker | Celery | Multiprocess worker, retry, late acknowledgement và scale ngang |
+| Queue/cache | Chưa chọn cho Feature 001–005; Redis là ứng viên của Feature 007 | Chỉ thêm sau khi ADR về broker/worker được chấp thuận |
+| Job worker | Chưa chọn cho Feature 001–005; Celery là ứng viên của Feature 007 | Không tạo worker trước feature sở hữu queued execution |
 | Numerical work | NumPy + Pandas | Dễ kiểm chứng công thức indicator và backtest; chỉ chuyển hotspot sang Polars/Numba sau profiling |
 | HTTP/WebSocket client | httpx + websockets | Viết Binance Adapter bất đồng bộ, dễ test contract |
 | Sentiment runtime | Hugging Face Transformers + PyTorch, pin model/revision | Chạy mô hình phân loại POSITIVE/NEUTRAL/NEGATIVE; chỉ tối ưu ONNX sau profiling |
@@ -102,6 +102,70 @@ Grafana và OpenTelemetry là bước tiếp theo, không phải điều kiện 
 
 ## 4. Project skeleton
 
+### Baseline đã review cho Feature 001–005
+
+Skeleton dưới đây là baseline được dùng để setup repository ở giai đoạn hiện
+tại. Nó là hợp nhất của `plan.md` và `tasks.md` thuộc Feature 001–005:
+
+- Feature 001 sở hữu historical Market Data, database/Alembic và backend nền.
+- Feature 002 sở hữu realtime delivery và frontend Market Chart.
+- Feature 003 sở hữu Strategy Foundation; không tạo frontend hay worker.
+- Feature 004 sở hữu Backtest và Evaluation; không tạo frontend hay worker.
+- Feature 005 sở hữu Leaderboard backend và frontend visualization.
+- Queue, Celery worker, Search, Composite, News và Sentiment thuộc Feature
+  006–010; không được tạo sớm trong skeleton 001–005.
+- Các model mở rộng dùng module riêng (`strategy_models.py`,
+  `backtest_models.py`, `evaluation_models.py`, `leaderboard_models.py`) và
+  import chung một SQLAlchemy `Base` từ `persistence/models.py`.
+
+```text
+crypto-strategy-lab/
+├── backend/
+│   ├── src/crypto_lab/
+│   │   ├── api/{routes,schemas,websocket}/
+│   │   ├── application/
+│   │   │   ├── market_data/            # 001 + phần realtime dùng chung của 002
+│   │   │   ├── chart_delivery/         # 002
+│   │   │   ├── strategies/             # 003
+│   │   │   ├── backtests/              # 004
+│   │   │   ├── evaluations/            # 004
+│   │   │   └── leaderboard/            # 005
+│   │   ├── domain/
+│   │   │   ├── market_data/            # 001 + selection contract của 002
+│   │   │   ├── strategy/               # 003
+│   │   │   ├── backtest/               # 004
+│   │   │   ├── evaluation/             # 004
+│   │   │   └── leaderboard/            # 005
+│   │   ├── infrastructure/
+│   │   │   ├── binance/                # historical adapter, 001
+│   │   │   ├── market_data/            # realtime adapter, 002
+│   │   │   ├── persistence/repositories/
+│   │   │   └── observability/
+│   │   └── bootstrap/                   # trusted Strategy registration, 003
+│   ├── migrations/versions/
+│   └── tests/{architecture,unit,contract,integration,performance,fixtures}/
+├── frontend/
+│   ├── src/
+│   │   ├── app/{layouts,providers,routes}/
+│   │   ├── features/
+│   │   │   ├── market-chart/{api,realtime,components,hooks}/  # 002
+│   │   │   └── leaderboard/{api,components,hooks}/             # 005
+│   │   └── shared/{ui,charts,hooks,api,lib,types}/
+│   └── tests/{market-chart,leaderboard}/
+├── infra/
+├── tests/{e2e,load}/
+├── specs/001-historical-market-data/
+├── specs/002-realtime-multi-chart/
+├── specs/003-strategy-foundation/
+├── specs/004-backtest-evaluation/
+└── specs/005-leaderboard-visualization/
+```
+
+### Skeleton roadmap đầy đủ (chỉ tạo khi feature sở hữu bắt đầu)
+
+Khối dưới đây mô tả đích dài hạn 001–010. Nó không phải danh sách thư mục cần
+tạo ngay trong giai đoạn 001–005.
+
 ```text
 crypto-strategy-lab/
 ├── .agents/
@@ -112,7 +176,7 @@ crypto-strategy-lab/
 │   ├── templates/
 │   └── feature.json
 ├── specs/
-│   ├── 001-market-data-chart/
+│   ├── 001-historical-market-data/
 │   │   ├── spec.md
 │   │   ├── plan.md
 │   │   ├── research.md
@@ -160,13 +224,14 @@ crypto-strategy-lab/
 │   │   ├── application/
 │   │   │   ├── market_data/
 │   │   │   ├── strategies/
-│   │   │   ├── backtesting/
+│   │   │   ├── backtests/
+│   │   │   ├── evaluations/
 │   │   │   ├── search/
 │   │   │   ├── leaderboard/
 │   │   │   ├── news_collection/
 │   │   │   └── sentiment_analysis/
 │   │   ├── domain/
-│   │   │   ├── market/
+│   │   │   ├── market_data/
 │   │   │   │   ├── candle.py
 │   │   │   │   └── timeframe.py
 │   │   │   ├── strategy/
@@ -355,7 +420,7 @@ Không nên dùng một lần `$speckit-specify` cho toàn bộ đồ án. Mỗi
 
 | Thứ tự | Feature | Kết quả demo |
 | --- | --- | --- |
-| 001 | Historical market data + single chart | Nhập BTCUSDT 5m và hiển thị candlestick lịch sử |
+| 001 | Historical market data | Tải, chuẩn hóa, lưu và tái sử dụng immutable Candle Dataset qua backend API |
 | 002 | Realtime multi-timeframe dashboard | Tối đa 4 chart, đổi timeframe độc lập, tự reconnect WebSocket |
 | 003 | Strategy plugin foundation | Đăng ký MA/RSI; thêm strategy mới không sửa Backtester |
 | 004 | Deterministic backtest + evaluation | Chạy một strategy và sinh trades, equity curve, metrics |

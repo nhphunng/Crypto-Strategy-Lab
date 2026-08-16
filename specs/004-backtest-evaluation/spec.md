@@ -114,7 +114,7 @@ As an `ANALYST`, I want to compare Evaluation Results with their complete contex
 
 ### Edge Cases
 
-- A complete dataset is empty or contains insufficient history for the Strategy; the run completes with an explicit empty/insufficient outcome and no fabricated Trades.
+- A dataset marked `COMPLETE` but containing zero Candles is rejected to match the Feature 001 dataset contract. A non-empty dataset containing insufficient history for the Strategy completes with an explicit insufficient outcome and no fabricated Trades.
 - Every Signal is `HOLD` or `WARMUP`; the result is valid with zero Trades and unchanged capital after applicable non-trade costs, which default to none.
 - Consecutive or redundant `BUY`/`SELL` Signals arrive while the portfolio is already in the corresponding state; the configured execution policy handles them deterministically without duplicate position transitions.
 - A position remains open at the requested range end; it is force-closed at the final closed Candle's close price and records `END_OF_RANGE` provenance.
@@ -131,7 +131,7 @@ As an `ANALYST`, I want to compare Evaluation Results with their complete contex
 
 - **FR-001**: The system MUST allow an analyst to run one exact immutable Strategy Definition against one exact immutable historical dataset and declared UTC range and Timeframe.
 - **FR-002**: A Backtest Run MUST retain the exact Strategy Definition and contract versions, canonical parameters, dataset identity/version/checksum, Market Pair, Timeframe, range, Strategy Context fingerprint, initial capital, fees, slippage, position-sizing policy, execution-policy version, and random seed used.
-- **FR-003**: The system MUST reject invalid configurations before simulation, including non-positive capital, negative fees or slippage, invalid ranges, unsupported Timeframes, unavailable Strategy versions, incompatible contract versions, incomplete datasets, invalid Candles, and Signal/dataset misalignment.
+- **FR-003**: The system MUST reject invalid configurations before simulation, including non-positive capital, negative fees or slippage, invalid ranges, unsupported Timeframes, unavailable Strategy versions, incompatible contract versions, incomplete datasets, datasets containing zero Candles, invalid Candles, and Signal/dataset misalignment.
 - **FR-004**: Simulation MUST consume the generic Strategy contract and ordered `BUY`, `SELL`, and `HOLD` Signals without branching on concrete Strategy names.
 - **FR-005**: Simulation MUST use only closed normalized Candles and contextual data available no later than each simulated decision time; no Signal, execution, Trade, or metric may use future information.
 - **FR-006**: A Signal produced for a Candle MUST be eligible for execution only at the next Candle's opening price. The MVP MUST simulate spot long-only trading with at most one open position. `BUY` while flat opens a position using all available cash; `SELL` while long closes it; `BUY` while long and `SELL` while flat are deterministic no-ops with recorded reasons. Entry and exit fills MUST apply configured non-negative percentage slippage adversely to the reference price and a configured non-negative percentage fee to executed notional. A Signal on the final Candle cannot create a new execution. An open position at range end MUST be force-closed using the final closed Candle's close price as the reference price, with normal exit costs and close reason `END_OF_RANGE`.

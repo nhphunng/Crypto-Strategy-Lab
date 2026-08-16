@@ -198,7 +198,7 @@ components:
         runId: { type: string, format: uuid }
         jobId: { type: string, format: uuid }
         resultChecksum: { type: string, pattern: '^[0-9a-f]{64}$' }
-        historyState: { type: string, enum: [EMPTY, INSUFFICIENT, EVALUABLE] }
+        historyState: { type: string, enum: [INSUFFICIENT, EVALUABLE] }
         tradeState: { type: string, enum: [NO_TRADES, HAS_TRADES] }
         initialCapital: { $ref: '#/components/schemas/Decimal' }
         finalEquity: { $ref: '#/components/schemas/Decimal' }
