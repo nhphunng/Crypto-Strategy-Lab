@@ -1,0 +1,172 @@
+{
+  "$schema": "https://design-tokens.github.io/community-group/format/",
+  "meta": {
+    "name": "Crypto Strategy Lab UI Kit",
+    "version": "1.1.0",
+    "theme": "dark-first",
+    "targetViewport": "1440x900"
+  },
+  "color": {
+    "bg": {
+      "canvas": "#0B0E13",
+      "workspace": "#0E1218",
+      "surface": "#131820",
+      "surfaceHover": "#181F29",
+      "surfaceActive": "#1D2632"
+    },
+    "border": {
+      "subtle": "#202936",
+      "default": "#2B3543"
+    },
+    "text": {
+      "primary": "#E7ECF3",
+      "secondary": "#9AA7B6",
+      "muted": "#687586"
+    },
+    "accent": {
+      "primary": "#4F7CFF",
+      "primaryHover": "#638BFF",
+      "searchMl": "#A78BFA"
+    },
+    "semantic": {
+      "positive": "#21C58B",
+      "negative": "#F05B64",
+      "warning": "#E6B94A",
+      "info": "#59A8FF",
+      "neutral": "#8894A3"
+    },
+    "chart": {
+      "grid": "#1B2430",
+      "crosshair": "#667386",
+      "supportFill": "#22C98A33",
+      "resistanceFill": "#F05B6433"
+    }
+  },
+  "typography": {
+    "fontFamily": {
+      "ui": "Inter, Geist, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif",
+      "mono": "JetBrains Mono, IBM Plex Mono, ui-monospace, SFMono-Regular, Menlo, monospace"
+    },
+    "fontSize": {
+      "micro": 11,
+      "small": 12,
+      "body": 14,
+      "h2": 16,
+      "h1": 20,
+      "display": 24,
+      "landingDisplay": 40
+    },
+    "lineHeight": {
+      "micro": 16,
+      "small": 18,
+      "body": 20,
+      "h2": 24,
+      "h1": 28,
+      "display": 32,
+      "landingDisplay": 48
+    },
+    "fontWeight": {
+      "regular": 400,
+      "medium": 500,
+      "strong": 550,
+      "semibold": 600
+    }
+  },
+  "spacing": {
+    "1": 4,
+    "2": 8,
+    "3": 12,
+    "4": 16,
+    "5": 20,
+    "6": 24,
+    "8": 32,
+    "10": 40,
+    "12": 48
+  },
+  "radius": {
+    "xs": 3,
+    "sm": 5,
+    "md": 8,
+    "lg": 10
+  },
+  "size": {
+    "topBar": 48,
+    "navCollapsed": 52,
+    "navExpanded": 184,
+    "controlCompact": 28,
+    "controlDefault": 32,
+    "controlPrimary": 36,
+    "tableHeader": 34,
+    "tableRow": 36,
+    "contextDrawerMin": 360,
+    "contextDrawerMax": 420,
+    "landingTopBar": 64
+  },
+  "status": {
+    "live": {
+      "color": "{color.semantic.positive}",
+      "label": "Live"
+    },
+    "connecting": {
+      "color": "{color.semantic.info}",
+      "label": "Connecting"
+    },
+    "stale": {
+      "color": "{color.semantic.warning}",
+      "label": "Stale"
+    },
+    "reconnecting": {
+      "color": "{color.semantic.warning}",
+      "label": "Reconnecting"
+    },
+    "error": {
+      "color": "{color.semantic.negative}",
+      "label": "Error"
+    },
+    "buy": {
+      "color": "{color.semantic.positive}",
+      "label": "BUY"
+    },
+    "sell": {
+      "color": "{color.semantic.negative}",
+      "label": "SELL"
+    },
+    "hold": {
+      "color": "{color.semantic.neutral}",
+      "label": "HOLD"
+    }
+  },
+  "layout": {
+    "chartMax": 4,
+    "chartPresets": [
+      "1",
+      "2-horizontal",
+      "2-vertical",
+      "3-primary-stack",
+      "4-grid"
+    ],
+    "navigation": [
+      "Market",
+      "Strategies",
+      "Backtests",
+      "Leaderboard",
+      "News & Sentiment",
+      "Operations"
+    ],
+    "landingMaxContentWidth": 1200,
+    "topLevelScreens": [
+      "Landing",
+      "Market",
+      "Strategies",
+      "Backtests",
+      "Leaderboard",
+      "News & Sentiment",
+      "Operations"
+    ],
+    "backtestsTabs": [
+      "Single Backtest",
+      "Strategy Search",
+      "Runs"
+    ]
+  }
+}
