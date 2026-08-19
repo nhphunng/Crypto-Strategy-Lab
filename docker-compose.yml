@@ -57,5 +57,15 @@ services:
     cap_drop:
       - ALL
 
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "${CSL_FRONTEND_PORT:-5173}:8080"
+    depends_on:
+      api:
+        condition: service_started
+
 volumes:
   crypto_lab_postgres:
