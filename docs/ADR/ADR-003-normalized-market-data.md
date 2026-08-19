@@ -1,6 +1,6 @@
 # ADR-003: Provider-Neutral Market Data Contract
 
-**Status:** Proposed  
+**Status:** Accepted  
 **Date:** 2026-08-13  
 **Owners:** Market Data Team
 

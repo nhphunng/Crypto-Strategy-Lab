@@ -1,6 +1,6 @@
 # ADR-002: Layered Boundaries and Ports/Adapters
 
-**Status:** Proposed  
+**Status:** Accepted  
 **Date:** 2026-08-13  
 **Owners:** Architecture Team
 

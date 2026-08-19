@@ -1,6 +1,6 @@
 # Crypto Strategy Lab — Architecture
 
-**Status:** Proposed  
+**Status:** Accepted  
 **Date:** 2026-08-13  
 **Review owner:** Crypto Strategy Lab Team  
 **Related documents:** [Requirement](REQUIREMENT.md), [SRS](SRS.md), [Constitution](../.specify/memory/constitution.md), [ADR Index](ADR/README.md)

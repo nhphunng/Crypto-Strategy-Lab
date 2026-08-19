@@ -1,6 +1,6 @@
 # ADR-001: Modular Monolith with Separate Worker Processes
 
-**Status:** Proposed  
+**Status:** Accepted  
 **Date:** 2026-08-13  
 **Owners:** Architecture Team
 

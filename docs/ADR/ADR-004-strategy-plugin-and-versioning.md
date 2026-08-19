@@ -1,6 +1,6 @@
 # ADR-004: Strategy Contract, Registry, and Immutable Versions
 
-**Status:** Proposed  
+**Status:** Accepted  
 **Date:** 2026-08-13  
 **Owners:** Strategy Team
 
