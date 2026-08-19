@@ -59,17 +59,17 @@ cross-row ordering, or checksum recomputation.
 |---|---|---|---|
 | 001 Historical Market Data | Durable normalized historical data and immutable datasets | `candles`, `candle_datasets`, `candle_dataset_members` | `IMPLEMENTED` |
 | 002 Realtime Multi-Chart | Subscription, recovery, chart-slot, and connection state | None | `EPHEMERAL` |
-| 003 Strategy Foundation | Immutable reproducible strategy definitions | `strategy_definitions` | `PLANNED` |
-| 004 Backtest and Evaluation | Execution policies, runs/results, snapshots, trades, equity, evaluation and scoring | Nine tables listed below | `PLANNED` |
-| 005 Leaderboard and Visualization | Durable Top-K projection and publication outbox | `leaderboards`, `leaderboard_entries`, `leaderboard_update_records` | `PLANNED` |
+| 003 Strategy Foundation | Immutable reproducible strategy definitions | `strategy_definitions` | `IMPLEMENTED` |
+| 004 Backtest and Evaluation | Execution policies, runs/results, snapshots, trades, equity, evaluation and scoring | Nine tables listed below | `IMPLEMENTED` |
+| 005 Leaderboard and Visualization | Durable Top-K projection and publication outbox | `leaderboards`, `leaderboard_entries`, `leaderboard_update_records` | `IMPLEMENTED` |
 
 Required migration order:
 
 ```text
-001 historical data
-  -> 003 strategy definitions
-    -> 004 backtest and evaluation
-      -> 005 leaderboard projection
+0001_historical_market_data
+  -> 20260813_003_strategy
+    -> 20260813_004_backtest
+      -> 20260813_005_leaderboard
 ```
 
 Feature 002 introduces no PostgreSQL dependency. A feature must not create or
@@ -162,11 +162,11 @@ Unique `(dataset_id, candle_id)` prevents duplicate membership. Application
 code must never delete a completed dataset even though pre-completion cleanup
 may use the cascade.
 
-## 7. Planned schema contracts
+## 7. Implemented schema contracts for Features 003–005
 
-The tables in this section reserve names, ownership, relationships, and core
-constraints. Their exact migration SQL must be reviewed against the owning
-feature's data model before the status changes to `IMPLEMENTED`.
+The tables in this section are created by the three linear Alembic revisions
+listed in Section 4. Their ORM mappings are registered with Alembic through the
+single shared `Base` metadata.
 
 ### 7.1 `strategy_definitions` — owner Feature 003
 
@@ -189,9 +189,9 @@ Required indexes and rules:
 
 #### `execution_policies`
 
-Immutable versioned execution rules. Store policy identity and version in
-normal columns, a unique fingerprint, the validated rule body in `JSONB`, and
-an audit creation time. One logical policy version is unique and never updated.
+Immutable versioned execution rules. A UUID `id` identifies the physical policy
+version row; `(policy_id, version)` and `fingerprint` are unique. The validated
+rule body is stored in `JSONB` with an audit creation time.
 
 #### `backtest_runs`
 
@@ -255,14 +255,16 @@ Primary or unique identity is `(backtest_result_id, position)`; values are
 #### `evaluation_policies`
 
 Immutable versioned metric formulas, precision, annualization, direction, and
-null semantics. Identity/version and fingerprint are relational; the validated
-rule document is `JSONB`.
+null semantics. A UUID row ID is referenced by consumers; `(policy_id,
+version)` and fingerprint are unique, and the validated rule document is
+`JSONB`.
 
 #### `scoring_policies`
 
 Immutable versioned bounds, weights, eligibility rules, metric directions,
-and complete deterministic tie-breakers. Identity/version and fingerprint are
-relational; the validated rule document is `JSONB`.
+and complete deterministic tie-breakers. A UUID row ID is referenced by
+consumers; `(policy_id, version)` and fingerprint are unique, and the validated
+rule document is `JSONB`.
 
 #### `evaluation_results`
 
@@ -316,13 +318,11 @@ projection version, and audit timestamps.
 
 Durable outbox/publication record committed atomically with a projection
 change. Store UUID event `id`, leaderboard, projection version, event type,
-source evaluation/run/job identities, compact added/removed/moved ID sets,
-`occurred_at`, and nullable `published_at`.
+source evaluation/run/job identities, compact added/removed/moved ID sets as
+validated `JSONB` arrays, `occurred_at`, and nullable `published_at`.
 
 Unique `(leaderboard_id, projection_version)` makes publication retries
-idempotent. The payload collections use validated `JSONB` or PostgreSQL UUID
-arrays; the owning migration must choose one representation and contract-test
-it before merge.
+idempotent.
 
 Visualization overlays and ranked-result details are composed read contracts,
 not additional mutable tables.
@@ -347,32 +347,30 @@ not additional mutable tables.
    lifecycle row; do not create a second `backtest_jobs` table without a new
    architecture decision.
 
-## 9. Open decisions before planned migrations
+## 9. Resolved physical decisions and remaining contract item
 
 These items must be resolved in the owning migration PR and then updated here:
 
-| Decision | Owner | Current constraint |
+| Decision | Resolution |
 |---|---|---|
-| Exact policy identity column shape | Feature 004 | Must support immutable logical ID + version and relational FKs. |
-| Final columns/checks for `strategy_definitions` | Feature 003 | Must land before Feature 004's strategy FK. |
-| Feature 004 physical columns and enum representation | Feature 004 | Must preserve the nine-table boundary and all invariants above. |
-| Outbox changed-ID representation | Feature 005 | Choose tested `JSONB` or UUID arrays. |
-| Empty `COMPLETE` datasets | Features 001/004 | Current migration requires more than zero Candles; Feature 004 must match it. |
+| Policy identity | UUID physical row ID plus unique logical `(policy_id, version)` and unique fingerprint. |
+| Strategy dependency | Feature 003 lands before Feature 004; all provenance FKs use `RESTRICT`. |
+| Feature 004 enums | Bounded `VARCHAR` columns with explicit database check constraints. |
+| Outbox changed IDs | Validated `JSONB` arrays. |
+| Empty `COMPLETE` datasets | Still a cross-feature contract item: current Feature 001 migration requires more than zero Candles, so Feature 004 must match it. |
 
-No engineer should resolve an open decision by silently editing an upstream
-migration or inventing a duplicate table. Follow
+Any future change must use a new forward migration. Follow
 [`DATABASE_MIGRATION_RULES.md`](DATABASE_MIGRATION_RULES.md).
 
 ## 10. Verification snapshot
 
 At this document revision:
 
-- Alembic has one implemented revision: `0001_historical_market_data`.
-- The only implemented tables are the three Feature 001 tables.
-- Feature 003–005 persistence modules are skeleton boundaries, not proof that
-  their tables exist.
-- The target schema contains 16 durable tables when all planned Features
-  001–005 migrations are implemented.
+- Alembic has one head: `20260813_005_leaderboard`.
+- The linear history contains the Feature 001 baseline followed by Features
+  003, 004, and 005.
+- All 16 durable tables in this contract are implemented.
+- Feature 002 continues to own ephemeral state and adds no table.
 
 Update the status and affected table sections in the same pull request that
 adds or changes a merged migration.
