@@ -1,5 +1,9 @@
 # Contract: Base Chart Slot and Grid
 
+**Status**: Accepted
+**Version**: `1`
+**Accepted**: 2026-08-19 by the Crypto Strategy Lab Team.
+
 ## Purpose and ownership
 
 TV2 owns the base Candle chart, slot controls, connection presentation, and generic extension inputs. Strategy computation belongs to TV3. Signal/trade overlay meaning and ranked-result detail belong to TV5.

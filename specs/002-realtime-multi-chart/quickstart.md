@@ -4,11 +4,13 @@
 
 Use these scenarios after implementation to prove `MD-US-02`, `MD-US-03`, `MTC-US-01`, and `MTC-US-02` without running strategy, backtest, leaderboard, News, or Sentiment features.
 
-## Before implementation starts
+## Approval gates
 
-1. TV1 and TV2 approve [openapi.yaml](contracts/openapi.yaml) and the shared Candle rules in [data-model.md](data-model.md).
-2. The team changes `docs/ARCHITECTURE.md` and ADR-003 to `Accepted`, or records an accepted replacement.
-3. The implementation branch contains the backend/frontend skeleton described in [plan.md](plan.md).
+- [x] TV1 and TV2 approved [openapi.yaml](contracts/openapi.yaml) and the shared Candle rules in [data-model.md](data-model.md) on 2026-08-19.
+- [x] The team accepted `docs/ARCHITECTURE.md`, ADR-002, and ADR-003.
+- [x] Feature 002 is approved to begin implementation without changing the accepted version 1 Candle/history semantics.
+
+The backend/frontend skeleton described in [plan.md](plan.md) is created and validated by Phase 1 implementation tasks after these governance gates.
 
 ## Prerequisites
 

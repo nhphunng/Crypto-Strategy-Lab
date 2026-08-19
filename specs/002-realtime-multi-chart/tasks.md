@@ -18,8 +18,8 @@
 
 **Purpose**: Clear governance and shared-contract blockers before application code begins.
 
-- [ ] T001 Record team acceptance or replacement decisions for the baseline market architecture in `docs/ARCHITECTURE.md` and `docs/ADR/ADR-003-normalized-market-data.md`
-- [ ] T002 Cross-review TV1/TV2 Candle fields, decimal precision, UTC/timeframe encoding, range inclusivity, completeness, limits, versions, and errors; record the approved result in `specs/002-realtime-multi-chart/contracts/openapi.yaml` and `specs/002-realtime-multi-chart/data-model.md`
+- [X] T001 Record team acceptance or replacement decisions for the baseline market architecture in `docs/ARCHITECTURE.md` and `docs/ADR/ADR-003-normalized-market-data.md`
+- [X] T002 Cross-review TV1/TV2 Candle fields, decimal precision, UTC/timeframe encoding, range inclusivity, completeness, limits, versions, and errors; record the approved result in `specs/002-realtime-multi-chart/contracts/openapi.yaml` and `specs/002-realtime-multi-chart/data-model.md`
 - [ ] T003 [P] Create backend package/test directories and package initializers under `backend/src/crypto_lab/{domain/market_data,application/market_data,application/chart_delivery,infrastructure/market_data,api/websocket}` and `backend/tests/{unit/market_data,contract,integration}`
 - [ ] T004 [P] Create frontend feature/test directories under `frontend/src/features/market-chart/{api,realtime,components,hooks}` and `frontend/tests/market-chart`
 - [ ] T005 [P] Document provider endpoint, heartbeat, retry, history-limit, and four-slot configuration keys without secrets in `.env.example`
