@@ -19,6 +19,16 @@ export default defineConfig({
   server: {
     host: "0.0.0.0",
     allowedHosts: ["terminal.local"],
+    proxy: {
+      "/api": {
+        target: "http://127.0.0.1:8000",
+        changeOrigin: true,
+      },
+      "/ws": {
+        target: "ws://127.0.0.1:8000",
+        ws: true,
+      },
+    },
     warmup: {
       clientFiles: ["./src/main.tsx"],
     },
@@ -26,7 +36,7 @@ export default defineConfig({
   test: {
     environment: "jsdom",
     globals: true,
-    include: ["src/**/*.test.{ts,tsx}"],
+    include: ["src/**/*.test.{ts,tsx}", "tests/market-chart/**/*.test.{ts,tsx}"],
     setupFiles: ["./src/test/setup.ts"],
     css: true,
   },
