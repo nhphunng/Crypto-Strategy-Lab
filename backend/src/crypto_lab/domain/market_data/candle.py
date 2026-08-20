@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
 
+from crypto_lab.domain.market_data.selection import MarketSelection as MarketSelection
 from crypto_lab.domain.market_data.timeframe import Timeframe, require_utc
 
 type CandleIdentity = tuple[str, str, str, datetime]
@@ -35,19 +36,6 @@ def format_utc_millis(value: datetime) -> str:
     value = require_utc(value)
     milliseconds = value.microsecond // 1000
     return f"{value:%Y-%m-%dT%H:%M:%S}.{milliseconds:03d}Z"
-
-
-@dataclass(frozen=True, slots=True)
-class MarketSelection:
-    provider: str
-    pair: str
-    timeframe: Timeframe
-
-    def __post_init__(self) -> None:
-        if not self.provider or self.provider != self.provider.upper():
-            raise ValueError("provider must be non-empty uppercase")
-        if not self.pair or self.pair != self.pair.upper():
-            raise ValueError("pair must be non-empty uppercase")
 
 
 @dataclass(frozen=True, slots=True)
