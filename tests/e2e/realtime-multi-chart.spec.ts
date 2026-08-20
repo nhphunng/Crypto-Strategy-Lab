@@ -75,6 +75,14 @@ test("uses two columns when wide and one column without overflow when narrow", a
   expect(wideFirst).not.toBeNull();
   expect(wideSecond).not.toBeNull();
   expect(wideSecond?.x).toBeGreaterThan((wideFirst?.x ?? 0) + 1);
+  const wideBoxes = await chartSlots(page).evaluateAll((slots) =>
+    slots.map((slot) => slot.getBoundingClientRect().toJSON()),
+  );
+  expect(Math.max(...wideBoxes.map((box) => box.bottom))).toBeLessThanOrEqual(800);
+  await expect(page.getByTestId("chart-grid")).toHaveAttribute(
+    "data-density",
+    "compact",
+  );
 
   await page.setViewportSize({ width: 390, height: 844 });
   const narrowFirst = await chartSlots(page).nth(0).boundingBox();

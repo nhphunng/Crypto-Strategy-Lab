@@ -2,6 +2,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 
 import { ChartGrid } from "../../features/market-chart/components/ChartGrid";
+import { MarketGuide } from "../../features/market-chart/components/MarketGuide";
 import { createMarketDataApi } from "../../features/market-chart/api/marketDataApi";
 import {
   type ChartMarketDataLifecycle,
@@ -36,37 +37,38 @@ export function MarketRoute({
   });
 
   return (
-    <main className="min-w-0 p-3 md:p-4">
-      <div className="mb-4">
-        <p className="text-xs font-semibold uppercase tracking-wide text-faint">
-          Realtime market workspace
-        </p>
-        <h1 className="text-xl font-semibold text-ink">Multi-chart market data</h1>
-        <p className="mt-1 max-w-2xl text-sm text-dim">
-          Compare one dashboard pair across independent timeframes. Each chart keeps its own
-          status and controls.
-        </p>
+    <main
+      data-testid="market-workspace"
+      className="flex h-full min-w-0 flex-col overflow-x-hidden overflow-y-auto p-2.5 md:p-3 xl:overflow-y-hidden"
+    >
+      <div
+        data-testid="market-content"
+        className="grid min-h-0 min-w-0 flex-1 grid-cols-1 gap-2 xl:grid-cols-[minmax(0,1fr)_15rem]"
+      >
+        <ChartGrid
+          heading="Multi-chart market data"
+          pair={model.pair}
+          slots={model.slots}
+          timeframes={MARKET_DATA_TIMEFRAMES}
+          limitMessage={model.limitMessage}
+          announcement={model.announcement}
+          onAdd={model.addSlot}
+          onSetCount={model.setSlotCount}
+          onRemove={model.removeSlot}
+          onTimeframeChange={model.changeTimeframe}
+          onRetry={model.retrySlot}
+        />
+        <MarketGuide />
       </div>
-      <ChartGrid
-        pair={model.pair}
-        slots={model.slots}
-        timeframes={MARKET_DATA_TIMEFRAMES}
-        limitMessage={model.limitMessage}
-        announcement={model.announcement}
-        onAdd={model.addSlot}
-        onRemove={model.removeSlot}
-        onTimeframeChange={model.changeTimeframe}
-        onRetry={model.retrySlot}
-      />
-      <footer className="mt-4 text-[11px] text-faint">
+      <footer className="mt-2 shrink-0 text-[10px] leading-4 text-faint">
         <a
           href="https://www.tradingview.com/"
           target="_blank"
           rel="noreferrer"
-          className="inline-block underline decoration-transparent underline-offset-2 transition-colors hover:text-dim hover:decoration-current focus-visible:text-dim focus-visible:decoration-current"
+          className="inline-flex flex-wrap gap-x-2 underline decoration-transparent underline-offset-2 transition-colors hover:text-dim hover:decoration-current focus-visible:text-dim focus-visible:decoration-current"
         >
-          <span className="block">TradingView Lightweight Charts™</span>
-          <span className="block">
+          <span>TradingView Lightweight Charts™</span>
+          <span>
             Copyright (с) 2025 TradingView, Inc. https://www.tradingview.com/
           </span>
         </a>

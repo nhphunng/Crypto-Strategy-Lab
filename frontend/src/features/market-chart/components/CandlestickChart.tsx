@@ -5,6 +5,7 @@ import {
   createChart,
   createSeriesMarkers,
   type CandlestickData,
+  type ColorType,
   type IChartApi,
   type ISeriesApi,
   type ISeriesMarkersPluginApi,
@@ -105,6 +106,18 @@ export function CandlestickChart({
       height: heightRef.current,
       layout: {
         attributionLogo: true,
+        background: { type: "solid" as ColorType, color: "#0b111a" },
+        textColor: "#94a3b8",
+      },
+      grid: {
+        vertLines: { color: "#1c2735" },
+        horzLines: { color: "#1c2735" },
+      },
+      rightPriceScale: { borderColor: "#334155" },
+      timeScale: { borderColor: "#334155", timeVisible: true },
+      crosshair: {
+        vertLine: { color: "#64748b", labelBackgroundColor: "#334155" },
+        horzLine: { color: "#64748b", labelBackgroundColor: "#334155" },
       },
     });
     const candleSeries = chart.addSeries(CandlestickSeries, CANDLE_SERIES_OPTIONS);
@@ -227,7 +240,7 @@ export function CandlestickChart({
   }
 
   return (
-    <figure className={className}>
+    <figure className={`${className ?? ""} min-w-0 overflow-hidden`}>
       <div
         ref={containerRef}
         data-testid="candlestick-series"
@@ -236,7 +249,10 @@ export function CandlestickChart({
         aria-label={`${latest.pair} ${latest.timeframe} Candlestick chart`}
         style={{ height, width: "100%" }}
       />
-      <figcaption aria-label="Latest Candle summary" className="font-mono text-xs">
+      <figcaption
+        aria-label="Latest Candle summary"
+        className="truncate px-1 pt-1 font-mono text-[10px] leading-4 text-faint"
+      >
         {latest.pair} {latest.timeframe} at {latest.openTime} · O {latest.open} H {latest.high} L{" "}
         {latest.low} C {latest.close} V {latest.volume}
       </figcaption>

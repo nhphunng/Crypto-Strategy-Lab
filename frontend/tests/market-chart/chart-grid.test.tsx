@@ -42,6 +42,7 @@ function ChartGridHarness({
       limitMessage={model.limitMessage}
       announcement={model.announcement}
       onAdd={model.addSlot}
+      onSetCount={model.setSlotCount}
       onRemove={model.removeSlot}
       onTimeframeChange={model.changeTimeframe}
       onRetry={model.retrySlot}
@@ -124,6 +125,36 @@ describe("one-to-four stable chart slots", () => {
     expect(explanation).toHaveAttribute("id", "message-chart-limit");
     expect(explanation).toHaveTextContent(LIMIT_MESSAGE);
   });
+
+  it("switches directly between one, two, and four stable chart slots", async () => {
+    const user = userEvent.setup();
+    render(<ChartGridHarness initialTimeframes={["5m"]} />);
+
+    const first = document.getElementById("chart-btcusdt-5m-slot-1");
+    const one = screen.getByRole("button", { name: "Show 1 chart" });
+    const two = screen.getByRole("button", { name: "Show 2 charts" });
+    const four = screen.getByRole("button", { name: "Show 4 charts" });
+    expect(one).toHaveAttribute("aria-pressed", "true");
+    expect(two).toHaveAttribute("aria-pressed", "false");
+    expect(four).toHaveAttribute("aria-pressed", "false");
+
+    await user.click(four);
+    expect(chartRegions()).toHaveLength(4);
+    expect(document.getElementById("chart-btcusdt-5m-slot-1")).toBe(first);
+    expect(four).toHaveAttribute("aria-pressed", "true");
+
+    await user.click(two);
+    expect(chartRegions()).toHaveLength(2);
+    expect(document.getElementById("chart-btcusdt-5m-slot-1")).toBe(first);
+    expect(document.getElementById("chart-btcusdt-5m-slot-2")).toBeVisible();
+    expect(document.getElementById("chart-btcusdt-5m-slot-3")).toBeNull();
+
+    await user.click(one);
+    expect(chartRegions()).toHaveLength(1);
+    expect(document.getElementById("chart-btcusdt-5m-slot-1")).toBe(first);
+    expect(screen.getByTestId("chart-grid")).toHaveClass("md:grid-cols-1");
+    expect(screen.getByTestId("chart-grid")).not.toHaveClass("md:grid-cols-2");
+  });
 });
 
 describe("accessible slot controls and status", () => {
@@ -201,6 +232,18 @@ describe("accessible slot controls and status", () => {
 });
 
 describe("responsive grid and route composition", () => {
+  it("switches four charts to a compact two-row workspace density", () => {
+    render(<ChartGridHarness initialTimeframes={INITIAL_TIMEFRAMES} />);
+
+    const grid = screen.getByTestId("chart-grid");
+    expect(grid).toHaveAttribute("data-density", "compact");
+    expect(grid).toHaveClass("xl:grid-rows-2");
+    expect(screen.getByRole("group", { name: "Chart workspace controls" })).toBeVisible();
+    for (const region of chartRegions()) {
+      expect(region).toHaveAttribute("data-layout-density", "compact");
+    }
+  });
+
   it("declares one narrow column and two columns only when space permits", () => {
     render(<ChartGridHarness initialTimeframes={INITIAL_TIMEFRAMES} />);
 
@@ -224,5 +267,28 @@ describe("responsive grid and route composition", () => {
     expect(screen.getByTestId("chart-grid")).toBeVisible();
     expect(document.getElementById("chart-btcusdt-5m-slot-route")).toBeVisible();
     expect(document.getElementById("select-pair")).toHaveValue("BTCUSDT");
+    const controls = screen.getByRole("group", { name: "Chart workspace controls" });
+    expect(within(controls).getByRole("heading", { name: "Multi-chart market data" })).toBeVisible();
+    expect(within(controls).getByRole("combobox", { name: "Dashboard pair" })).toBeVisible();
+    expect(within(controls).getByRole("button", { name: "Add chart" })).toBeVisible();
+    expect(screen.queryByText("Realtime market workspace")).not.toBeInTheDocument();
+    expect(screen.queryByText(/Compare one dashboard pair/i)).not.toBeInTheDocument();
+    expect(screen.getByRole("complementary", { name: "Beginner candle guide" })).toBeVisible();
+    expect(screen.getByRole("heading", { name: "How candles update" })).toBeVisible();
+    expect(screen.getByText("Same open time")).toBeVisible();
+    expect(screen.getByText("New open time")).toBeVisible();
+    expect(screen.getByRole("heading", { name: "Read a candle" })).toBeVisible();
+    expect(screen.getByText("O · Open")).toBeVisible();
+    expect(screen.getByText("H · High")).toBeVisible();
+    expect(screen.getByText("L · Low")).toBeVisible();
+    expect(screen.getByText("C · Close")).toBeVisible();
+    expect(screen.getByText("V · Volume")).toBeVisible();
+    expect(screen.getByRole("heading", { name: "Connection states" })).toBeVisible();
+    expect(screen.getByTestId("market-workspace")).toHaveClass("h-full");
+    expect(screen.getByTestId("market-workspace")).toHaveClass("overflow-y-auto");
+    expect(screen.getByTestId("market-workspace")).toHaveClass("xl:overflow-y-hidden");
+    expect(screen.getByTestId("market-content")).toHaveClass(
+      "xl:grid-cols-[minmax(0,1fr)_15rem]",
+    );
   });
 });

@@ -23,6 +23,7 @@ import type {
 export const MAX_CHART_SLOTS = 4;
 export const CHART_SLOT_LIMIT_MESSAGE =
   "A dashboard can use at most four chart slots.";
+export type ChartSlotPreset = 1 | 2 | 4;
 
 export type ChartSlotState = {
   slotId: string;
@@ -167,6 +168,38 @@ export function useChartSlots(options: UseChartSlotsOptions) {
     setAnnouncement(`Chart ${slotId} removed.`);
   }, []);
 
+  const setSlotCount = useCallback(
+    (targetCount: ChartSlotPreset) => {
+      const current = slotsRef.current;
+      if (current.length === targetCount) {
+        setAnnouncement(
+          `${targetCount} chart slot${targetCount === 1 ? " is" : "s are"} already active.`,
+        );
+        return;
+      }
+
+      const updated = current.slice(0, targetCount);
+      while (updated.length < targetCount) {
+        updated.push({
+          slotId: createSlotId.current(),
+          pair: options.pair,
+          timeframe: options.defaultTimeframe,
+          generation: 1,
+          candles: [],
+          connectionState: "LOADING",
+          retrySequence: 0,
+        });
+      }
+      slotsRef.current = updated;
+      setSlots(updated);
+      setLimitMessage(undefined);
+      setAnnouncement(
+        `Dashboard now shows ${targetCount} chart slot${targetCount === 1 ? "" : "s"}.`,
+      );
+    },
+    [options.defaultTimeframe, options.pair],
+  );
+
   const changeTimeframe = useCallback((slotId: string, timeframe: Timeframe) => {
     const current = slotsRef.current;
     const updated: ChartSlotState[] = current.map((slot) =>
@@ -270,6 +303,7 @@ export function useChartSlots(options: UseChartSlotsOptions) {
     limitMessage,
     announcement,
     addSlot,
+    setSlotCount,
     removeSlot,
     changeTimeframe,
     retrySlot,

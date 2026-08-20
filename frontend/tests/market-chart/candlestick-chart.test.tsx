@@ -65,6 +65,7 @@ const lightweightCharts = vi.hoisted(() => {
 
 vi.mock("lightweight-charts", () => ({
   CandlestickSeries: lightweightCharts.CandlestickSeries,
+  ColorType: { Solid: "solid" },
   createChart: lightweightCharts.createChart,
 }));
 
@@ -171,6 +172,16 @@ describe("base CandlestickChart", () => {
       chartPoint(middle),
       chartPoint(latest),
     ]);
+    expect(instance.options).toMatchObject({
+      layout: {
+        background: { type: "solid", color: "#0b111a" },
+        textColor: "#94a3b8",
+      },
+      grid: {
+        vertLines: { color: "#1c2735" },
+        horzLines: { color: "#1c2735" },
+      },
+    });
 
     expect(screen.getByTestId("candlestick-series")).toHaveAttribute(
       "data-series-length",
