@@ -80,7 +80,7 @@ def _response(request: Request, descriptor: ErrorDescriptor) -> JSONResponse:
             details=dict(descriptor.details) if descriptor.details else None,
         ),
         timestamp=format_utc_millis(datetime.now(UTC)),
-        requestId=request_id(request),
+        request_id=request_id(request),
     )
     headers = {}
     if descriptor.retry_after_seconds is not None:
