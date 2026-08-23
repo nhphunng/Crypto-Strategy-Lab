@@ -399,3 +399,14 @@ T071: immutable generated revisions
 - [X] T093 Preserve every duplicate request/draft activation link to the existing immutable artifact/version/provenance while preventing duplicate active versions, with traceability tests covering FR-052 through FR-054 and SC-019 in `backend/src/crypto_lab/application/strategies/activate_generated_strategy.py` and `backend/tests/contract/test_generated_strategy_activation.py`
 - [X] T094 Return `STRATEGY_INTENT_UNRESOLVED` when strategy-name generation yields zero or multiple materially plausible candidates, while natural-language/source zero-candidate extraction completes explicitly, with tests covering FR-039 through FR-043 and SC-013 in `backend/src/crypto_lab/application/strategies/generate_strategies.py` and `backend/tests/integration/test_strategy_generation_failures.py`
 - [ ] T095 Make the approved generated-code isolation profile operationally installable/configurable and run an actual image containment smoke test for non-root, networkless, read-only, capability-free, time/memory/process-limited execution, covering ADR-006, FR-044, FR-045, and SC-015 in `backend/sandbox/`, `infra/compose.yaml`, `infra/security/`, and `backend/tests/contract/test_generated_strategy_sandbox.py`
+
+---
+
+## Phase 12: Convergence
+
+**Purpose**: Connect the frontend strategy builder to the canonical backend catalog and make activated generated strategies immediately reusable across later frontend sessions.
+
+- [ ] T096 Add strict frontend discovery DTOs, runtime boundary validation, mapping tests, and an asynchronous strategy catalog client for `GET /api/v1/strategies`, replacing runtime dependence on the mock strategy gateway while preserving test-only fixtures, per FR-025, FR-026, FR-055, FR-057, FE-01, and FE-08 (partial)
+- [ ] T097 Render built-in and generated catalog entries from backend-owned identities and parameter schemas with loading, retry, empty, and safe presentation-fallback states; remove runtime assumptions about `ma-cross-v3`, `rsi-reversal-v2`, and unsupported mock-only strategies, per FR-017, FR-025, FR-026, FE-01, and FE-06 (contradicts)
+- [ ] T098 Invalidate and refetch strategy discovery after successful generated-draft activation, automatically expose/select the exact activated ID and version for parameter configuration, and prove a later mount/reload rediscovers it without local-only persistence, per US7/AC1-2, FR-055, FR-056, and FR-060 (partial)
+- [ ] T099 Synchronize generated draft `failureIssues` and validation findings with the backend contract and add frontend integration coverage for discovery, activation-to-selection, failure feedback, and remount reuse using API fixtures, per FR-046, FR-047, DOD-05, and DOD-06 (partial)
