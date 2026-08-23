@@ -43,6 +43,10 @@ class Settings(BaseSettings):
     default_range_candles: int = Field(default=500, ge=1, le=1000)
     max_dataset_candles: int = Field(default=10_000, ge=1000, le=1_000_000)
     dataset_build_lease_seconds: int = Field(default=120, ge=10, le=3600)
+    cors_allowed_origins: tuple[str, ...] = (
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    )
     log_level: str = "INFO"
 
     @field_validator("binance_base_url")

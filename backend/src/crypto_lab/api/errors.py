@@ -9,6 +9,7 @@ from fastapi.responses import JSONResponse
 
 from crypto_lab.api.common import ErrorDetail, ErrorEnvelope
 from crypto_lab.api.middleware import request_id
+from crypto_lab.application.leaderboard.errors import LeaderboardError
 from crypto_lab.application.market_data.errors import ErrorDescriptor, MarketDataError
 from crypto_lab.domain.market_data.candle import format_utc_millis
 
@@ -33,12 +34,21 @@ _STATUS_BY_CODE = {
     "MARKET_DATASET_NOT_FOUND": 404,
     "MARKET_DATASET_INTEGRITY_FAILED": 500,
     "MARKET_INTERNAL_ERROR": 500,
+    "LEADERBOARD_NOT_FOUND": 404,
+    "LEADERBOARD_ENTRY_NOT_FOUND": 404,
+    "LEADERBOARD_QUERY_INVALID": 422,
+    "LEADERBOARD_RANGE_INVALID": 422,
+    "LEADERBOARD_DEPENDENCY_UNAVAILABLE": 503,
 }
 
 
 def install_error_handlers(app: FastAPI) -> None:
     @app.exception_handler(MarketDataError)
     async def market_error(request: Request, error: MarketDataError) -> JSONResponse:
+        return _response(request, error.descriptor)
+
+    @app.exception_handler(LeaderboardError)
+    async def leaderboard_error(request: Request, error: LeaderboardError) -> JSONResponse:
         return _response(request, error.descriptor)
 
     @app.exception_handler(RequestValidationError)
@@ -72,13 +82,15 @@ def install_error_handlers(app: FastAPI) -> None:
 
 
 def _response(request: Request, descriptor: ErrorDescriptor) -> JSONResponse:
+    detail = ErrorDetail(
+        code=descriptor.code,
+        retryable=descriptor.retryable,
+        details=dict(descriptor.details) if descriptor.details else None,
+    )
     envelope = ErrorEnvelope(
         message=descriptor.message,
-        error=ErrorDetail(
-            code=descriptor.code,
-            retryable=descriptor.retryable,
-            details=dict(descriptor.details) if descriptor.details else None,
-        ),
+        error=detail,
+        data=detail,
         timestamp=format_utc_millis(datetime.now(UTC)),
         requestId=request_id(request),
     )

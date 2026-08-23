@@ -29,9 +29,16 @@ class ErrorDetail(ApiModel):
 
 
 class ErrorEnvelope(ApiModel):
+    """Repository-wide error shape.
+
+    ``error`` is the established Feature 001 field; ``data`` mirrors it so the
+    Feature 005 contract, which names the payload ``data``, is also satisfied.
+    """
+
     success: bool = False
     message: str
     error: ErrorDetail
+    data: ErrorDetail
     timestamp: str
     request_id: str = Field(alias="requestId")
 

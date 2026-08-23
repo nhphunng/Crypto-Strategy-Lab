@@ -5,6 +5,10 @@ from datetime import UTC, datetime, timedelta
 
 import httpx
 
+from crypto_lab.api.leaderboard_dependencies import (
+    LeaderboardContainer,
+    build_leaderboard_container,
+)
 from crypto_lab.application.market_data.dataset_service import DatasetService
 from crypto_lab.application.market_data.historical_service import HistoricalMarketDataService
 from crypto_lab.application.market_data.ports import Clock, MarketDataRepository
@@ -30,6 +34,7 @@ class Container:
     datasets: DatasetService
     database: Database | None = None
     http_client: httpx.AsyncClient | None = None
+    leaderboard: LeaderboardContainer | None = None
 
     async def close(self) -> None:
         if self.http_client is not None:
@@ -73,4 +78,5 @@ def build_container(settings: Settings | None = None) -> Container:
         datasets,
         database,
         client,
+        build_leaderboard_container(database),
     )
