@@ -45,4 +45,11 @@ export interface GeneratedDraft extends GeneratedDraftSummary {
     status: string
     checks: Array<{ name: string; status: string; findings: unknown[] }>
   }
+  failureIssues: Array<{ field: string; code: string; message: string }>
+}
+
+export interface ActivatedStrategy {
+  strategyId: string
+  strategyVersion: string
+  provenanceId: string
 }

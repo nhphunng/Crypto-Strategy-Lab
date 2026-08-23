@@ -220,11 +220,18 @@ export const SEARCH_RUN = {
 
 export type Strategy = {
   id: string
+  strategyId?: string
+  strategyType?: string
   name: string
-  category: 'Trend' | 'Momentum' | 'Volatility' | 'Structure' | 'Composite'
+  category: string
   version: string
+  contractVersion?: string
+  origin?: 'BUILT_IN' | 'LLM_GENERATED'
+  capabilities?: string[]
+  generationProvenanceId?: string | null
+  generatedArtifactFingerprint?: string | null
   summary: string
-  status: 'Tested' | 'Draft' | 'Valid'
+  status: string
   params: { key: string; label: string; value: number; min: number; max: number; step: number }[]
   rules: { text: string; side: 'buy' | 'sell' }[]
 }
