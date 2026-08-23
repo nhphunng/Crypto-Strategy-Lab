@@ -83,6 +83,12 @@ async def test_migrations_upgrade_in_dependency_order_and_round_trip() -> None:
         "leaderboards",
         "leaderboard_entries",
         "leaderboard_update_records",
+        "strategy_generation_requests",
+        "strategy_source_snapshots",
+        "generated_strategy_drafts",
+        "generated_strategy_artifacts",
+        "strategy_validation_reports",
+        "strategy_generation_provenance",
     } <= await table_names()
 
     run_alembic("downgrade", "base")
@@ -99,4 +105,4 @@ def test_alembic_has_one_head() -> None:
         text=True,
     )
     heads = [line for line in result.stdout.splitlines() if line.strip().endswith("(head)")]
-    assert heads == ["20260813_005_leaderboard (head)"]
+    assert heads == ["20260823_006_generation (head)"]
