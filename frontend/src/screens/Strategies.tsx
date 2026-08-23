@@ -9,6 +9,7 @@ import {
   Scale,
   TriangleAlert,
   Vote,
+  Sparkles,
 } from 'lucide-react'
 import { useStore } from '../lib/store'
 import {
@@ -24,6 +25,9 @@ import {
 import { useServices } from '../services/registry'
 import { PageHeader } from '../components/Shell'
 import { MarketSelector } from '../components/MarketSelector'
+import { StrategyGenerationForm } from '../features/strategies/components/StrategyGenerationForm'
+import { GeneratedStrategyReview } from '../features/strategies/components/GeneratedStrategyReview'
+import type { GeneratedDraft } from '../features/strategies/types'
 import {
   Button,
   cn,
@@ -228,6 +232,8 @@ export function Strategies() {
   const [advanced, setAdvanced] = useState(false)
   const [configActive, setConfigActive] = useState<string | null>(null)
   const [inspector, setInspector] = useState(false)
+  const [generationOpen, setGenerationOpen] = useState(false)
+  const [generatedDrafts, setGeneratedDrafts] = useState<GeneratedDraft[]>([])
 
   const single = selected.length === 1
   const paramsFor = (id: string) => params[id] ?? recommendedValues(id)
@@ -318,10 +324,32 @@ export function Strategies() {
   return (
     <div className="flex h-full flex-col">
       <PageHeader title="Strategies">
+        <Button variant="default" onClick={() => setGenerationOpen((value) => !value)}>
+          <Sparkles size={14} /> Generate Strategy
+        </Button>
         <Button variant="default" onClick={() => setInspector(true)}>
           <GitBranch size={14} /> Strategy Details
         </Button>
       </PageHeader>
+
+      {generationOpen && (
+        <div className="max-h-[55vh] shrink-0 overflow-auto border-b border-line">
+          <StrategyGenerationForm onDrafts={setGeneratedDrafts} />
+          {generatedDrafts.map((draft) => (
+            <GeneratedStrategyReview
+              key={draft.id}
+              draft={draft}
+              onActivated={(label) => {
+                toast(`${label} is available for later workflows`, 'positive')
+                setGeneratedDrafts((items) => items.filter((item) => item.id !== draft.id))
+              }}
+            />
+          ))}
+          {generatedDrafts.length === 0 && (
+            <p className="bg-workspace px-5 py-3 text-[11px] text-faint">A source may validly produce zero drafts.</p>
+          )}
+        </div>
+      )}
 
       {/* market context bar — always visible */}
       <div className="flex shrink-0 flex-wrap items-center gap-x-6 gap-y-2 border-b border-subtle bg-surface px-5 py-2.5">
