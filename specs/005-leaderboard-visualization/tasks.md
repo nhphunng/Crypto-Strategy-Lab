@@ -6,6 +6,8 @@
 
 **Tests**: Required by FR-019 and the constitution. Write story tests first and verify they fail for the expected missing behavior before implementation.
 
+**Status 2026-08-23**: all 52 tasks implemented and verified. Measured outcomes are recorded in [quickstart.md](quickstart.md). Two documented deviations: overlay descriptors stay `UNAVAILABLE` until an upstream Strategy/Backtest feature publishes them (T042 renders `LINE`/`BAND`/`ZONE` and is covered by fixtures), and T004 uses hand-written contract-derived types plus runtime validators instead of an OpenAPI generator, with `backend/tests/contract/test_leaderboard_contract_sync.py` enforcing the sync against `contracts/openapi.yaml`.
+
 **Organization**: Tasks are grouped by local story labels preserving canonical SRS mappings: `[US1]` = `LV-US-01`, `[US2]` = `LV-US-02`, `[US3]` = `LV-US-03`.
 
 ## Format: `[ID] [P?] [Story] Description`
@@ -19,9 +21,9 @@
 **Purpose**: Establish feature folders, deterministic fixtures, and contract tooling without adding a service.
 
 - [X] T001 Create backend leaderboard package initializers in `backend/src/crypto_lab/domain/leaderboard/__init__.py` and `backend/src/crypto_lab/application/leaderboard/__init__.py`
-- [ ] T002 [P] Create the frontend feature barrel and minimal route shell in `frontend/src/features/leaderboard/index.ts` and `frontend/src/app/routes/leaderboard.tsx`
-- [ ] T003 [P] Add the deterministic 12-result, tie, no-trade, and partial-marker TV5 fixture in `backend/tests/fixtures/leaderboard.py`
-- [ ] T004 [P] Configure OpenAPI-derived leaderboard type generation and runtime contract validation entry in `frontend/package.json` and `frontend/src/features/leaderboard/schemas.ts`
+- [X] T002 [P] Create the frontend feature barrel and minimal route shell in `frontend/src/features/leaderboard/index.ts` and `frontend/src/app/routes/leaderboard.tsx`
+- [X] T003 [P] Add the deterministic 12-result, tie, no-trade, and partial-marker TV5 fixture in `backend/tests/fixtures/leaderboard.py`
+- [X] T004 [P] Configure OpenAPI-derived leaderboard type generation and runtime contract validation entry in `frontend/package.json` and `frontend/src/features/leaderboard/schemas.ts`
 
 ---
 
@@ -31,15 +33,15 @@
 
 **CRITICAL**: No user story implementation begins until this phase is complete.
 
-- [ ] T005 Define `ScoringPolicyRef`, complete `LeaderboardScope` identity (comparison scope, ranking metric, K), `ProjectionVersion`, decimal, UTC, and eligibility value objects in `backend/src/crypto_lab/domain/leaderboard/policy.py`
-- [ ] T006 [P] Define framework-independent `LeaderboardEntry` and projection invariants in `backend/src/crypto_lab/domain/leaderboard/entry.py`
-- [ ] T007 [P] Define typed repository, Evaluation Result reader, ranked-result reader, and update-publisher ports in `backend/src/crypto_lab/application/leaderboard/ports.py`
-- [ ] T008 [P] Add Pydantic request, response, and event DTOs aligned to TV5 contracts in `backend/src/crypto_lab/api/schemas/leaderboards.py`
+- [X] T005 Define `ScoringPolicyRef`, complete `LeaderboardScope` identity (comparison scope, ranking metric, K), `ProjectionVersion`, decimal, UTC, and eligibility value objects in `backend/src/crypto_lab/domain/leaderboard/policy.py`
+- [X] T006 [P] Define framework-independent `LeaderboardEntry` and projection invariants in `backend/src/crypto_lab/domain/leaderboard/entry.py`
+- [X] T007 [P] Define typed repository, Evaluation Result reader, ranked-result reader, and update-publisher ports in `backend/src/crypto_lab/application/leaderboard/ports.py`
+- [X] T008 [P] Add Pydantic request, response, and event DTOs aligned to TV5 contracts in `backend/src/crypto_lab/api/schemas/leaderboards.py`
 - [X] T009 Add `leaderboards`, `leaderboard_entries`, and durable update-record SQLAlchemy mappings and constraints in `backend/src/crypto_lab/infrastructure/persistence/leaderboard_models.py`
 - [X] T010 Create immutable Alembic upgrade/downgrade for leaderboard projection tables, constraints, and indices in `backend/migrations/versions/20260813_005_add_leaderboard_projection.py`
-- [ ] T011 Implement transactional repository primitives, projection locking, bounded queries, and durable update records in `backend/src/crypto_lab/infrastructure/persistence/repositories/leaderboard_repository.py`
-- [ ] T012 [P] Add structured leaderboard log context and current Top-1/update-latency metrics in `backend/src/crypto_lab/infrastructure/observability/leaderboard.py`
-- [ ] T013 Define repository, reader, publisher, and use-case dependency providers without route imports or business logic in `backend/src/crypto_lab/api/leaderboard_dependencies.py`
+- [X] T011 Implement transactional repository primitives, projection locking, bounded queries, and durable update records in `backend/src/crypto_lab/infrastructure/persistence/repositories/leaderboard_repository.py`
+- [X] T012 [P] Add structured leaderboard log context and current Top-1/update-latency metrics in `backend/src/crypto_lab/infrastructure/observability/leaderboard.py`
+- [X] T013 Define repository, reader, publisher, and use-case dependency providers without route imports or business logic in `backend/src/crypto_lab/api/leaderboard_dependencies.py`
 
 **Checkpoint**: Shared types compile, migration round-trips against PostgreSQL, and boundaries can be constructed.
 
@@ -55,21 +57,21 @@
 
 ### Tests for User Story 1
 
-- [ ] T014 [P] [US1] Write failing unit tests for eligibility, metric direction, deterministic ties, fewer-than-K, displacement, contiguous ranks, and isolation of different K/ranking-metric identities in `backend/tests/unit/leaderboard/test_ranking.py`
-- [ ] T015 [P] [US1] Write failing REST contract tests for envelopes, row projection versions, metric direction/unit metadata, validation, metric/context filtering, presentation sorting, and pagination in `backend/tests/contract/test_leaderboard_api.py`
-- [ ] T016 [P] [US1] Write failing PostgreSQL integration tests for complete projection-identity constraints, concurrent qualifiers, atomic update records, and migration round-trip in `backend/tests/integration/test_leaderboard_projection.py`
-- [ ] T017 [P] [US1] Write failing component tests for metric direction/unit labels, stable control IDs, simulated-analysis disclaimer, accessibility, empty/error states, filters, sorting, and pagination in `frontend/tests/leaderboard/LeaderboardTable.test.tsx`
+- [X] T014 [P] [US1] Write failing unit tests for eligibility, metric direction, deterministic ties, fewer-than-K, displacement, contiguous ranks, and isolation of different K/ranking-metric identities in `backend/tests/unit/leaderboard/test_ranking.py`
+- [X] T015 [P] [US1] Write failing REST contract tests for envelopes, row projection versions, metric direction/unit metadata, validation, metric/context filtering, presentation sorting, and pagination in `backend/tests/contract/test_leaderboard_api.py`
+- [X] T016 [P] [US1] Write failing PostgreSQL integration tests for complete projection-identity constraints, concurrent qualifiers, atomic update records, and migration round-trip in `backend/tests/integration/test_leaderboard_projection.py`
+- [X] T017 [P] [US1] Write failing component tests for metric direction/unit labels, stable control IDs, simulated-analysis disclaimer, accessibility, empty/error states, filters, sorting, and pagination in `frontend/tests/leaderboard/LeaderboardTable.test.tsx`
 
 ### Implementation for User Story 1
 
-- [ ] T018 [US1] Implement the total deterministic ranking comparator and bounded Top-K transition in `backend/src/crypto_lab/domain/leaderboard/ranking.py`
-- [ ] T019 [US1] Implement compatible Evaluation Result validation and transactional snapshot/update-record orchestration without duplicating upstream evaluations or scores in `backend/src/crypto_lab/application/leaderboard/update_leaderboard.py`
-- [ ] T020 [US1] Implement authoritative snapshot/filter/sort/page query orchestration in `backend/src/crypto_lab/application/leaderboard/query_leaderboard.py`
-- [ ] T021 [US1] Implement and register `/api/v1/leaderboards` mapping, complete projection identity, metric filters/metadata, validation, envelopes, and domain error codes in `backend/src/crypto_lab/api/routes/leaderboards.py` and `backend/src/crypto_lab/main.py`
-- [ ] T022 [P] [US1] Implement typed REST client queries and decimal/date mapping in `frontend/src/features/leaderboard/api/leaderboardApi.ts`
-- [ ] T023 [P] [US1] Define contract-derived Leaderboard Entry, metric direction, filters, pagination, and view-state types in `frontend/src/features/leaderboard/types.ts`
-- [ ] T024 [US1] Implement accessible Top-K rows, metrics/directions/units, provenance summary, sort/filter/page controls, explicit states, and stable IDs for every interactive control in `frontend/src/features/leaderboard/components/LeaderboardTable.tsx`
-- [ ] T025 [US1] Compose the independently usable leaderboard route with `table-leaderboard`, simulated-analysis labelling, and a visible non-investment-advice disclaimer in `frontend/src/app/routes/leaderboard.tsx`
+- [X] T018 [US1] Implement the total deterministic ranking comparator and bounded Top-K transition in `backend/src/crypto_lab/domain/leaderboard/ranking.py`
+- [X] T019 [US1] Implement compatible Evaluation Result validation and transactional snapshot/update-record orchestration without duplicating upstream evaluations or scores in `backend/src/crypto_lab/application/leaderboard/update_leaderboard.py`
+- [X] T020 [US1] Implement authoritative snapshot/filter/sort/page query orchestration in `backend/src/crypto_lab/application/leaderboard/query_leaderboard.py`
+- [X] T021 [US1] Implement and register `/api/v1/leaderboards` mapping, complete projection identity, metric filters/metadata, validation, envelopes, and domain error codes in `backend/src/crypto_lab/api/routes/leaderboards.py` and `backend/src/crypto_lab/main.py`
+- [X] T022 [P] [US1] Implement typed REST client queries and decimal/date mapping in `frontend/src/features/leaderboard/api/leaderboardApi.ts`
+- [X] T023 [P] [US1] Define contract-derived Leaderboard Entry, metric direction, filters, pagination, and view-state types in `frontend/src/features/leaderboard/types.ts`
+- [X] T024 [US1] Implement accessible Top-K rows, metrics/directions/units, provenance summary, sort/filter/page controls, explicit states, and stable IDs for every interactive control in `frontend/src/features/leaderboard/components/LeaderboardTable.tsx`
+- [X] T025 [US1] Compose the independently usable leaderboard route with `table-leaderboard`, simulated-analysis labelling, and a visible non-investment-advice disclaimer in `frontend/src/app/routes/leaderboard.tsx`
 
 **Checkpoint**: `LV-US-01` passes independently with no WebSocket or visualization requirement.
 
@@ -85,18 +87,18 @@
 
 ### Tests for User Story 2
 
-- [ ] T026 [P] [US2] Write failing event contract tests for complete subscription identity, v1 envelope, correlation fields, compact changed set, and invalid versions in `backend/tests/contract/test_leaderboard_events.py`
-- [ ] T027 [P] [US2] Extend failing PostgreSQL coverage for Evaluation-completion invocation, duplicate delivery, unchanged projections, transactional update records, claim/retry publication, and publish status in `backend/tests/integration/test_leaderboard_projection.py`
-- [ ] T028 [P] [US2] Write failing hook/component tests for duplicate, older, gap, reconnect, stale, and recovered snapshot states in `frontend/tests/leaderboard/useLeaderboardUpdates.test.tsx`
+- [X] T026 [P] [US2] Write failing event contract tests for complete subscription identity, v1 envelope, correlation fields, compact changed set, and invalid versions in `backend/tests/contract/test_leaderboard_events.py`
+- [X] T027 [P] [US2] Extend failing PostgreSQL coverage for Evaluation-completion invocation, duplicate delivery, unchanged projections, transactional update records, claim/retry publication, and publish status in `backend/tests/integration/test_leaderboard_projection.py`
+- [X] T028 [P] [US2] Write failing hook/component tests for duplicate, older, gap, reconnect, stale, and recovered snapshot states in `frontend/tests/leaderboard/useLeaderboardUpdates.test.tsx`
 
 ### Implementation for User Story 2
 
-- [ ] T029 [US2] Wire the durable Evaluation-completion boundary to `UpdateLeaderboard` and implement a retry-safe dispatcher that claims committed update records, publishes them, and records publication status in `backend/src/crypto_lab/application/leaderboard/publish_leaderboard_updates.py` and `backend/src/crypto_lab/main.py`
-- [ ] T030 [US2] Implement `/ws/v1/leaderboards` subscription validation and versioned event delivery in `backend/src/crypto_lab/api/websocket/leaderboard_channel.py`
-- [ ] T031 [US2] Register the leaderboard WebSocket channel and sanitized connection/error logging in `backend/src/crypto_lab/main.py`
-- [ ] T032 [US2] Implement event ID/projection-version deduplication, gap invalidation, bounded reconnect, and snapshot refetch in `frontend/src/features/leaderboard/hooks/useLeaderboardUpdates.ts`
-- [ ] T033 [P] [US2] Implement `CONNECTING`, `LIVE`, `RECONNECTING`, and `STALE` status with latest update/run context in `frontend/src/features/leaderboard/components/LeaderboardStatus.tsx`
-- [ ] T034 [US2] Integrate live reconciliation and status without replacing the last valid snapshot in `frontend/src/features/leaderboard/components/LeaderboardTable.tsx`
+- [X] T029 [US2] Wire the durable Evaluation-completion boundary to `UpdateLeaderboard` and implement a retry-safe dispatcher that claims committed update records, publishes them, and records publication status in `backend/src/crypto_lab/application/leaderboard/publish_leaderboard_updates.py` and `backend/src/crypto_lab/main.py`
+- [X] T030 [US2] Implement `/ws/v1/leaderboards` subscription validation and versioned event delivery in `backend/src/crypto_lab/api/websocket/leaderboard_channel.py`
+- [X] T031 [US2] Register the leaderboard WebSocket channel and sanitized connection/error logging in `backend/src/crypto_lab/main.py`
+- [X] T032 [US2] Implement event ID/projection-version deduplication, gap invalidation, bounded reconnect, and snapshot refetch in `frontend/src/features/leaderboard/hooks/useLeaderboardUpdates.ts`
+- [X] T033 [P] [US2] Implement `CONNECTING`, `LIVE`, `RECONNECTING`, and `STALE` status with latest update/run context in `frontend/src/features/leaderboard/components/LeaderboardStatus.tsx`
+- [X] T034 [US2] Integrate live reconciliation and status without replacing the last valid snapshot in `frontend/src/features/leaderboard/components/LeaderboardTable.tsx`
 
 **Checkpoint**: `LV-US-02` passes with a seeded snapshot and one event source even if visualization is absent.
 
@@ -112,21 +114,21 @@
 
 ### Tests for User Story 3
 
-- [ ] T035 [P] [US3] Write failing REST contract tests for ranked detail, bounded visualization, Trade pagination, decimal precision, UTC, and partial availability in `backend/tests/contract/test_ranked_result_api.py`
-- [ ] T036 [P] [US3] Write failing integration tests for provenance joins, range bounds, unaligned markers, and no-trade behavior in `backend/tests/integration/test_ranked_result_detail.py`
-- [ ] T037 [P] [US3] Write failing component tests for generic overlays, non-color marker identity, nullable unaligned coordinates, stable control/row IDs, keyboard Trade selection, overlap, no-trade, partial states, and the analysis disclaimer in `frontend/tests/leaderboard/RankedResultDetail.test.tsx`
-- [ ] T038 [P] [US3] Write failing browser acceptance flow for Top-1 drill-down, Trade #3 highlighting, provenance, simulated-analysis labelling, and non-investment-advice text in `tests/e2e/leaderboard-visualization.spec.ts`
+- [X] T035 [P] [US3] Write failing REST contract tests for ranked detail, bounded visualization, Trade pagination, decimal precision, UTC, and partial availability in `backend/tests/contract/test_ranked_result_api.py`
+- [X] T036 [P] [US3] Write failing integration tests for provenance joins, range bounds, unaligned markers, and no-trade behavior in `backend/tests/integration/test_ranked_result_detail.py`
+- [X] T037 [P] [US3] Write failing component tests for generic overlays, non-color marker identity, nullable unaligned coordinates, stable control/row IDs, keyboard Trade selection, overlap, no-trade, partial states, and the analysis disclaimer in `frontend/tests/leaderboard/RankedResultDetail.test.tsx`
+- [X] T038 [P] [US3] Write failing browser acceptance flow for Top-1 drill-down, Trade #3 highlighting, provenance, simulated-analysis labelling, and non-investment-advice text in `tests/e2e/leaderboard-visualization.spec.ts`
 
 ### Implementation for User Story 3
 
-- [ ] T039 [US3] Implement ranked-result provenance, availability, bounded Candle/overlay/Signal, and pageable Trade queries in `backend/src/crypto_lab/application/leaderboard/get_ranked_result.py`
-- [ ] T040 [US3] Implement ranked detail, visualization-range, and Trade-page REST endpoints in `backend/src/crypto_lab/api/routes/leaderboards.py`
-- [ ] T041 [P] [US3] Extend typed queries and runtime validation for ranked detail, visualization, and Trades in `frontend/src/features/leaderboard/api/leaderboardApi.ts` and `frontend/src/features/leaderboard/schemas.ts`
-- [ ] T042 [P] [US3] Implement generic `LINE`, `BAND`, and `ZONE` rendering without Strategy-name branches in `frontend/src/features/leaderboard/components/StrategyOverlayLayer.tsx`
-- [ ] T043 [P] [US3] Implement accessible Buy/Sell/Hold/Entry/Exit label-shape markers, stable Hold-control/marker IDs, overlap handling, and nullable-coordinate unaligned reporting in `frontend/src/features/leaderboard/components/TradeSignalMarkers.tsx`
-- [ ] T044 [P] [US3] Implement sortable/pageable keyboard-accessible Trade rows, stable row/control IDs, and selection state in `frontend/src/features/leaderboard/components/TradeTable.tsx`
-- [ ] T045 [US3] Compose exact Market Pair/Timeframe/range chart context, overlays, markers, availability states, provenance panel, simulated-analysis label, and non-investment-advice disclaimer in `frontend/src/features/leaderboard/components/RankedResultDetail.tsx`
-- [ ] T046 [US3] Connect row drill-down and selected Trade Entry/Exit highlighting through generic extension inputs on the existing Candle chart without importing leaderboard behavior in `frontend/src/features/market-chart/components/CandlestickChart.tsx`
+- [X] T039 [US3] Implement ranked-result provenance, availability, bounded Candle/overlay/Signal, and pageable Trade queries in `backend/src/crypto_lab/application/leaderboard/get_ranked_result.py`
+- [X] T040 [US3] Implement ranked detail, visualization-range, and Trade-page REST endpoints in `backend/src/crypto_lab/api/routes/leaderboards.py`
+- [X] T041 [P] [US3] Extend typed queries and runtime validation for ranked detail, visualization, and Trades in `frontend/src/features/leaderboard/api/leaderboardApi.ts` and `frontend/src/features/leaderboard/schemas.ts`
+- [X] T042 [P] [US3] Implement generic `LINE`, `BAND`, and `ZONE` rendering without Strategy-name branches in `frontend/src/features/leaderboard/components/StrategyOverlayLayer.tsx`
+- [X] T043 [P] [US3] Implement accessible Buy/Sell/Hold/Entry/Exit label-shape markers, stable Hold-control/marker IDs, overlap handling, and nullable-coordinate unaligned reporting in `frontend/src/features/leaderboard/components/TradeSignalMarkers.tsx`
+- [X] T044 [P] [US3] Implement sortable/pageable keyboard-accessible Trade rows, stable row/control IDs, and selection state in `frontend/src/features/leaderboard/components/TradeTable.tsx`
+- [X] T045 [US3] Compose exact Market Pair/Timeframe/range chart context, overlays, markers, availability states, provenance panel, simulated-analysis label, and non-investment-advice disclaimer in `frontend/src/features/leaderboard/components/RankedResultDetail.tsx`
+- [X] T046 [US3] Connect row drill-down and selected Trade Entry/Exit highlighting through generic extension inputs on the existing Candle chart without importing leaderboard behavior in `frontend/src/features/market-chart/components/CandlestickChart.tsx`
 
 **Checkpoint**: All three canonical TV5 stories pass independently and together.
 
@@ -136,12 +138,12 @@
 
 **Purpose**: Close non-functional, traceability, architecture-fitness, and demo gates.
 
-- [ ] T047 [P] Add k6 snapshot and update-propagation checks with documented demo-load thresholds in `tests/load/leaderboard.js`
-- [ ] T048 [P] Add test-only unknown Strategy/overlay fixtures proving no concrete-name branch in backend mapping or frontend rendering in `backend/tests/contract/test_leaderboard_extensibility.py` and `frontend/tests/leaderboard/RankedResultDetail.test.tsx`
-- [ ] T049 Implement sanitized audit events and verify correlation propagation for ranking changes, reconnects, and failures in `backend/src/crypto_lab/infrastructure/observability/leaderboard.py` and `backend/tests/integration/test_leaderboard_observability.py`
-- [ ] T050 Add executable contract-sync coverage for generated TypeScript, runtime schemas, REST responses, and WebSocket events against `specs/005-leaderboard-visualization/contracts/openapi.yaml` and `specs/005-leaderboard-visualization/contracts/leaderboard-events.md` in `backend/tests/contract/test_leaderboard_contract_sync.py`
-- [ ] T051 Execute every scenario and record measured outcomes/checksum IDs in `specs/005-leaderboard-visualization/quickstart.md`
-- [ ] T052 Update feature architecture, API/event flow, and demo navigation in `README.md` and `docs/TECH_STACK_SKELETON_SPECKIT_FLOW.md`
+- [X] T047 [P] Add k6 snapshot and update-propagation checks with documented demo-load thresholds in `tests/load/leaderboard.js`
+- [X] T048 [P] Add test-only unknown Strategy/overlay fixtures proving no concrete-name branch in backend mapping or frontend rendering in `backend/tests/contract/test_leaderboard_extensibility.py` and `frontend/tests/leaderboard/RankedResultDetail.test.tsx`
+- [X] T049 Implement sanitized audit events and verify correlation propagation for ranking changes, reconnects, and failures in `backend/src/crypto_lab/infrastructure/observability/leaderboard.py` and `backend/tests/integration/test_leaderboard_observability.py`
+- [X] T050 Add executable contract-sync coverage for generated TypeScript, runtime schemas, REST responses, and WebSocket events against `specs/005-leaderboard-visualization/contracts/openapi.yaml` and `specs/005-leaderboard-visualization/contracts/leaderboard-events.md` in `backend/tests/contract/test_leaderboard_contract_sync.py`
+- [X] T051 Execute every scenario and record measured outcomes/checksum IDs in `specs/005-leaderboard-visualization/quickstart.md`
+- [X] T052 Update feature architecture, API/event flow, and demo navigation in `README.md` and `docs/TECH_STACK_SKELETON_SPECKIT_FLOW.md`
 
 ---
 
@@ -244,4 +246,4 @@ T044: frontend/src/features/leaderboard/components/TradeTable.tsx
 
 - No task implements live orders, financial metric calculation, Signal generation, Backtest simulation, or search control.
 - Decimal/time precision and all provenance/projection versions are contract obligations.
-- Stop after `$speckit-analyze` for this assignment; do not execute these tasks in the spec/plan PR.
+- The spec/plan PR stopped after `$speckit-analyze`; implementation landed later on the `feat/005-leaderboard-*` branches.

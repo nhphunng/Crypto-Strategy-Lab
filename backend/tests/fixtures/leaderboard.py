@@ -8,7 +8,7 @@ always derived by the feature under test, never seeded directly.
 from __future__ import annotations
 
 import hashlib
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from uuid import UUID, uuid5
@@ -666,9 +666,21 @@ NEWCOMER = CandidateSpec(
 )
 
 
-async def add_qualifying_candidate(session: AsyncSession) -> UUID:
+async def add_qualifying_candidate(
+    session: AsyncSession,
+    *,
+    index: int = NEWCOMER.index,
+    score: Decimal | None = None,
+) -> UUID:
     """Complete one more evaluation that must enter the current Top-K."""
 
-    execution_policy_id = _uuid("execution-policy")
-    await _seed_candidate(session, NEWCOMER, execution_policy_id)
-    return NEWCOMER.evaluation_id
+    spec = NEWCOMER
+    if index != NEWCOMER.index or score is not None:
+        spec = replace(
+            NEWCOMER,
+            index=index,
+            score=score if score is not None else NEWCOMER.score,
+            strategy_id=f"{NEWCOMER.strategy_id}-{index}",
+        )
+    await _seed_candidate(session, spec, _uuid("execution-policy"))
+    return spec.evaluation_id

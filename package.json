@@ -1,0 +1,11 @@
+{
+  "name": "crypto-strategy-lab-e2e",
+  "private": true,
+  "description": "Repository-level browser acceptance tooling (frontend and backend deps live in their own packages).",
+  "scripts": {
+    "test:e2e": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.62.1"
+  }
+}

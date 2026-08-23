@@ -145,7 +145,7 @@ describe('LeaderboardRoute', () => {
   it('loads a snapshot and shows the non-investment-advice disclaimer', async () => {
     const loadSnapshot = vi.fn().mockResolvedValue(snapshotFixture())
 
-    render(<LeaderboardRoute loadSnapshot={loadSnapshot} />)
+    render(<LeaderboardRoute loadSnapshot={loadSnapshot} liveUpdates={false} />)
 
     expect(await screen.findByTestId('table-leaderboard')).toBeInTheDocument()
     const disclaimer = screen.getByTestId('disclaimer-leaderboard').textContent ?? ''
@@ -159,7 +159,7 @@ describe('LeaderboardRoute', () => {
 
   it('reloads a separate projection when K or the ranking metric changes', async () => {
     const loadSnapshot = vi.fn().mockResolvedValue(snapshotFixture())
-    render(<LeaderboardRoute loadSnapshot={loadSnapshot} />)
+    render(<LeaderboardRoute loadSnapshot={loadSnapshot} liveUpdates={false} />)
     await screen.findByTestId('table-leaderboard')
 
     await userEvent.selectOptions(screen.getByTestId('control-top-k'), '3')
@@ -173,7 +173,7 @@ describe('LeaderboardRoute', () => {
   it('surfaces a failed load without inventing rows', async () => {
     const loadSnapshot = vi.fn().mockRejectedValue(new Error('LEADERBOARD_DEPENDENCY_UNAVAILABLE'))
 
-    render(<LeaderboardRoute loadSnapshot={loadSnapshot} />)
+    render(<LeaderboardRoute loadSnapshot={loadSnapshot} liveUpdates={false} />)
 
     expect(await screen.findByTestId('state-leaderboard-error')).toHaveTextContent(
       'LEADERBOARD_DEPENDENCY_UNAVAILABLE',

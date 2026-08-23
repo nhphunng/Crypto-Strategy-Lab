@@ -6,12 +6,15 @@ recomputes a financial metric, generates a Signal, or simulates a Trade.
 
 from __future__ import annotations
 
+from time import perf_counter
 from uuid import UUID
 
 from crypto_lab.application.leaderboard.errors import query_invalid
 from crypto_lab.application.leaderboard.ports import (
     Clock,
     LeaderboardRepository,
+    NullObserver,
+    ProjectionObserver,
     ProjectionOutcome,
     Recompute,
     UpdateSource,
@@ -28,9 +31,15 @@ from crypto_lab.domain.leaderboard.ranking import RankingOutcome, rank_candidate
 class UpdateLeaderboard:
     """Recompute one or more projections from authoritative inputs, idempotently."""
 
-    def __init__(self, repository: LeaderboardRepository, clock: Clock) -> None:
+    def __init__(
+        self,
+        repository: LeaderboardRepository,
+        clock: Clock,
+        observer: ProjectionObserver | None = None,
+    ) -> None:
         self._repository = repository
         self._clock = clock
+        self._observer = observer or NullObserver()
 
     async def for_identity(
         self,
@@ -39,12 +48,19 @@ class UpdateLeaderboard:
         source: UpdateSource | None = None,
     ) -> ProjectionOutcome:
         policy = await self._load_policy(identity)
-        return await self._repository.mutate_projection(
+        started = perf_counter()
+        outcome = await self._repository.mutate_projection(
             identity,
             _recompute_with(policy, identity),
             now=self._clock.now(),
             source=source,
         )
+        latency_ms = (perf_counter() - started) * 1000
+        if outcome.changed:
+            self._observer.projection_changed(outcome, latency_ms=latency_ms, source=source)
+        else:
+            self._observer.projection_unchanged(outcome, source=source)
+        return outcome
 
     async def for_evaluation(
         self,

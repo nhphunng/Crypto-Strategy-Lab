@@ -354,6 +354,57 @@ class LeaderboardUpdatePublisher(Protocol):
     async def publish(self, event: LeaderboardUpdatedEvent) -> None: ...
 
 
+class ProjectionObserver(Protocol):
+    """Sanitized observability sink: identifiers and counters only."""
+
+    def projection_changed(
+        self,
+        outcome: ProjectionOutcome,
+        *,
+        latency_ms: float,
+        source: UpdateSource | None,
+    ) -> None: ...
+
+    def projection_unchanged(
+        self,
+        outcome: ProjectionOutcome,
+        *,
+        source: UpdateSource | None,
+    ) -> None: ...
+
+    def events_published(self, count: int) -> None: ...
+
+    def publication_failed(self, event: LeaderboardUpdatedEvent) -> None: ...
+
+
+@dataclass(slots=True)
+class NullObserver:
+    """Default observer used when no observability sink is configured."""
+
+    def projection_changed(
+        self,
+        outcome: ProjectionOutcome,
+        *,
+        latency_ms: float,
+        source: UpdateSource | None,
+    ) -> None:
+        return None
+
+    def projection_unchanged(
+        self,
+        outcome: ProjectionOutcome,
+        *,
+        source: UpdateSource | None,
+    ) -> None:
+        return None
+
+    def events_published(self, count: int) -> None:
+        return None
+
+    def publication_failed(self, event: LeaderboardUpdatedEvent) -> None:
+        return None
+
+
 @dataclass(slots=True)
 class RecordingPublisher:
     """In-memory publisher used by tests and by the local dispatcher default."""
@@ -379,10 +430,12 @@ __all__ = [
     "MarkerTone",
     "MarkerType",
     "MarkerView",
+    "NullObserver",
     "OverlayKind",
     "OverlayPoint",
     "OverlayView",
     "PendingUpdate",
+    "ProjectionObserver",
     "ProjectionOutcome",
     "ProjectionSnapshot",
     "Provenance",

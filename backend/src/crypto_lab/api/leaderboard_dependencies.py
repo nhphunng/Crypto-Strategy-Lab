@@ -52,18 +52,19 @@ class LeaderboardContainer:
 
 def build_leaderboard_container(database: Database) -> LeaderboardContainer:
     clock = SystemClock()
+    metrics = LeaderboardMetrics()
     repository = SqlAlchemyLeaderboardRepository(database.sessions)
     reader = SqlAlchemyRankedResultReader(database.sessions)
-    updater = UpdateLeaderboard(repository, clock)
+    updater = UpdateLeaderboard(repository, clock, metrics)
     hub = LeaderboardEventHub()
-    dispatcher = PublishLeaderboardUpdates(repository, hub, clock)
+    dispatcher = PublishLeaderboardUpdates(repository, hub, clock, observer=metrics)
     return LeaderboardContainer(
         repository=repository,
         reader=reader,
         updater=updater,
         queries=QueryLeaderboard(repository, updater),
         ranked_results=GetRankedResult(reader),
-        metrics=LeaderboardMetrics(),
+        metrics=metrics,
         hub=hub,
         dispatcher=dispatcher,
         dispatcher_loop=UpdateDispatcherLoop(dispatcher),

@@ -14,6 +14,8 @@ from crypto_lab.application.leaderboard.ports import (
     Clock,
     LeaderboardRepository,
     LeaderboardUpdatePublisher,
+    NullObserver,
+    ProjectionObserver,
     ProjectionOutcome,
 )
 from crypto_lab.application.leaderboard.update_leaderboard import UpdateLeaderboard
@@ -34,11 +36,13 @@ class PublishLeaderboardUpdates:
         clock: Clock,
         *,
         batch_size: int = DEFAULT_BATCH_SIZE,
+        observer: ProjectionObserver | None = None,
     ) -> None:
         self._repository = repository
         self._publisher = publisher
         self._clock = clock
         self._batch_size = batch_size
+        self._observer = observer or NullObserver()
 
     async def dispatch_once(self) -> int:
         pending = await self._repository.claim_pending_updates(self._batch_size)
@@ -46,14 +50,17 @@ class PublishLeaderboardUpdates:
         for item in pending:
             try:
                 await self._publisher.publish(item.event)
-            except Exception:  # pragma: no cover - transport failure is retried
+            except Exception:
                 logger.warning(
                     "leaderboard_publish_failed",
                     extra={"fields": {"event_id": str(item.event.event_id)}},
                 )
+                self._observer.publication_failed(item.event)
                 continue
             await self._repository.mark_published(item.record_id, self._clock.now())
             published += 1
+        if published:
+            self._observer.events_published(published)
         return published
 
 
