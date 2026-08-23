@@ -116,6 +116,7 @@ class DockerGeneratedStrategyRuntime:
     ) -> tuple[bool, str]:
         project_root = Path(__file__).parents[5]
         seccomp_profile = project_root / "infra/security/strategy-sandbox-seccomp.json"
+        container_name = f"crypto-lab-strategy-{uuid4().hex}"
         with tempfile.TemporaryDirectory(prefix="crypto-lab-strategy-") as directory:
             artifact_path = Path(directory) / "artifact.py"
             artifact_path.write_text(source_code, encoding="utf-8")
@@ -123,6 +124,9 @@ class DockerGeneratedStrategyRuntime:
                 "docker",
                 "run",
                 "--rm",
+                "--interactive",
+                "--name",
+                container_name,
                 "--network=none",
                 "--read-only",
                 "--cap-drop=ALL",
@@ -152,13 +156,33 @@ class DockerGeneratedStrategyRuntime:
                 stdout, stderr = await asyncio.wait_for(
                     process.communicate(json.dumps(payload).encode()), timeout=5
                 )
-            except (FileNotFoundError, TimeoutError):
+            except FileNotFoundError:
+                return False, "isolated runtime unavailable or timed out"
+            except TimeoutError:
+                process.kill()
+                await process.communicate()
+                await _force_remove_container(container_name)
                 return False, "isolated runtime unavailable or timed out"
             if len(stdout) > 1_048_576:
                 return False, "sandbox output exceeded 1 MiB"
             if process.returncode != 0:
                 return False, stderr.decode(errors="replace")[:1000]
             return True, stdout.decode()
+
+
+async def _force_remove_container(container_name: str) -> None:
+    try:
+        cleanup = await asyncio.create_subprocess_exec(
+            "docker",
+            "rm",
+            "--force",
+            container_name,
+            stdout=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.DEVNULL,
+        )
+        await asyncio.wait_for(cleanup.wait(), timeout=2)
+    except (FileNotFoundError, TimeoutError):
+        return
 
 
 def _static_checks(

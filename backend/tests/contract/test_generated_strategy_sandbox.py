@@ -1,5 +1,8 @@
+import asyncio
+import json
 import shutil
 import subprocess
+import time
 from pathlib import Path
 
 import pytest
@@ -45,6 +48,50 @@ async def test_built_sandbox_image_executes_only_through_the_contained_runner() 
     assert output == '{"status":"ready"}'
 
 
+@pytest.mark.asyncio
+async def test_built_sandbox_image_enforces_runtime_containment_controls() -> None:
+    if not _sandbox_image_available():
+        pytest.skip("Docker daemon or prebuilt sandbox image is unavailable")
+    runtime = DockerGeneratedStrategyRuntime()
+    passed, output = await runtime._run_container(_containment_probe(), {"mode": "probe"})
+    assert passed, output
+    probe = json.loads(output)["probe"]
+    assert probe == {
+        "capabilities": "0000000000000000",
+        "cslEnvironment": [],
+        "memoryLimit": "268435456",
+        "networkBlocked": True,
+        "noNewPrivileges": "1",
+        "pidsLimit": "32",
+        "processBlocked": True,
+        "rootFilesystemBlocked": True,
+        "uid": 65532,
+    }
+
+
+@pytest.mark.asyncio
+async def test_built_sandbox_terminates_unbounded_artifacts_without_leaking_containers() -> None:
+    if not _sandbox_image_available():
+        pytest.skip("Docker daemon or prebuilt sandbox image is unavailable")
+    runtime = DockerGeneratedStrategyRuntime()
+    started = time.monotonic()
+    passed, output = await runtime._run_container("while True:\n pass\n", {"mode": "self_test"})
+    assert not passed
+    assert output == "isolated runtime unavailable or timed out"
+    assert time.monotonic() - started < 8
+    leaked = await asyncio.create_subprocess_exec(
+        "docker",
+        "ps",
+        "-aq",
+        "--filter",
+        "name=crypto-lab-strategy-",
+        stdout=asyncio.subprocess.PIPE,
+    )
+    stdout, _ = await leaked.communicate()
+    assert leaked.returncode == 0
+    assert stdout.strip() == b""
+
+
 def _sandbox_image_available() -> bool:
     if shutil.which("docker") is None:
         return False
@@ -56,3 +103,38 @@ def _sandbox_image_available() -> bool:
         timeout=5,
     )
     return daemon.returncode == 0 and image.returncode == 0
+
+
+def _containment_probe() -> str:
+    return '''
+def analyze(payload):
+    import os
+    import socket
+
+    def blocked(operation):
+        try:
+            operation()
+        except OSError:
+            return True
+        return False
+
+    status = {}
+    with open("/proc/self/status", encoding="utf-8") as stream:
+        for line in stream:
+            if line.startswith("CapEff:"):
+                status["capabilities"] = line.split()[1]
+            elif line.startswith("NoNewPrivs:"):
+                status["noNewPrivileges"] = line.split()[1]
+    with open("/sys/fs/cgroup/memory.max", encoding="utf-8") as stream:
+        status["memoryLimit"] = stream.read().strip()
+    with open("/sys/fs/cgroup/pids.max", encoding="utf-8") as stream:
+        status["pidsLimit"] = stream.read().strip()
+    status.update({
+        "uid": os.getuid(),
+        "cslEnvironment": sorted(key for key in os.environ if key.startswith("CSL_")),
+        "networkBlocked": blocked(lambda: socket.socket()),
+        "rootFilesystemBlocked": blocked(lambda: open("/runner/probe", "w")),
+        "processBlocked": blocked(lambda: os.fork()),
+    })
+    return {"signals": [], "probe": status}
+'''

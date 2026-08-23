@@ -192,6 +192,7 @@ def build_container(settings: Settings | None = None) -> Container:
             Path(settings.generated_artifact_root), protector
         )
         runtime = DockerGeneratedStrategyRuntime(
+            image=settings.strategy_sandbox_image,
             apparmor_profile=settings.strategy_sandbox_apparmor_profile
         )
     generation_configured = storage_configured and all(

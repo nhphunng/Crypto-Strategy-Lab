@@ -60,6 +60,7 @@ class Settings(BaseSettings):
     source_encryption_key_base64: SecretStr | None = None
     source_encryption_key_id: str = "local-source-key-v1"
     generated_artifact_root: str = ".data/generated-strategies"
+    strategy_sandbox_image: str = Field(default="crypto-lab-strategy-sandbox:1", min_length=1)
     strategy_sandbox_apparmor_profile: str | None = None
 
     @field_validator("binance_base_url")
