@@ -652,3 +652,23 @@ async def _seed_equity(session: AsyncSession, spec: CandidateSpec, result_id: UU
             )
         )
     await session.flush()
+
+
+NEWCOMER = CandidateSpec(
+    20,
+    "ma-rsi-momentum",
+    Decimal("95.0"),
+    Decimal("44.6"),
+    Decimal("64.0"),
+    Decimal("10.5"),
+    3,
+    Decimal("2.35"),
+)
+
+
+async def add_qualifying_candidate(session: AsyncSession) -> UUID:
+    """Complete one more evaluation that must enter the current Top-K."""
+
+    execution_policy_id = _uuid("execution-policy")
+    await _seed_candidate(session, NEWCOMER, execution_policy_id)
+    return NEWCOMER.evaluation_id

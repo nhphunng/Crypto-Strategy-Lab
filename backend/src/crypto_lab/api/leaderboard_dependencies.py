@@ -10,10 +10,16 @@ from datetime import UTC, datetime
 
 from fastapi import Request
 
+from crypto_lab.api.websocket.leaderboard_channel import LeaderboardEventHub
 from crypto_lab.application.leaderboard.get_ranked_result import GetRankedResult
 from crypto_lab.application.leaderboard.ports import (
     LeaderboardRepository,
     RankedResultReader,
+)
+from crypto_lab.application.leaderboard.publish_leaderboard_updates import (
+    LeaderboardIngestion,
+    PublishLeaderboardUpdates,
+    UpdateDispatcherLoop,
 )
 from crypto_lab.application.leaderboard.query_leaderboard import QueryLeaderboard
 from crypto_lab.application.leaderboard.update_leaderboard import UpdateLeaderboard
@@ -38,12 +44,19 @@ class LeaderboardContainer:
     queries: QueryLeaderboard
     ranked_results: GetRankedResult
     metrics: LeaderboardMetrics
+    hub: LeaderboardEventHub
+    dispatcher: PublishLeaderboardUpdates
+    dispatcher_loop: UpdateDispatcherLoop
+    ingestion: LeaderboardIngestion
 
 
 def build_leaderboard_container(database: Database) -> LeaderboardContainer:
+    clock = SystemClock()
     repository = SqlAlchemyLeaderboardRepository(database.sessions)
     reader = SqlAlchemyRankedResultReader(database.sessions)
-    updater = UpdateLeaderboard(repository, SystemClock())
+    updater = UpdateLeaderboard(repository, clock)
+    hub = LeaderboardEventHub()
+    dispatcher = PublishLeaderboardUpdates(repository, hub, clock)
     return LeaderboardContainer(
         repository=repository,
         reader=reader,
@@ -51,6 +64,10 @@ def build_leaderboard_container(database: Database) -> LeaderboardContainer:
         queries=QueryLeaderboard(repository, updater),
         ranked_results=GetRankedResult(reader),
         metrics=LeaderboardMetrics(),
+        hub=hub,
+        dispatcher=dispatcher,
+        dispatcher_loop=UpdateDispatcherLoop(dispatcher),
+        ingestion=LeaderboardIngestion(updater, dispatcher),
     )
 
 

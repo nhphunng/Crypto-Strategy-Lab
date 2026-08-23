@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { fetchLeaderboardSnapshot } from '../../features/leaderboard/api/leaderboardApi'
+import { LeaderboardStatus } from '../../features/leaderboard/components/LeaderboardStatus'
 import { LeaderboardTable } from '../../features/leaderboard/components/LeaderboardTable'
+import {
+  useLeaderboardUpdates,
+  type SocketFactory,
+} from '../../features/leaderboard/hooks/useLeaderboardUpdates'
 import type {
   LeaderboardIdentity,
   LeaderboardSnapshot,
@@ -34,6 +39,8 @@ export type LeaderboardRouteProps = {
   loadSnapshot?: typeof fetchLeaderboardSnapshot
   renderDetail?: (selection: { leaderboardId: string; evaluationResultId: string }) => ReactNode
   onSelect?: (evaluationResultId: string) => void
+  socketFactory?: SocketFactory
+  liveUpdates?: boolean
 }
 
 export function LeaderboardRoute({
@@ -41,6 +48,8 @@ export function LeaderboardRoute({
   loadSnapshot = fetchLeaderboardSnapshot,
   renderDetail,
   onSelect,
+  socketFactory,
+  liveUpdates = true,
 }: LeaderboardRouteProps) {
   const [identity, setIdentity] = useState<LeaderboardIdentity>(initialIdentity)
   const [view, setView] = useState<LeaderboardViewState>(DEFAULT_VIEW)
@@ -72,6 +81,14 @@ export function LeaderboardRoute({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [identity, view, reloadToken, loadSnapshot])
+
+  const live = useLeaderboardUpdates({
+    identity,
+    projectionVersion: snapshot?.projectionVersion ?? null,
+    onRefetch: refresh,
+    socketFactory,
+    enabled: liveUpdates,
+  })
 
   const selection = useMemo(
     () =>
@@ -134,6 +151,16 @@ export function LeaderboardRoute({
         </label>
       </header>
 
+      <LeaderboardStatus
+        status={live.status}
+        stale={live.stale}
+        attempts={live.attempts}
+        projectionVersion={snapshot?.projectionVersion ?? null}
+        updatedAt={snapshot?.updatedAt ?? null}
+        runState={snapshot?.runState ?? null}
+        lastEvent={live.lastEvent}
+      />
+
       <p
         data-testid="disclaimer-leaderboard"
         className="border-b border-subtle bg-workspace px-4 py-1.5 text-[11px] text-dim"
@@ -148,6 +175,7 @@ export function LeaderboardRoute({
             view={view}
             status={status}
             errorMessage={errorMessage}
+            stale={live.stale}
             onViewChange={setView}
             onRetry={refresh}
             selectedId={selectedId}

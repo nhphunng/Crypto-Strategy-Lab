@@ -12,6 +12,7 @@ from crypto_lab.api.errors import install_error_handlers
 from crypto_lab.api.middleware import RequestIdMiddleware
 from crypto_lab.api.routes.leaderboards import router as leaderboards_router
 from crypto_lab.api.routes.market_data import router as market_data_router
+from crypto_lab.api.websocket.leaderboard_channel import router as leaderboard_ws_router
 from crypto_lab.infrastructure.logging import configure_logging
 
 
@@ -21,7 +22,11 @@ def create_app(container: Container | None = None) -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         app.state.container = owned_container
+        if owned_container.leaderboard is not None:
+            owned_container.leaderboard.dispatcher_loop.start()
         yield
+        if owned_container.leaderboard is not None:
+            await owned_container.leaderboard.dispatcher_loop.stop()
         await owned_container.close()
 
     app = FastAPI(
@@ -42,6 +47,7 @@ def create_app(container: Container | None = None) -> FastAPI:
     install_error_handlers(app)
     app.include_router(market_data_router)
     app.include_router(leaderboards_router)
+    app.include_router(leaderboard_ws_router)
 
     @app.get("/health/live", include_in_schema=False)
     async def live() -> JSONResponse:

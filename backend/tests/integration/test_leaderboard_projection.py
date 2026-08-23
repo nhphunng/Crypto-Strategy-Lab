@@ -8,7 +8,16 @@ from datetime import UTC, datetime
 import pytest
 from sqlalchemy import func, select
 
-from crypto_lab.application.leaderboard.ports import UpdateSource
+from crypto_lab.application.leaderboard.ports import (
+    LeaderboardUpdatedEvent,
+    RecordingPublisher,
+    RunState,
+    UpdateSource,
+)
+from crypto_lab.application.leaderboard.publish_leaderboard_updates import (
+    LeaderboardIngestion,
+    PublishLeaderboardUpdates,
+)
 from crypto_lab.application.leaderboard.update_leaderboard import UpdateLeaderboard
 from crypto_lab.domain.leaderboard.policy import (
     LeaderboardIdentity,
@@ -26,9 +35,16 @@ from crypto_lab.infrastructure.persistence.leaderboard_models import (
 from crypto_lab.infrastructure.persistence.repositories.leaderboard_repository import (
     SqlAlchemyLeaderboardRepository,
 )
-from tests.fixtures.leaderboard import LeaderboardFixture
+from tests.fixtures.leaderboard import LeaderboardFixture, add_qualifying_candidate
 
 pytestmark = pytest.mark.integration
+
+
+class FailingPublisher:
+    """Publisher whose transport is unavailable for this attempt."""
+
+    async def publish(self, event: LeaderboardUpdatedEvent) -> None:
+        raise ConnectionError("event transport unavailable")
 
 
 class FixedClock:
@@ -239,3 +255,111 @@ async def test_snapshot_exposes_immutable_provenance_for_every_row(
         assert candidate.dataset_id == seeded_leaderboard.dataset_id
         assert candidate.pair == seeded_leaderboard.pair
         assert candidate.policy.version == seeded_leaderboard.scoring_policy_version
+
+
+async def test_dispatcher_publishes_committed_records_once(
+    leaderboard_database: Database,
+    seeded_leaderboard: LeaderboardFixture,
+) -> None:
+    repository = SqlAlchemyLeaderboardRepository(leaderboard_database.sessions)
+    clock = FixedClock()
+    publisher = RecordingPublisher()
+    dispatcher = PublishLeaderboardUpdates(repository, publisher, clock)
+    await UpdateLeaderboard(repository, clock).for_identity(
+        identity(seeded_leaderboard),
+        source=UpdateSource(evaluation_result_id=seeded_leaderboard.top_one_evaluation_id),
+    )
+
+    first = await dispatcher.dispatch_once()
+    second = await dispatcher.dispatch_once()
+
+    assert first == 1
+    assert second == 0
+    assert len(publisher.events) == 1
+    event = publisher.events[0]
+    assert event.projection_version == 1
+    assert event.entry_count == 10
+    assert event.top_one is not None
+    assert event.top_one["evaluationResultId"] == str(seeded_leaderboard.top_one_evaluation_id)
+    assert event.run_state is RunState.COMPLETED
+
+    async with leaderboard_database.sessions() as session:
+        record = await session.scalar(select(LeaderboardUpdateRecordRow))
+    assert record is not None
+    assert record.published_at is not None
+
+
+async def test_publication_failure_is_retried_without_repeating_the_change(
+    leaderboard_database: Database,
+    seeded_leaderboard: LeaderboardFixture,
+) -> None:
+    repository = SqlAlchemyLeaderboardRepository(leaderboard_database.sessions)
+    clock = FixedClock()
+    await UpdateLeaderboard(repository, clock).for_identity(identity(seeded_leaderboard))
+
+    failing = FailingPublisher()
+    await PublishLeaderboardUpdates(repository, failing, clock).dispatch_once()
+    async with leaderboard_database.sessions() as session:
+        unpublished = await session.scalar(select(LeaderboardUpdateRecordRow))
+    assert unpublished is not None
+    assert unpublished.published_at is None
+
+    recovered = RecordingPublisher()
+    published = await PublishLeaderboardUpdates(repository, recovered, clock).dispatch_once()
+
+    assert published == 1
+    assert len(recovered.events) == 1
+    async with leaderboard_database.sessions() as session:
+        boards = (await session.scalars(select(LeaderboardRow))).all()
+    assert [board.projection_version for board in boards] == [1]
+
+
+async def test_evaluation_ingestion_publishes_only_visible_changes(
+    leaderboard_database: Database,
+    seeded_leaderboard: LeaderboardFixture,
+) -> None:
+    repository = SqlAlchemyLeaderboardRepository(leaderboard_database.sessions)
+    clock = FixedClock()
+    publisher = RecordingPublisher()
+    dispatcher = PublishLeaderboardUpdates(repository, publisher, clock)
+    use_case = UpdateLeaderboard(repository, clock)
+    ingestion = LeaderboardIngestion(use_case, dispatcher)
+    await use_case.for_identity(identity(seeded_leaderboard))
+    await dispatcher.dispatch_once()
+    published_after_materialization = len(publisher.events)
+
+    await ingestion.on_evaluation_completed(seeded_leaderboard.top_one_evaluation_id)
+    await ingestion.on_evaluation_completed(seeded_leaderboard.top_one_evaluation_id)
+
+    assert len(publisher.events) == published_after_materialization
+
+
+async def test_a_newly_completed_qualifying_evaluation_publishes_one_event(
+    leaderboard_database: Database,
+    seeded_leaderboard: LeaderboardFixture,
+) -> None:
+    repository = SqlAlchemyLeaderboardRepository(leaderboard_database.sessions)
+    clock = FixedClock()
+    publisher = RecordingPublisher()
+    dispatcher = PublishLeaderboardUpdates(repository, publisher, clock)
+    use_case = UpdateLeaderboard(repository, clock)
+    ingestion = LeaderboardIngestion(use_case, dispatcher)
+    await use_case.for_identity(identity(seeded_leaderboard))
+    await dispatcher.dispatch_once()
+    baseline = len(publisher.events)
+
+    async with leaderboard_database.sessions() as session, session.begin():
+        newcomer = await add_qualifying_candidate(session)
+
+    await ingestion.on_evaluation_completed(newcomer)
+    await ingestion.on_evaluation_completed(newcomer)
+
+    assert len(publisher.events) == baseline + 1
+    event = publisher.events[-1]
+    assert str(newcomer) in {str(item) for item in event.added}
+    assert event.projection_version == 2
+
+    snapshot = await repository.read_snapshot(identity(seeded_leaderboard))
+    assert snapshot is not None
+    assert len(snapshot.entries) == 10
+    assert snapshot.entries[0].candidate.evaluation_result_id == newcomer
