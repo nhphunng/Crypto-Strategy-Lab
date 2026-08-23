@@ -9,7 +9,11 @@ import httpx
 
 from crypto_lab.application.market_data.dataset_service import DatasetService
 from crypto_lab.application.market_data.historical_service import HistoricalMarketDataService
-from crypto_lab.application.market_data.ports import Clock, MarketDataRepository
+from crypto_lab.application.market_data.ports import (
+    Clock,
+    MarketDataRepository,
+    RealtimeMarketDataProvider,
+)
 from crypto_lab.application.strategies.activate_generated_strategy import ActivateGeneratedStrategy
 from crypto_lab.application.strategies.analyze_strategy import AnalyzeStrategy
 from crypto_lab.application.strategies.discover_strategies import DiscoverStrategies
@@ -27,6 +31,12 @@ from crypto_lab.infrastructure.binance.market_data_provider import BinanceMarket
 from crypto_lab.infrastructure.database import Database
 from crypto_lab.infrastructure.llm.strategy_generation_adapter import (
     StructuredStrategyGenerationAdapter,
+)
+from crypto_lab.infrastructure.market_data.binance_realtime_provider import (
+    BinanceRealtimeMarketProvider,
+)
+from crypto_lab.infrastructure.market_data.realtime_selection_hub import (
+    RealtimeSelectionHub,
 )
 from crypto_lab.infrastructure.persistence.market_data_repository import (
     SqlAlchemyMarketDataRepository,
@@ -80,6 +90,8 @@ class Container:
     generated_artifacts: GeneratedArtifactStore | None = None
     generated_runtime: DockerGeneratedStrategyRuntime | None = None
     strategy_definitions: StrategyDefinitionRepository | None = None
+    realtime_provider: RealtimeMarketDataProvider | None = None
+    realtime_hub: RealtimeSelectionHub | None = None
 
     async def load_generated_strategies(self) -> None:
         if (
@@ -117,6 +129,8 @@ class Container:
             )
 
     async def close(self) -> None:
+        if self.realtime_hub is not None:
+            await self.realtime_hub.close()
         if self.http_client is not None:
             await self.http_client.aclose()
         if self.database is not None:
@@ -217,21 +231,30 @@ def build_container(settings: Settings | None = None) -> Container:
             clock,
             strategy_definitions,
         )
-    return Container(
-        settings,
+    realtime_provider = BinanceRealtimeMarketProvider(
         clock,
-        repository,
-        historical,
-        datasets,
-        database,
-        client,
-        strategy_registry,
-        strategy_discovery,
-        strategy_analysis,
-        generation_repository,
-        strategy_generation,
-        strategy_activation,
-        artifacts,
-        runtime,
-        strategy_definitions,
+        websocket_url=settings.binance_websocket_url,
+        heartbeat_interval_seconds=settings.provider_heartbeat_interval_seconds,
+        stale_after_seconds=settings.provider_stale_after_seconds,
+    )
+    realtime_hub = RealtimeSelectionHub(realtime_provider)
+    return Container(
+        settings=settings,
+        clock=clock,
+        repository=repository,
+        historical=historical,
+        datasets=datasets,
+        database=database,
+        http_client=client,
+        strategy_registry=strategy_registry,
+        strategy_discovery=strategy_discovery,
+        strategy_analysis=strategy_analysis,
+        strategy_generation_repository=generation_repository,
+        strategy_generation=strategy_generation,
+        strategy_activation=strategy_activation,
+        generated_artifacts=artifacts,
+        generated_runtime=runtime,
+        strategy_definitions=strategy_definitions,
+        realtime_provider=realtime_provider,
+        realtime_hub=realtime_hub,
     )

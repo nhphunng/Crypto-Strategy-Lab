@@ -158,7 +158,8 @@ class BinanceMarketDataProvider:
         return candle
 
     def _backoff(self, attempt: int) -> float:
-        return float(min(float(self._max_retry_delay), (2**attempt) + max(0.0, self._jitter())))
+        jitter = float(self._jitter())
+        return min(float(self._max_retry_delay), float(2**attempt) + max(0.0, jitter))
 
     def _retry_after(self, response: httpx.Response) -> int | None:
         raw = response.headers.get("Retry-After")

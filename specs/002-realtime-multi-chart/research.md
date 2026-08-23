@@ -98,4 +98,4 @@
 
 ## Architecture Approval Status
 
-`docs/ARCHITECTURE.md`, ADR-002, and ADR-003 are `Proposed`. They guide this design but are not binding implementation decisions. Before implementation approval, the team must accept the baseline/ADR-003 or record an accepted replacement. TV1 and TV2 must cross-review the shared Candle and history contracts.
+`docs/ARCHITECTURE.md`, ADR-002, and ADR-003 are `Accepted` and are binding implementation decisions. On 2026-08-19, TV1 and TV2 completed cross-review of the shared Candle/history version 1 boundary, including fields, precision, UTC/timeframe encoding, half-open range behavior, completeness, limits, versions, and errors. No research decision or contract semantic changed during acceptance.

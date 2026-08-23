@@ -1,5 +1,9 @@
 # Contract: Base Chart Slot and Grid
 
+**Status**: Accepted
+**Version**: `1`
+**Accepted**: 2026-08-19 by the Crypto Strategy Lab Team.
+
 ## Purpose and ownership
 
 TV2 owns the base Candle chart, slot controls, connection presentation, and generic extension inputs. Strategy computation belongs to TV3. Signal/trade overlay meaning and ranked-result detail belong to TV5.
@@ -79,3 +83,21 @@ Changing these IDs is a test-selector contract change.
 ## TV5 composition seam
 
 TV5 may pass generic overlay and marker descriptors defined by its own contract. TV2 guarantees stable Candle coordinates and a composition point. TV2 does not define BUY/SELL, Entry/Exit, trade selection, score, rank, or provenance behavior.
+
+### Cross-check with `specs/005-leaderboard-visualization/contracts/chart-overlays.md` (2026-08-20)
+
+The base renderer (`frontend/src/features/market-chart/components/CandlestickChart.tsx`) is verified to contain no import or branch on Strategy, Trade, Backtest, Evaluation, or Leaderboard identities. Its generic seam is:
+
+```text
+ChartOverlaySeries { id, points: { openTime, value }[], color?, dashed? }
+ChartMarker        { id, openTime, value, label, color? }
+```
+
+Compatibility mapping for TV5 composition:
+
+- TV5 `LINE` overlays map 1:1 onto `ChartOverlaySeries`; decimal-string `value` is converted to a number and `time` maps to `openTime` at the TV5 composition point.
+- TV5 `BAND` and `ZONE` kinds are not interpreted by the base component; they must be decomposed into generic LINE series (or a dedicated TV5 renderer) at the composition point, because the base interprets only generic primitives.
+- TV5 `styleToken`, `label`, `sourceStrategyId`, `sourceStrategyVersion`, `signalId`, and `tradeId` are presentation/provenance fields outside the base seam; TV5 maps `styleToken`/`label` onto the base `color`/`label` fields and keeps provenance in its own descriptors.
+- TV5 marker `type`/`shape` semantics (BUY/SELL/HOLD/ENTRY/EXIT with grayscale-safe shape cues) are TV5-layer behavior; the base renders every generic marker with the same circle-and-label presentation and does not branch on type.
+- TV5 alignment rules are enforced at the TV5 layer; the base only filters markers/overlays to Candle times present in the loaded range, which TV5 surfaces as its partial-data notice.
+- TV5 availability states (`AVAILABLE`, `EMPTY`, `PARTIAL`, `UNAVAILABLE`) are TV5 domain data and never enter the base seam.

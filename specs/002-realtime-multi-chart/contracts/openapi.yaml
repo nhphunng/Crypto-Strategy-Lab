@@ -1,11 +1,16 @@
 openapi: 3.1.0
 info:
   title: Crypto Strategy Lab Market Chart API
-  version: 1.0.0-draft
+  version: 1.0.0
   description: >-
-    TV2 compatibility projection for supported market dimensions and bounded
+    Accepted TV2 compatibility projection for supported market dimensions and bounded
     historical Candle bootstrap. Feature 001 owns the authoritative historical
     REST contract; this projection must remain compatible with its version 1 semantics.
+  x-approval:
+    status: ACCEPTED
+    reviewedAt: 2026-08-19
+    reviewers: [TV1, TV2]
+    authority: Feature 001 historical contract and ADR-003
 servers:
   - url: /api/v1
 paths:
