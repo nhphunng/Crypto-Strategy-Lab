@@ -30,6 +30,8 @@ Validated revision baseline: `7d7e177` plus the benchmark/evidence changes recor
 | `cd frontend && npm run typecheck` | PASS |
 | `cd frontend && npm test` | PASS; 87 tests |
 | `cd frontend && npm run build` | PASS |
+| `$speckit-analyze` | PASS; 60/60 FR and 20/20 SC mapped, zero CRITICAL/HIGH, zero Constitution conflict |
+| `$speckit-converge` | No new remediation task; T085 remains the only substantive unmet acceptance gate |
 
 No acceptance assertion used a live market provider or live LLM response.
 
@@ -52,4 +54,5 @@ No acceptance assertion used a live market provider or live LLM response.
 
 SC-011, SC-012, and SC-020 require representative human participants. Their approved protocol and
 pending status remain in `usability-validation.md`; this does not invalidate the completed technical
-Quickstart scenarios but prevents closing T085 and the final aggregate T086 gate.
+Quickstart scenarios. Every technical command required by T086 passed, but T086 remains open because
+the final aggregate gate cannot report `Converged` until T085 has measured outcomes.
