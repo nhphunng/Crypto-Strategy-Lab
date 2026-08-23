@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 from collections.abc import AsyncIterator
+from decimal import Decimal
 
 import pytest
 from sqlalchemy import text
@@ -15,6 +16,16 @@ TEST_DATABASE_URL = os.getenv(
     "TEST_DATABASE_URL",
     "postgresql+asyncpg://crypto_lab:crypto_lab@localhost:55432/crypto_lab",
 )
+
+
+@pytest.fixture
+def decimal_value():
+    """Construct exact fixture values; strategy tests must never use binary floats."""
+
+    def build(value: str | int) -> Decimal:
+        return Decimal(value)
+
+    return build
 
 
 @pytest.fixture

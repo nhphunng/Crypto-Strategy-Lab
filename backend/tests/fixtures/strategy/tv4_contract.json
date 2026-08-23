@@ -1,0 +1,9 @@
+{
+  "contractVersion": "1.0.0",
+  "cases": [
+    {"strategyId": "ma", "strategyVersion": "1.0.0", "parameters": {"period": 2}},
+    {"strategyId": "rsi", "strategyVersion": "1.0.0", "parameters": {"period": 2, "lowerThreshold": "30", "upperThreshold": "70"}},
+    {"strategyId": "generic-fixture", "strategyVersion": "1.0.0", "parameters": {}}
+  ],
+  "ordering": ["timestamp", "strategyId", "strategyVersion", "strategyDefinitionId", "sequence"]
+}
