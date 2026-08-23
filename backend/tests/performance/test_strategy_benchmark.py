@@ -13,11 +13,18 @@ def test_ten_thousand_candle_strategy_execution_is_bounded() -> None:
     strategy = MovingAverageStrategy()
     selected = definition(strategy, {"period": 20})
     supplied = context([str(100 + index % 17) for index in range(10_000)])
-    started = perf_counter()
-    result = strategy.analyze(selected, supplied)
-    elapsed = perf_counter() - started
-    assert len(result.signals) == 10_000
-    assert elapsed < 3
+    samples = []
+    fingerprints = set()
+    for _ in range(20):
+        started = perf_counter()
+        result = strategy.analyze(selected, supplied)
+        samples.append(perf_counter() - started)
+        assert len(result.signals) == 10_000
+        fingerprints.add(
+            tuple((signal.id, signal.action, signal.phase) for signal in result.signals)
+        )
+    assert len(fingerprints) == 1
+    assert quantiles(samples, n=100)[94] < 1
 
 
 @pytest.mark.performance

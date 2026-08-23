@@ -242,7 +242,7 @@ description: "Dependency-ordered implementation tasks for Strategy Foundation"
 - [X] T081 [P] Add the 10,000-Candle execution benchmark plus generation acknowledgement/completion and strategy-discovery p95 benchmarks in `backend/tests/performance/test_strategy_benchmark.py`
 - [X] T082 [P] Add architecture fitness tests that forbid ambient database, HTTP, queue, provider, clock, randomness, filesystem, process, and environment access from all strategy calculation modules in `backend/tests/contract/test_strategy_architecture.py`
 - [X] T083 Add generated-code threat-model fixtures, source/prompt redaction, disclaimer, resource limits, and analytical-only security assertions in `backend/tests/contract/test_strategy_security_boundary.py`
-- [ ] T084 Execute every scenario in `specs/003-strategy-foundation/quickstart.md` and record commands/results in the feature pull-request evidence
+- [X] T084 Execute every scenario in `specs/003-strategy-foundation/quickstart.md` and record commands/results in the feature pull-request evidence
 - [ ] T085 Conduct SC-011/SC-012/SC-020 provenance, metadata, and generation-review comprehension assessments and record outcomes in `specs/003-strategy-foundation/evidence/usability-validation.md`
 - [ ] T086 Run Ruff, mypy, migration tests, unit/contract/integration/security suites, benchmarks, `$speckit-analyze`, and `$speckit-converge`; resolve every CRITICAL/HIGH finding before the feature is considered complete
 
