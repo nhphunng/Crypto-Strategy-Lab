@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from urllib.parse import urlparse
 
-from pydantic import Field, field_validator
+from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from crypto_lab.domain.market_data.timeframe import Timeframe
@@ -44,6 +44,15 @@ class Settings(BaseSettings):
     max_dataset_candles: int = Field(default=10_000, ge=1000, le=1_000_000)
     dataset_build_lease_seconds: int = Field(default=120, ge=10, le=3600)
     log_level: str = "INFO"
+    llm_endpoint: str | None = None
+    llm_provider: str = "configured-provider"
+    llm_model_id: str | None = None
+    llm_model_version: str | None = None
+    llm_api_key: SecretStr | None = None
+    source_encryption_key_base64: SecretStr | None = None
+    source_encryption_key_id: str = "local-source-key-v1"
+    generated_artifact_root: str = ".data/generated-strategies"
+    strategy_sandbox_apparmor_profile: str | None = None
 
     @field_validator("binance_base_url")
     @classmethod

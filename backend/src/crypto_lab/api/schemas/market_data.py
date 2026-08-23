@@ -108,8 +108,8 @@ def selection_to_dto(value: MarketSelection) -> MarketSelectionDto:
 
 def range_to_dto(value: TimeRange) -> TimeRangeDto:
     return TimeRangeDto(
-        startTime=format_utc_millis(value.start_time),
-        endTime=format_utc_millis(value.end_time),
+        start_time=format_utc_millis(value.start_time),
+        end_time=format_utc_millis(value.end_time),
     )
 
 
@@ -118,50 +118,50 @@ def candle_to_dto(value: Candle) -> CandleDto:
         provider=value.provider,
         pair=value.pair,
         timeframe=value.timeframe,
-        openTime=format_utc_millis(value.open_time),
-        closeTime=format_utc_millis(value.close_time),
+        open_time=format_utc_millis(value.open_time),
+        close_time=format_utc_millis(value.close_time),
         open=canonical_decimal(value.open),
         high=canonical_decimal(value.high),
         low=canonical_decimal(value.low),
         close=canonical_decimal(value.close),
         volume=canonical_decimal(value.volume),
         closed=value.closed,
-        receivedAt=format_utc_millis(value.received_at),
+        received_at=format_utc_millis(value.received_at),
     )
 
 
 def historical_range_to_dto(value: HistoricalCandleRange) -> CandleRangeDto:
     return CandleRangeDto(
-        schemaVersion="1",
+        schema_version="1",
         selection=selection_to_dto(value.selection),
         range=range_to_dto(value.time_range),
         completeness=value.completeness.value,
-        missingRanges=tuple(range_to_dto(item) for item in value.missing_ranges),
+        missing_ranges=tuple(range_to_dto(item) for item in value.missing_ranges),
         candles=tuple(candle_to_dto(item) for item in value.candles),
     )
 
 
 def dataset_to_dto(value: CandleDataset) -> CandleDatasetDto:
     return CandleDatasetDto(
-        schemaVersion="1",
-        datasetId=str(value.id),
+        schema_version="1",
+        dataset_id=str(value.id),
         selection=selection_to_dto(value.selection),
         range=range_to_dto(value.time_range),
         status=value.status.value,
-        candleCount=value.candle_count,
+        candle_count=value.candle_count,
         checksum=value.checksum,
-        failureCode=value.failure_code,
-        createdAt=format_utc_millis(value.created_at),
-        updatedAt=format_utc_millis(value.updated_at),
-        completedAt=format_utc_millis(value.completed_at) if value.completed_at else None,
+        failure_code=value.failure_code,
+        created_at=format_utc_millis(value.created_at),
+        updated_at=format_utc_millis(value.updated_at),
+        completed_at=format_utc_millis(value.completed_at) if value.completed_at else None,
     )
 
 
 def page_to_dto(dataset_id: str, value: CandlePage) -> DatasetCandlePageDto:
     return DatasetCandlePageDto(
-        schemaVersion="1",
-        datasetId=dataset_id,
+        schema_version="1",
+        dataset_id=dataset_id,
         candles=tuple(candle_to_dto(item) for item in value.candles),
-        nextCursor=value.next_cursor,
-        hasMore=value.has_more,
+        next_cursor=value.next_cursor,
+        has_more=value.has_more,
     )

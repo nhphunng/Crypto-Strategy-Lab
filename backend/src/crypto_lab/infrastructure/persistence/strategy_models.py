@@ -43,3 +43,6 @@ class StrategyDefinitionRow(Base):
     parameter_schema_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
     content_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    origin: Mapped[str] = mapped_column(String(32), nullable=False, default="BUILT_IN")
+    generated_artifact_id: Mapped[UUID | None] = mapped_column(nullable=True)
+    generation_provenance_id: Mapped[UUID | None] = mapped_column(nullable=True)
