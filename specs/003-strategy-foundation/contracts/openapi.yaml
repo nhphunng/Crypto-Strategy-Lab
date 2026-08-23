@@ -234,7 +234,7 @@ components:
     ParameterDefinition:
       type: object
       additionalProperties: false
-      required: [name, description, valueType, required]
+      required: [name, description, valueType, defaultValue, minimum, maximum, required]
       properties:
         name: { type: string }
         description: { type: string }
@@ -243,11 +243,6 @@ components:
         defaultValue: {}
         minimum: {}
         maximum: {}
-        minimumInclusive: { type: boolean, default: true }
-        maximumInclusive: { type: boolean, default: true }
-        relationshipRules:
-          type: array
-          items: { type: string }
     StrategyMetadata:
       type: object
       additionalProperties: false
@@ -258,9 +253,11 @@ components:
         - strategyVersion
         - contractVersion
         - status
-        - parameterDefinition
+        - parameters
         - capabilities
         - origin
+        - generationProvenanceId
+        - generatedArtifactFingerprint
       properties:
         strategyId: { type: string }
         strategyType: { type: string }
@@ -268,7 +265,7 @@ components:
         strategyVersion: { $ref: '#/components/schemas/SemanticVersion' }
         contractVersion: { $ref: '#/components/schemas/SemanticVersion' }
         status: { $ref: '#/components/schemas/StrategyStatus' }
-        parameterDefinition:
+        parameters:
           type: array
           items: { $ref: '#/components/schemas/ParameterDefinition' }
         capabilities:
@@ -281,6 +278,16 @@ components:
         generationProvenanceId:
           type: [string, 'null']
           format: uuid
+        generatedArtifactFingerprint:
+          type: [string, 'null']
+    StrategyList:
+      type: object
+      additionalProperties: false
+      required: [strategies]
+      properties:
+        strategies:
+          type: array
+          items: { $ref: '#/components/schemas/StrategyMetadata' }
     StrategyListResponse:
       type: object
       additionalProperties: false
@@ -288,9 +295,7 @@ components:
       properties:
         success: { const: true }
         message: { type: string }
-        data:
-          type: array
-          items: { $ref: '#/components/schemas/StrategyMetadata' }
+        data: { $ref: '#/components/schemas/StrategyList' }
         timestamp: { $ref: '#/components/schemas/UtcInstant' }
         requestId: { type: string }
     StrategyResponse:
