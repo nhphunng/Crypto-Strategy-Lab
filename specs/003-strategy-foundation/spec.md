@@ -4,7 +4,7 @@
 
 **Created**: 2026-08-13
 
-**Status**: Draft
+**Status**: Ready for implementation — SRS traceability, ADR-006 isolation and generated-strategy security/source policy approved 2026-08-23
 
 **Input**: User description: "Provide TV3's common strategy contract, MA and RSI strategies, BUY/SELL/HOLD signals, strategy registration and discovery, and immutable strategy versioning for deterministic use by backtesting."
 
@@ -82,6 +82,61 @@ As a `STRATEGY_DEVELOPER`, I want behavior and parameter changes to create a new
 5. **Given** a deprecated but retained compatible version, **When** a historical consumer resolves its metadata, **Then** the exact version remains traceable with deprecated status; **and when** a new execution requests it, **Then** execution fails as `STRATEGY_VERSION_DEPRECATED` without fallback.
 6. **Given** an incompatible version, **When** registration or execution is requested, **Then** it fails as `INCOMPATIBLE_CONTRACT_VERSION` without fallback.
 
+---
+
+### User Story 5 - Generate a Strategy from an Existing Strategy Name (Priority: P2)
+
+As an `ANALYST`, I want to provide the name of an existing trading strategy so that the system can produce, validate, and register reusable executable strategy logic without requiring me to write code. This story traces to SRS story `SP-US-04`.
+
+**Why this priority**: A strategy name is the shortest path from an analyst's intent to reusable strategy behavior and directly expands the strategy catalog.
+
+**Independent Test**: Submit well-known, ambiguous, unsupported, duplicate, and misspelled strategy names; verify intent extraction, generated draft provenance, validation, user confirmation, atomic activation, and later discovery without relying on MA or RSI behavior.
+
+**Acceptance Scenarios**:
+
+1. **Given** a sufficiently specific existing strategy name, **When** the analyst requests generation, **Then** the system creates one structured draft containing normalized strategy identity, assumptions, parameters, rules, source provenance, generated executable logic, and validation status.
+2. **Given** a name that has multiple materially different interpretations, **When** generation is requested, **Then** the system presents the interpretations and does not generate or activate an arbitrary version until the analyst selects one.
+3. **Given** a generated draft that passes contract, safety, determinism, and fixture validation, **When** the analyst confirms activation, **Then** the system stores an immutable Strategy Version and registers it for later discovery and execution.
+4. **Given** generated logic that fails any required validation, **When** activation is attempted, **Then** registration fails atomically, the unsafe logic is never executable through the registry, and the analyst receives actionable validation findings.
+5. **Given** an already registered strategy with equivalent normalized rules and parameters, **When** another generation request resolves to the same content, **Then** the system identifies the existing reusable version rather than silently creating a duplicate.
+
+---
+
+### User Story 6 - Extract One or More Strategies from Source Content (Priority: P2)
+
+As an `ANALYST`, I want to submit a natural-language description, webpage URL, or equivalent source content so that the system can extract one or more structured strategies for review and reuse. This story traces to SRS story `SP-US-05`.
+
+**Why this priority**: Strategy knowledge commonly appears as prose or web content and may describe several separable strategies or variants.
+
+**Independent Test**: Submit direct prose, a supported webpage, content containing multiple strategies, irrelevant content, inaccessible or unsafe URLs, conflicting rules, and content with incomplete attribution; verify extraction boundaries, provenance, draft separation, and failure isolation.
+
+**Acceptance Scenarios**:
+
+1. **Given** a natural-language description containing one complete strategy, **When** extraction completes, **Then** the system creates one structured draft and identifies which source statements support its entry, exit, parameter, warm-up, and data requirements.
+2. **Given** source content containing multiple independently executable strategies or explicit variants, **When** extraction completes, **Then** the system creates separate drafts, preserves their source relationships, and allows each draft to be reviewed, validated, accepted, or rejected independently.
+3. **Given** a webpage URL, **When** the page can be retrieved under the source-access policy, **Then** the system records the submitted URL, canonical URL when available, retrieval time, content fingerprint, and extracted strategy evidence.
+4. **Given** a page that is inaccessible, unsupported, too large, redirects to a prohibited destination, or cannot be attributed, **When** ingestion is attempted, **Then** the request fails with a source-specific reason and creates no executable strategy.
+5. **Given** source content with contradictory or materially incomplete trading rules, **When** extraction completes, **Then** affected drafts remain `NEEDS_REVIEW`, list the contradictions or missing rules, and cannot be activated.
+6. **Given** mixed relevant and irrelevant source content, **When** extraction completes, **Then** only supported strategy rules appear in drafts and unsupported LLM additions are labeled as assumptions requiring review.
+
+---
+
+### User Story 7 - Reuse Generated Strategies in Later Workflows (Priority: P1)
+
+As an `ANALYST`, I want every approved generated strategy to remain stored and discoverable so that I can use the exact version in later analysis, backtest, search, and composite-strategy workflows. This story traces to SRS story `SP-US-06`.
+
+**Why this priority**: Generation has durable value only when approved results enter the same immutable catalog and provenance model as built-in strategies.
+
+**Independent Test**: Activate a generated strategy, restart the application, discover and resolve it, use it through the common Strategy contract, create a revised version, and verify old workflow references remain unchanged.
+
+**Acceptance Scenarios**:
+
+1. **Given** an activated generated Strategy Version, **When** the system restarts or a later workflow lists compatible strategies, **Then** the exact version remains stored, discoverable, and distinguishable as LLM-generated.
+2. **Given** a later workflow selects a generated strategy, **When** it resolves the exact Strategy Definition, **Then** it receives the same common contract, parameter schema, executable behavior, provenance, and lifecycle guarantees as a built-in strategy.
+3. **Given** a user edits source rules, assumptions, parameters, or generated behavior, **When** the revision is approved, **Then** the system creates a new immutable version and preserves all references to the earlier version.
+4. **Given** a generation request produced several drafts, **When** only some are activated, **Then** later workflows discover only activated compatible versions while rejected or review-pending drafts remain non-executable.
+5. **Given** the model, prompt, source, or validation policy later changes, **When** an existing generated version is resolved, **Then** its stored behavior and generation provenance remain unchanged.
+
 ### Edge Cases
 
 - **Empty candle input**: Return an empty ordered signal sequence with execution provenance and no error.
@@ -104,6 +159,18 @@ As a `STRATEGY_DEVELOPER`, I want behavior and parameter changes to create a new
 - **Future or misaligned data**: Reject the complete run as `INVALID_CONTEXT` when a candle is after the decision timestamp or differs from the context's provider, pair, timeframe, dataset, or timestamp alignment.
 - **Constant-price RSI input**: Once evaluable, equal aggregate gains and losses produce the neutral RSI value of 50 and therefore HOLD unless a prior value and current value form a strict configured crossing.
 - **RSI input with gains but no losses, or losses but no gains**: Once evaluable, RSI is treated as 100 or 0 respectively; the configured strict crossing rules still determine the action.
+- **Unknown or misspelled strategy name**: Return `STRATEGY_INTENT_UNRESOLVED` with possible matches when confidence is insufficient; do not invent a strategy silently.
+- **Ambiguous strategy name**: Preserve the candidate interpretations and require selection before code generation or activation.
+- **Prompt injection or instructions embedded in source content**: Treat retrieved content only as untrusted reference material; embedded instructions cannot alter system policy, validation, tool access, or activation rules.
+- **Private, local, redirecting, or otherwise prohibited URL**: Reject as `SOURCE_ACCESS_DENIED`; do not fetch internal network resources, local files, credentials, or unsupported schemes.
+- **Unavailable, paywalled, script-only, oversized, binary, or unsupported source**: Return a source-specific failure or request user-supplied text; create no executable strategy from partial unseen content.
+- **Multiple strategies in one source**: Create separately identifiable drafts with shared source provenance; failure or rejection of one draft does not block valid sibling drafts.
+- **Contradictory, incomplete, or non-deterministic rules**: Keep the draft non-executable and enumerate unresolved rules rather than filling them silently.
+- **LLM timeout, refusal, malformed output, or provider unavailability**: Preserve the request and safe source snapshot where permitted, record a retryable failure, and do not partially register output.
+- **Generated syntax/import/contract/test failure**: Quarantine the artifact, retain validation findings, and leave the active registry unchanged.
+- **Disallowed capability or dependency**: Reject logic that attempts network, filesystem, process, environment, credential, clock, randomness, database, queue, or exchange-order access outside the approved strategy sandbox contract.
+- **Equivalent generated content**: Resolve the existing immutable version by canonical content fingerprint and retain the new request's provenance link without duplicating executable behavior.
+- **Model or prompt changes**: Do not mutate an existing generated version; regeneration produces a new draft and, if activated, a new immutable version.
 
 ## Requirements *(mandatory)*
 
@@ -111,7 +178,9 @@ As a `STRATEGY_DEVELOPER`, I want behavior and parameter changes to create a new
 
 **Authoritative product sources**: `docs/SRS.md` §§3.3, 3.4, 7.3, and the foundation portions of §7.4; `SE-FR-01` through `SE-FR-05`; `SP-FR-01` through `SP-FR-05`; `SE-US-01`; `SE-US-02`; `SP-US-01`; `SP-US-02`; and `SP-US-03`.
 
-**Supporting governance and decision sources**: the project constitution, `docs/team-planning/SPECKIT_TEAM_WORKFLOW.md`, `docs/ARCHITECTURE.md`, and ADRs 003, 004, and 005. The architecture and these ADRs are currently Proposed; they inform this specification but do not independently approve implementation choices.
+**Supporting governance and decision sources**: the project constitution, `docs/team-planning/SPECKIT_TEAM_WORKFLOW.md`, Accepted `docs/ARCHITECTURE.md`, ADRs 002–006, and approved `docs/GENERATED_STRATEGY_SECURITY_POLICY.md`. ADR-006 extends ADR-004 with the required generated-code isolation boundary.
+
+**Canonical amendment traceability**: User Stories 5–7 map to SRS `SP-US-04`, `SP-US-05`, and `SP-US-06`. FR-039–FR-060 map to SRS `SP-FR-06` through `SP-FR-20`: source/name input (`06–07`), extraction/drafts (`08–09`), artifact/validation/activation (`10–12`), web/prompt/source governance (`13–16`), and durable origin-safe immutable reuse (`17–20`).
 
 **In scope**:
 
@@ -119,6 +188,9 @@ As a `STRATEGY_DEVELOPER`, I want behavior and parameter changes to create a new
 - MA and RSI strategy behavior, parameters, validation, and acceptance fixtures.
 - BUY/SELL/HOLD signal semantics, determinism, traceability, and error behavior.
 - Strategy registration, discovery, compatibility, and immutable versioning.
+- LLM-assisted creation from an existing strategy name.
+- Extraction of one or more strategy drafts from natural language, webpage URLs, and equivalent supported source content.
+- Validation, approval, persistent storage, registration, versioning, provenance, and later reuse of generated strategies.
 - The business-level strategy contract required by `BACKTEST_ENGINE` and TV4's `004-backtest-evaluation` feature.
 
 **Out of scope**:
@@ -127,7 +199,10 @@ As a `STRATEGY_DEVELOPER`, I want behavior and parameter changes to create a new
 - Complete MACD calculation; MACD is only an extensibility acceptance example unless separately approved.
 - Composite strategies, majority voting, weights, thresholds, strategy search, and candidate generation.
 - Backtest execution, trade simulation, position accounting, fees, slippage, profit and loss, equity curves, evaluation metrics, scoring, ranking, leaderboard behavior, and visualization.
-- Realtime chart behavior, market-data acquisition or persistence, news and sentiment analysis, dynamic third-party code upload, untrusted plugin execution, live trading, and exchange order placement.
+- Realtime chart behavior, market-data acquisition or persistence, news and sentiment analysis, arbitrary user-authored code upload, live trading, and exchange order placement.
+- Autonomous activation of generated code that has not completed required safety/contract validation and user confirmation.
+- Bypassing ADR-006, the approved source-access/security policy, validation, confirmation, or provenance controls.
+- Authenticated/private webpage crawling, arbitrary user-authored code upload, public marketplace publication, multi-user ownership/moderation, or second-reviewer workflows.
 - Technology selection, code structure, storage design, endpoints, transports, and message formats.
 
 ### Functional Requirements
@@ -185,6 +260,34 @@ As a `STRATEGY_DEVELOPER`, I want behavior and parameter changes to create a new
 - **FR-037**: The common contract MUST distinguish at least `INVALID_PARAMETERS`, `INVALID_CONTEXT`, `UNKNOWN_STRATEGY`, `DUPLICATE_STRATEGY_ENTRY`, `INVALID_STRATEGY_METADATA`, `INCOMPATIBLE_CONTRACT_VERSION`, `STRATEGY_VERSION_UNAVAILABLE`, and `STRATEGY_VERSION_DEPRECATED`.
 - **FR-038**: Every failure MUST identify its category and the offending field, identity, version, or context rule in human-readable terms while returning no partial strategy or registry state.
 
+#### LLM-Assisted Strategy Generation and Extraction
+
+- **FR-039**: The system MUST accept a generation request containing exactly one supported source mode: an existing strategy name, natural-language content, a webpage URL, or another explicitly supported source representation.
+- **FR-040**: Every request MUST produce a durable Generation Request record with source type, user-supplied input or permitted reference, request time, status, and correlation identity before generated output can be activated.
+- **FR-041**: For a strategy name, the system MUST resolve the intended trading concept and MUST stop for user selection when multiple materially different interpretations remain plausible.
+- **FR-042**: For source content, the system MUST identify zero, one, or multiple independently executable strategy candidates and MUST preserve evidence linking each extracted rule to the submitted source or label it as an explicit assumption.
+- **FR-043**: A generated Strategy Draft MUST contain a normalized name, description, required data, entry/exit/HOLD rules, warm-up behavior, parameter definitions/defaults/ranges, determinism assumptions, risk or position assumptions that affect signals, source provenance, and generation provenance.
+- **FR-044**: The system MUST generate executable Python strategy logic that targets the common Strategy contract and MUST NOT grant generated logic capabilities outside that contract.
+- **FR-045**: Generated output MUST be treated as untrusted and non-executable until it passes syntax, import allowlist, contract compatibility, parameter-schema, prohibited-capability, determinism, no-look-ahead, resource-bound, and generated-fixture validation.
+- **FR-046**: Validation MUST be all-or-nothing per Strategy Draft, MUST retain structured findings, and MUST NOT alter the active registry when any required check fails.
+- **FR-047**: The system MUST present extracted rules, explicit assumptions, source evidence, validation findings, and generated version metadata for user review before activation.
+- **FR-048**: Only a draft that has passed all required validations and received explicit user confirmation MAY transition to an activated reusable Strategy Version.
+- **FR-049**: A source containing multiple strategies MUST produce independently reviewable drafts so that validation, rejection, correction, and activation of one candidate do not determine sibling outcomes.
+- **FR-050**: Web source ingestion MUST enforce an approved access policy covering scheme, redirect, destination, size, content type, timeout, and private/local network restrictions before content is supplied to the LLM.
+- **FR-051**: Retrieved source content MUST be treated as untrusted data; source instructions MUST NOT modify generation policy, validation rules, system prompts, credentials, tool permissions, or activation decisions.
+- **FR-052**: Generated strategy identity and version content MUST include canonical fingerprints of structured rules, parameter schema, executable artifact, contract version, and validation policy so equivalent output can be detected and historical behavior cannot drift.
+- **FR-053**: The system MUST record generation provenance sufficient to identify source snapshots or fingerprints, source attribution, model/provider and model version, prompt/template version, generation parameters, generation time, validation-policy version, validation result, and confirming actor or process.
+- **FR-054**: Source content and generated artifacts MUST follow configured retention, attribution, privacy, and licensing policies; the system MUST prevent activation when required provenance or permitted-use evidence is missing.
+
+#### Storage, Registration, and Reuse of Generated Strategies
+
+- **FR-055**: Every activated generated strategy MUST be durably stored as an immutable Strategy Version and registered through the same discovery mechanism used by built-in strategies.
+- **FR-056**: Generated strategies MUST expose the same Strategy Definition, parameter, Signal, compatibility, lifecycle, determinism, and provenance contract to downstream workflows as other registered strategies.
+- **FR-057**: Discovery MUST distinguish built-in and LLM-generated origins and MUST expose generation/validation provenance without exposing prompts, source content, or sensitive data that the requester is not permitted to view.
+- **FR-058**: Revisions to source rules, assumptions, parameters, generated logic, contract meaning, or validation-relevant behavior MUST create a new immutable draft and activated version; existing versions MUST never be overwritten.
+- **FR-059**: Drafts in `PENDING_GENERATION`, `NEEDS_REVIEW`, `VALIDATING`, `VALIDATION_FAILED`, `REJECTED`, or `ARCHIVED` states MUST NOT be executable or discoverable as available strategies in later workflows.
+- **FR-060**: The system MUST support exact later resolution of an activated generated version after restart and after model, prompt, source, or validation-policy changes, without regenerating its executable artifact.
+
 ### Key Entities
 
 - **Strategy**: A deterministic signal-producing behavior that follows the common contract. It validates its declared parameters and analyzes only the immutable Strategy Context supplied to it; it does not execute trades or calculate rankings.
@@ -196,6 +299,12 @@ As a `STRATEGY_DEVELOPER`, I want behavior and parameter changes to create a new
 - **Strategy Registry Entry**: Discoverable metadata connecting a strategy identity and immutable version to its contract version, status, parameter definition, and capabilities. It exposes strategy metadata but not strategy-specific calculation logic.
 - **Contract Version**: The identifier for a mutually understood strategy input, output, validation, and error contract. It determines whether a strategy and consumer can interact without changing the contract's meaning.
 - **Normalized Candle Reference/Input**: A traceable OHLCV observation identified by provider, market pair, timeframe, and UTC timestamp within an immutable normalized dataset. Strategy input preserves its dataset identity and chronological relationship.
+- **Strategy Generation Request**: A durable request that captures one supported input mode, lifecycle state, correlation, and permitted source reference for producing strategy drafts.
+- **Strategy Source Snapshot**: An immutable, attributable representation or fingerprint of the name, text, webpage, or equivalent content used during extraction.
+- **Generated Strategy Draft**: A non-executable review object containing structured trading rules, assumptions, parameter metadata, generated artifact reference, source evidence, generation provenance, and validation status.
+- **Generated Strategy Artifact**: Immutable Python logic produced for one draft and fingerprinted for validation and later exact execution only after activation.
+- **Strategy Validation Report**: Versioned results for contract, safety, determinism, no-look-ahead, resource, import, and fixture checks against one exact artifact.
+- **Strategy Generation Provenance**: Immutable metadata linking source, model, prompt/template, artifact, validation policy/result, and activation confirmation.
 
 ## Success Criteria *(mandatory)*
 
@@ -213,6 +322,14 @@ As a `STRATEGY_DEVELOPER`, I want behavior and parameter changes to create a new
 - **SC-010**: TV4 can validate and consume MA, RSI, and one compliant example strategy through one documented input/output contract with zero dependency on MA-specific or RSI-specific behavior.
 - **SC-011**: At least 95% of representative analysts can correctly identify a signal's action, decision timestamp, strategy version, parameters, dataset, and warm-up/evaluated status from the exposed result without implementation knowledge.
 - **SC-012**: At least 95% of representative strategy developers can identify valid parameters and compatibility status from registry metadata without consulting a hard-coded strategy list or strategy calculation internals.
+- **SC-013**: In 100% of acceptance fixtures, a sufficiently specific strategy name produces a reviewable structured draft or a clear unresolved-intent outcome; no ambiguous request is silently activated.
+- **SC-014**: In 100% of multi-strategy source fixtures, the system creates the expected number of independently reviewable drafts and preserves evidence for every extracted trading rule or labels it as an assumption.
+- **SC-015**: Zero generated artifacts that fail a required safety, contract, determinism, no-look-ahead, resource, import, or fixture check become executable through the active registry.
+- **SC-016**: In 100% of activation fixtures, only user-confirmed drafts with passing validation become discoverable, and failed or rejected siblings remain non-executable.
+- **SC-017**: Every activated generated strategy is discoverable after restart and can be consumed through the common Strategy contract by at least analysis and one downstream workflow without concrete-strategy branching.
+- **SC-018**: In 100% of generated-version fixtures, source, model, prompt/template, artifact, contract, and validation-policy provenance is resolvable without changing the stored executable behavior.
+- **SC-019**: Duplicate generation of canonically equivalent rules and behavior creates zero duplicate executable versions while retaining traceability to each request.
+- **SC-020**: At least 90% of representative analysts can submit a supported source, understand extracted rules and assumptions, identify validation blockers, and activate an eligible draft in under 10 minutes without writing code.
 
 ## Assumptions
 
@@ -225,9 +342,27 @@ As a `STRATEGY_DEVELOPER`, I want behavior and parameter changes to create a new
 - Registry lifecycle status includes at least available and deprecated; status changes do not mutate the behavior or parameter meaning of an immutable version.
 - The `BACKTEST_ENGINE` is a downstream consumer only. It supplies or receives the documented contract but trade execution, accounting, and evaluation remain outside this feature.
 - SRS requirements for Bollinger Bands, Support/Resistance, and full MACD implementation remain product-level work allocated outside this narrower TV3 feature and are not silently considered complete here.
+- “Any existing strategy” means any strategy the LLM can identify well enough to express within the current normalized-data, deterministic BUY/SELL/HOLD contract; unsupported multi-asset, discretionary, stateful, proprietary, or execution-dependent concepts remain review-blocked rather than being approximated silently.
+- The working UX baseline requires explicit user confirmation after reviewing structured rules, assumptions, provenance, and passing validation. Autonomous activation is not assumed.
+- A webpage is processed from a policy-compliant immutable source snapshot or fingerprint; later page changes do not mutate a generated version.
+- One source may yield zero, one, or many drafts. The system does not force irrelevant content into a strategy.
+- Generated logic is never trusted merely because it was produced by the configured LLM; activation depends on independent validation and the approved isolation boundary.
+
+## Approved Decisions and Implementation Gate
+
+- **AD-001 — Canonical traceability**: SRS 0.2 approves `SP-US-04..06` and `SP-FR-06..20`; local stories/requirements map as stated above.
+- **AD-002 — Generated-code isolation**: Accepted ADR-006 requires an ephemeral non-root, read-only, networkless, secretless, capability-dropped sandbox with 1 CPU, 256 MiB memory, 32 PIDs, 16 MiB temporary storage, 1 MiB output and 5-second invocation timeout.
+- **AD-003 — Source rights and retention**: The approved security policy permits public HTTPS/443 and user-supplied text under strict SSRF/redirect/content/rights controls; raw content retention is at most 30 days and activated provenance keeps minimal evidence/fingerprints.
+- **AD-004 — Catalog and confirmation**: The trusted single-workspace MVP uses one global catalog and exact requester confirmation. It does not invent RBAC or a second reviewer.
+- **AD-005 — LLM service policy**: The application uses a provider-neutral port; live generation is enabled only for a configured provider that excludes submitted content from training and uses minimum available retention. Tests use deterministic recorded outputs.
+- **AD-006 — Artifact lifecycle**: Exact artifact digest is verified on load; policy tightening may suspend execution pending immutable revalidation but never rewrites artifact bytes or historical provenance.
+
+**Implementation gate result**: PASS as of 2026-08-23. Any implementation deviation from these approved decisions requires the corresponding SRS/policy/ADR amendment first.
 
 ## Dependencies
 
 - Feature 001 or another approved normalized-market-data owner must provide the normalized candle and immutable dataset identity semantics consumed by Strategy Context.
-- TV3 and TV4 must review and agree on Strategy Definition identity/version, validated parameters, Strategy Context, timestamp alignment, signal fields and ordering, warm-up behavior, error categories, and compatibility expectations before planning is approved.
+- The approved TV3↔TV4 contract baseline covers Strategy Definition identity/version, validated parameters, Strategy Context, timestamp alignment, signal fields/order, warm-up behavior, errors and compatibility; implementation changes to that boundary require both owners to review the contract and shared fixtures before merge.
 - Historical reproducibility depends on downstream consumers retaining the exact Strategy Definition, validated parameters, dataset identity, contract version, and ordered signals they consume.
+- LLM-assisted implementation depends on approved model access, prompt/template versioning, a source-ingestion adapter, durable artifact/provenance storage, and an isolated generated-code validation/execution boundary.
+- Live-provider configuration is environment-dependent; implementation and deterministic acceptance tests proceed through the provider-neutral port without embedding a provider credential or making the core suite depend on live service availability.

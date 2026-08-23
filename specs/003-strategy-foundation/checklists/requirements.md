@@ -1,7 +1,7 @@
 # Specification Quality Checklist: Strategy Foundation
 
 **Purpose**: Validate specification completeness and quality before proceeding to planning
-**Created**: 2026-08-13
+**Created**: 2026-08-13; revalidated 2026-08-22 for the LLM-assisted strategy amendment
 **Feature**: [Strategy Foundation specification](../spec.md)
 
 ## Content Quality
@@ -34,4 +34,6 @@
 - Validation iteration 1 identified two ambiguities: deprecated-version use did not yet have an explicit execution outcome, and MA/RSI calculation semantics were not precise enough for independent fixtures. Both were corrected in the specification.
 - Validation iteration 2: all 16 quality items passed; no unresolved clarification markers remain.
 - SRS scope reconciliation is explicit: MA and RSI are included, while Bollinger Bands, Support/Resistance, and complete MACD behavior remain outside this TV3 assignment.
-- The specification is ready for `$speckit-clarify`; cross-feature review with TV4 remains an identified dependency before planning approval.
+- Validation iteration 3 (2026-08-22): the three new source modes, zero-to-many extraction, review/activation lifecycle, durable reuse, provenance, error behavior, edge cases, and measurable outcomes are covered without `[NEEDS CLARIFICATION]` markers.
+- Governance revalidation 2026-08-23: SRS 0.2 provides canonical `SP-US-04..06`/`SP-FR-06..20`, ADR-006 is Accepted, Architecture is synchronized, and `docs/GENERATED_STRATEGY_SECURITY_POLICY.md` is Approved.
+- All 16 checklist items pass and the specification is ready for `$speckit-implement`; implementation remains bound to the approved isolation/source/provenance decisions.

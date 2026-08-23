@@ -1,5 +1,13 @@
 # Research: Strategy Foundation
 
+## Dependency note: authenticated encryption for protected source snapshots
+
+`cryptography==50.0.0` is the reviewed direct dependency for AES-256-GCM envelope
+encryption. The standard library has no authenticated-encryption primitive, and a custom
+cryptographic construction would violate the generated-strategy security policy. The
+application owns only per-record data encryption; wrapping/unwrapping data keys remains
+behind the configured key-provider boundary.
+
 ## Decision 1: Keep strategy calculation in a pure Python domain
 
 **Decision**: Represent Strategy, Strategy Context, parameters, definitions, registry metadata, and Signals as immutable domain values. Strategy calculation accepts all data explicitly and uses no database, HTTP, queue, provider, clock, or random source.
@@ -36,16 +44,16 @@
 - Random UUID signal IDs: stable only after persistence and violates repeat-output equality.
 - Let consumers invent HOLD rows: spreads strategy-specific semantics downstream.
 
-## Decision 4: Use trusted startup registration, not dynamic code upload
+## Decision 4: Preserve trusted startup registration for built-ins and gate generated artifacts separately
 
-**Decision**: Strategy implementations are packaged with the application and registered in a deterministic bootstrap composition function. The registry is an in-process domain catalog keyed by strategy ID and immutable version. Public APIs expose discovery and execution, not arbitrary code upload or runtime registration.
+**Decision**: Built-in Strategy implementations remain packaged and deterministically registered at startup. LLM-generated artifacts enter through a separate draft, validation, confirmation, and activation pipeline and never share a trust decision with built-ins. Arbitrary user-authored code upload remains out of scope.
 
-**Rationale**: This satisfies extensibility for team-developed strategies without introducing untrusted execution, sandboxing, signature verification, or deployment complexity. A new compliant strategy adds its own implementation, metadata, registration, and tests.
+**Rationale**: The new user requirement needs generated executable Python, but it does not justify treating model output as trusted. Separating origins preserves the existing registry contract and makes the additional security decision explicit.
 
 **Alternatives considered**:
 
-- Dynamic Python module discovery: adds import-order, packaging, and security risks.
-- Uploadable strategy code: explicitly outside scope.
+- Register model output directly in the application process: rejected because validation bugs would expose the whole service.
+- Treat generated code as equivalent to team-reviewed built-ins: rejected because provenance and trust are materially different.
 - `if/switch` by strategy name: rejected because downstream consumers would require modification.
 
 ## Decision 5: Separate registry entries from persisted Strategy Definitions
@@ -120,3 +128,70 @@
 - No HTTP boundary: prevents analyst/UI discovery and direct inspection.
 - Public registration endpoint: misleading because metadata alone cannot install trusted executable behavior.
 
+## Decision 11: Use a structured intermediate draft before generating or activating code
+
+**Decision**: Every generation result first becomes a structured Strategy Draft containing normalized rules, parameter schema, warm-up/data requirements, source evidence, and explicit assumptions. Python artifact generation and validation are tied to that exact draft fingerprint.
+
+**Rationale**: Reviewers can evaluate trading meaning without reading code, multiple strategies can be separated, and unsupported LLM additions become visible. The draft also provides stable input for regeneration and duplicate detection.
+
+**Alternatives considered**:
+
+- Generate code directly from raw text: hard to review, attribute, or compare and encourages hidden assumptions.
+- Store only a prose summary: cannot prove the executable artifact matches extracted meaning.
+- Force one source to one strategy: loses explicit variants and makes partial acceptance impossible.
+
+## Decision 12: Treat all retrieved content and model output as untrusted
+
+**Decision**: Source retrieval runs behind a strict allow/deny policy and returns inert content plus provenance. Retrieved instructions cannot alter system policy. Model output is schema-validated and remains non-executable until independent validators pass.
+
+**Rationale**: URLs introduce SSRF, redirect, oversized-content, and prompt-injection risks; model output can be malformed or adversarial even when the input is benign.
+
+**Alternatives considered**:
+
+- Let the model fetch arbitrary URLs: removes destination and credential controls.
+- Trust content from well-known domains: a trusted host can still contain malicious user-authored text or redirect.
+- Rely only on prompt instructions: prompts are not a security boundary.
+
+## Decision 13: Require isolated, layered validation before activation
+
+**Decision**: The required validation sequence is schema/rule completeness, syntax, allowlisted imports and AST/capability policy, common-contract conformance, generated fixtures, determinism/no-look-ahead, and bounded execution inside an isolation runtime with time, CPU, memory, output, and syscall/capability limits. Exact technology remains blocked on an Accepted ADR.
+
+**Rationale**: Static checks alone miss runtime behavior; runtime tests alone should not receive ambient host capabilities. Layering reduces attack surface while producing actionable findings.
+
+**Alternatives considered**:
+
+- In-process Python `exec` or import: unacceptable blast radius and weak resource containment.
+- Static analysis only: cannot establish runtime contract, determinism, or resource behavior.
+- Container choice in this feature plan: premature until the required threat model and ADR are approved.
+
+## Decision 14: Persist immutable generation and activation provenance
+
+**Decision**: Store request identity, permitted source snapshot/fingerprint and attribution, structured draft, artifact fingerprint/content reference, model/provider/version, prompt/template version, generation parameters, validation-policy version/report, and confirmation event. Activated artifacts are content-addressed and never regenerated implicitly.
+
+**Rationale**: Web content, prompts, models, and validators evolve. Exact provenance is required to explain and reproduce what was approved and to distinguish a new version from a retry.
+
+**Alternatives considered**:
+
+- Store code only: loses source evidence, model lineage, and review context.
+- Regenerate when a strategy is loaded: silently changes historical behavior and depends on provider availability.
+- Store raw source unconditionally: may violate privacy, copyright, or retention policy; fingerprints and permitted snapshots are separated.
+
+## Decision 15: Require explicit confirmation and atomic catalog publication
+
+**Decision**: A passing draft is still not active until the user confirms the reviewed rules, assumptions, provenance, and validation result. Activation atomically creates/resolves immutable version records and publishes the registry entry; failure publishes nothing.
+
+**Rationale**: Validation can prove technical properties but not that an ambiguous trading interpretation matches user intent. Atomic publication prevents partially reusable strategies.
+
+**Alternatives considered**:
+
+- Auto-activate every passing artifact: makes interpretation mistakes immediately reusable.
+- Register first and mark pending later: later workflows could execute unapproved behavior.
+- Require source-wide acceptance: prevents independent handling of multiple extracted strategies.
+
+## Approved Governance Baseline (2026-08-23)
+
+- SRS 0.2 assigns canonical `SP-US-04..06` and `SP-FR-06..20` to generation, extraction and durable reuse.
+- Accepted ADR-006 selects an ephemeral hardened container/process boundary, restricted Python import/capability policy, content-addressed SHA-256 artifacts, strict resource limits and fail-closed activation.
+- `docs/GENERATED_STRATEGY_SECURITY_POLICY.md` approves public HTTPS/443 and user-supplied text sources, SSRF/redirect/content bounds, attribution/minimal evidence, maximum 30-day raw retention, provider no-training/minimum-retention requirements and incident handling.
+- The trusted single-workspace MVP uses a global catalog, requester confirmation and no invented RBAC/second reviewer. Multi-user/public marketplace behavior remains a future feature, not an unresolved dependency.
+- The LLM remains behind a provider-neutral port. Deployment selects credentials/provider by environment; deterministic recorded outputs keep implementation and acceptance tests independent of a live provider.

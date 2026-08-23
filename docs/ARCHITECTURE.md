@@ -1,7 +1,7 @@
 # Crypto Strategy Lab — Architecture
 
 **Status:** Accepted  
-**Date:** 2026-08-13  
+**Date:** 2026-08-23  
 **Review owner:** Crypto Strategy Lab Team  
 **Related documents:** [Requirement](REQUIREMENT.md), [SRS](SRS.md), [Constitution](../.specify/memory/constitution.md), [ADR Index](ADR/README.md)
 
@@ -17,6 +17,8 @@ flowchart LR
     WEB <--> CSL["Crypto Strategy Lab"]
     CSL <--> MARKET["Market Data Providers — Binance trước"]
     CSL <--> NEWS["News Providers"]
+    CSL <--> LLM["Configured LLM Provider"]
+    CSL --> WEB_SOURCE["Approved Public HTTPS Sources"]
     CSL --> STORE[("Persistent Storage")]
 ```
 
@@ -29,6 +31,8 @@ flowchart LR
 | Operator | Theo dõi stream, worker, lỗi và tiến độ |
 | Market Data Provider | Cung cấp historical và realtime candle |
 | News Provider | Cung cấp tin liên quan đến coin/pair |
+| Configured LLM Provider | Extract structured strategy và generate candidate artifact qua provider-neutral port |
+| Public Strategy Source | Cung cấp permitted public text; không có authenticated/browser-session access |
 
 Frontend không gọi provider, database hoặc job queue trực tiếp. Backend chịu trách nhiệm validate và chuẩn hóa mọi dữ liệu ngoài.
 
@@ -47,6 +51,12 @@ flowchart LR
     ADAPTER --> APP
     NEWS["News Providers"] --> NEWS_ADAPTER["News Adapters"]
     NEWS_ADAPTER --> APP
+    WEB_SOURCE["Public HTTPS Sources"] --> SOURCE_ADAPTER["Policy-Enforced Source Adapter"]
+    SOURCE_ADAPTER --> APP
+    LLM["Configured LLM Provider"] <--> LLM_ADAPTER["LLM Adapter"]
+    LLM_ADAPTER <--> APP
+    APP --> SANDBOX["Ephemeral Strategy Sandbox"]
+    SANDBOX --> APP
 ```
 
 | Container | Trách nhiệm chính |
@@ -56,6 +66,7 @@ flowchart LR
 | Background Worker | Chạy công việc nền như backtest/search và sentiment analysis |
 | PostgreSQL | Lưu dữ liệu bền vững và provenance của experiment |
 | Job Broker/Queue | Phân phối công việc nền và hỗ trợ retry; công nghệ chốt ở feature liên quan |
+| Strategy Sandbox | Validate và execute generated Python trong ephemeral deny-by-default isolation; không có network/secret/host mount |
 
 API và worker là các process riêng nhưng dùng chung domain/application code. Backend bắt đầu dưới dạng modular monolith; chưa tách microservices.
 
@@ -67,6 +78,10 @@ API và worker là các process riêng nhưng dùng chung domain/application cod
 | Chart Delivery | Cung cấp historical/realtime data cho UI | Gọi provider trực tiếp hoặc tính strategy |
 | Strategy | Validate parameters và tạo BUY/SELL/HOLD | Database, HTTP, queue, ranking |
 | Strategy Registry | Đăng ký và cung cấp metadata của strategy | Chứa logic của từng strategy |
+| Strategy Generation | Điều phối request, source, LLM, draft, validation, confirmation và activation | Tin LLM/source, execute Python hoặc tự bypass policy |
+| Source Ingestion | Validate public HTTPS destination/redirect/content và tạo inert source snapshot | Dùng browser session, cookie/credential hoặc quyết định trading rules |
+| Generated Artifact Validation | Static policy + gọi sandbox + tạo immutable Validation Report | Publish registry entry hoặc chạy trong application process |
+| Generated Artifact Runtime | Verify digest và gọi sandbox cho exact activated artifact | Network/DB/queue/provider access hoặc mutate artifact |
 | Composite | Kết hợp member signals theo policy | Chạy backtest hoặc tính leaderboard |
 | Search | Sinh Candidate Strategy | Mô phỏng trade hoặc tính metrics |
 | Backtest | Mô phỏng trade trên dataset cố định | Quyết định thứ hạng |
@@ -75,7 +90,7 @@ API và worker là các process riêng nhưng dùng chung domain/application cod
 | News | Thu thập, chuẩn hóa và lưu NewsItem | Phân loại sentiment |
 | Sentiment | Phân tích NewsItem và tạo SentimentResult có version | Crawl news hoặc đặt lệnh thật |
 | API/WebSocket | Xác thực boundary, mapping và delivery | Chứa business rules |
-| Persistence/Queue Adapters | Cài đặt external ports | Quyết định signal, score hoặc business state |
+| Persistence/Queue/LLM/Source/Sandbox Adapters | Cài đặt external ports | Quyết định signal, score, policy hoặc business state |
 
 ## 4. Dependency Rules
 
@@ -96,6 +111,10 @@ flowchart BT
 5. Provider DTO, API DTO, queue message, persistence model và domain object là các contract riêng; mapper phải explicit.
 6. Frontend chỉ dùng public REST/WebSocket contracts và không tính strategy, backtest hoặc ranking.
 7. Contract dùng qua nhiều feature phải có owner, schema version và compatibility rule.
+8. LLM/source/sandbox là infrastructure adapters sau application ports; domain không import provider, parser, container hoặc sandbox client.
+9. Retrieved content và model output là untrusted DTO. Chúng chỉ trở thành domain draft/artifact sau explicit mapping và validation.
+10. API/domain/normal worker không execute generated source. Chỉ `GeneratedStrategyRuntime` adapter gọi ADR-006 sandbox.
+11. Sandbox chỉ nhận bounded exact artifact + immutable Strategy Context và trả versioned result/error; không nhận repository/provider/queue handle.
 
 ## 5. Market Data Flow
 
@@ -191,13 +210,75 @@ High-level rules:
 - Candidate cần sentiment phải failed/deferred rõ ràng, không dùng dữ liệu giả.
 - Model/runtime và integration chi tiết được chốt trong ADR của sentiment feature.
 
-## 8. Docker Compose Deployment
+## 8. LLM-Assisted Strategy Generation and Reuse Flow
+
+```mermaid
+sequenceDiagram
+    actor Analyst
+    participant Web
+    participant API
+    participant Gen as Generation Application
+    participant Source as Source Adapter
+    participant LLM as LLM Adapter
+    participant Sandbox as Strategy Sandbox
+    participant DB as PostgreSQL
+    participant Registry
+
+    Analyst->>Web: Submit name, text or public HTTPS URL
+    Web->>API: Create Generation Request
+    API->>DB: Persist RECEIVED request
+    API->>Gen: Process exact request
+    Gen->>Source: Apply source policy and fingerprint
+    Source-->>Gen: Inert permitted source or categorized denial
+    Gen->>LLM: Structured extraction + artifact generation
+    LLM-->>Gen: 0..N candidate outputs
+    Gen->>DB: Persist immutable drafts/artifacts/provenance
+    loop Each candidate
+        Gen->>Sandbox: Static-approved artifact + bounded fixtures
+        Sandbox-->>Gen: Bounded result/findings
+        Gen->>DB: Persist immutable Validation Report
+    end
+    API-->>Web: Drafts, evidence, assumptions, validation status
+    Analyst->>Web: Confirm exact passing draft fingerprints
+    Web->>API: Activate draft
+    API->>DB: Atomic version/provenance activation
+    API->>Registry: Publish exact immutable version
+```
+
+### Trust boundaries and rules
+
+- Source retrieval follows `docs/GENERATED_STRATEGY_SECURITY_POLICY.md`: public HTTPS/443 only, DNS
+  and every redirect revalidated, no cookies/auth/session/proxy, permitted text only, bounded time and
+  size, minimal attribution/evidence retention.
+- Source content is inert data. Prompt injection cannot change policy, system instructions, tools,
+  validation or activation.
+- LLM provider is replaceable through a port. Credentials remain inside its adapter; live generation
+  is disabled unless provider data is excluded from training and uses minimum available retention.
+- Model output is persisted as non-active draft/artifact data. It is never imported by API/domain or
+  normal workers.
+- ADR-006 sandbox is ephemeral, non-root, read-only, networkless, secretless, capability-dropped and
+  resource-limited. Sandbox image and validation-policy fingerprints are recorded.
+- Activation requires exact matching draft/artifact digests, current passing report and requester
+  confirmation in one transaction. Equivalent content resolves the existing executable version.
+- Later workflow execution verifies the stored digest and calls the sandbox without source/LLM access.
+  Built-in and generated origins share the Strategy result contract.
+- A stricter policy may suspend new execution pending revalidation but cannot mutate the artifact or
+  historical provenance.
+
+### Ownership baseline
+
+The trusted single-workspace MVP uses one global strategy catalog and requester confirmation only.
+This is not an authorization role model. Multi-user ownership, shared marketplace publication,
+moderation and second-reviewer approval require a separate access-control amendment.
+
+## 9. Docker Compose Deployment
 
 ```text
 Docker Compose
 ├── frontend
 ├── api
 ├── worker (1..N)
+├── strategy-sandbox (ephemeral per validation/execution)
 ├── postgres
 └── job-broker (được chọn ở feature queued workers)
 ```
@@ -206,6 +287,8 @@ Docker Compose
 
 - `frontend` chỉ giao tiếp với `api` qua public REST/WebSocket.
 - `api` và `worker` dùng cùng application/domain packages nhưng chạy process riêng.
+- `strategy-sandbox` không dùng application environment, database, broker hoặc provider credentials; không expose public port và không mount Docker socket/host source.
+- Sandbox deployment enforces ADR-006 network, filesystem, privilege, seccomp/profile, CPU, memory, PID, temporary-storage, timeout and output limits.
 - `worker` scale bằng số replica/process; không sửa producer hoặc consumer contracts.
 - PostgreSQL là nguồn dữ liệu bền vững.
 - Job broker không phải nguồn sự thật cho durable business state.
@@ -213,7 +296,7 @@ Docker Compose
 - Mỗi container có health check phù hợp; API tách liveness và readiness.
 - Local setup phải chạy được từ clone sạch theo quickstart của feature.
 
-## 9. Proposed Foundation ADRs
+## 10. Accepted Foundation ADRs
 
 | ADR | Phạm vi |
 |---|---|
@@ -222,10 +305,11 @@ Docker Compose
 | [ADR-003](ADR/ADR-003-normalized-market-data.md) | Provider-neutral market data |
 | [ADR-004](ADR/ADR-004-strategy-plugin-and-versioning.md) | Strategy contract, registry và version |
 | [ADR-005](ADR/ADR-005-reproducible-backtesting.md) | Deterministic/reproducible backtesting |
+| [ADR-006](ADR/ADR-006-llm-generated-strategy-isolation.md) | Isolated validation/execution, immutable generated artifacts và activation trust boundary |
 
-Các ADR về Redis/Celery, scoring policy/formula và sentiment model/runtime được tạo khi nhóm làm feature tương ứng. Trước khi review, chúng vẫn là `Proposed` và chưa phải quyết định cuối.
+ADRs 001–006 are Accepted and binding. Các ADR về Redis/Celery, scoring policy/formula và sentiment model/runtime được tạo khi nhóm làm feature tương ứng; proposal tương lai chưa binding trước Accepted review.
 
-## 10. Team Review Checklist
+## 11. Team Review Checklist
 
 - [ ] System Context thể hiện đúng actor và external systems.
 - [ ] Container boundaries đủ để chia frontend, API, worker và storage.
@@ -235,3 +319,5 @@ Các ADR về Redis/Celery, scoring policy/formula và sentiment model/runtime �
 - [ ] Docker Compose topology đủ cho local demo và worker scaling.
 - [ ] Các quyết định chưa đến thời điểm đã được ghi rõ là deferred.
 - [ ] Feature plan liên kết ADR liên quan và không tự định nghĩa contract trái nhau.
+- [ ] LLM/source/sandbox boundaries khớp ADR-006 và security policy; không generated source nào execute trong API/domain/normal worker.
+- [ ] Restart/reuse flow không gọi lại source hoặc LLM và exact artifact digest/provenance được giữ.
