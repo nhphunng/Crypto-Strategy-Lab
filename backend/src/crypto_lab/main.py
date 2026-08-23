@@ -10,6 +10,7 @@ from crypto_lab.api.dependencies import Container, build_container
 from crypto_lab.api.errors import install_error_handlers
 from crypto_lab.api.middleware import RequestIdMiddleware
 from crypto_lab.api.routes.market_data import router as market_data_router
+from crypto_lab.api.websocket.market_data_channel import router as market_data_websocket_router
 from crypto_lab.infrastructure.logging import configure_logging
 
 
@@ -32,6 +33,7 @@ def create_app(container: Container | None = None) -> FastAPI:
     app.add_middleware(RequestIdMiddleware)
     install_error_handlers(app)
     app.include_router(market_data_router)
+    app.include_router(market_data_websocket_router)
 
     @app.get("/health/live", include_in_schema=False)
     async def live() -> JSONResponse:

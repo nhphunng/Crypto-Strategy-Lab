@@ -4,12 +4,6 @@ from datetime import UTC, datetime, timedelta
 
 import httpx
 import pytest
-from tests.fixtures.market_data import (
-    FakeProvider,
-    FixedClock,
-    InMemoryMarketDataRepository,
-    make_candle,
-)
 
 from crypto_lab.api.dependencies import Container
 from crypto_lab.application.market_data.dataset_service import DatasetService
@@ -19,6 +13,12 @@ from crypto_lab.domain.market_data.ranges import TimeRange
 from crypto_lab.domain.market_data.timeframe import Timeframe
 from crypto_lab.infrastructure.settings import Settings
 from crypto_lab.main import create_app
+from tests.fixtures.market_data import (
+    FakeProvider,
+    FixedClock,
+    InMemoryMarketDataRepository,
+    make_candle,
+)
 
 NOW = datetime(2026, 8, 13, 12, tzinfo=UTC)
 START = datetime(2024, 1, 1, tzinfo=UTC)

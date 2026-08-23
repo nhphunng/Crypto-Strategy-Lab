@@ -32,7 +32,7 @@ The implementation intentionally does not contain a chart or realtime socket. It
 | Independent vertical slice | PASS WITH OWNERSHIP NOTE | Historical acquisition/storage/API is independently testable. Rendering remains TV2-owned per the current team plan, superseding the older packaging label “+ single chart.” |
 | Simplicity over premature scale | PASS | One modular-monolith backend and PostgreSQL; no Kafka, Kubernetes, TimescaleDB, Redis, Celery, CQRS, or microservice is added. Dataset materialization is synchronous and bounded until measured evidence requires a job path. |
 | Cross-document consistency | PASS | Canonical Candle/timeframe/range/completeness values match Feature 002. Immutable complete datasets satisfy Feature 003/004 provenance needs. |
-| Architecture/ADR governance | PASS WITH REVIEW GATE | Architecture and ADR-001/002/003/005 are Proposed, read as review inputs only. No status is silently changed; selected feature-local details are recorded in research. |
+| Architecture/ADR governance | PASS | Architecture and ADR-001/002/003/005 are Accepted. Feature-local details remain recorded in research and the accepted contracts. |
 | Layered architecture | PASS | Domain owns Candle/range/dataset rules; application uses provider/repository/clock ports; infrastructure maps PostgreSQL/Binance; API only binds and maps. |
 | Integration over mocking | PASS | Domain and application tests use fakes; SQL repository/migration tests target real PostgreSQL; Binance adapter uses raw HTTP fixture contract tests. |
 | Migration-first storage | PASS | Alembic revision creates all tables/indexes; application startup never calls `create_all`. |
@@ -43,12 +43,12 @@ The implementation intentionally does not contain a chart or realtime socket. It
 
 ### Architecture Decision References
 
-- **Architecture baseline**: `docs/ARCHITECTURE.md` — Status: **Proposed**; component boundaries and historical flow are consistent with the Constitution and feature requirements.
-- **ADR-001**: Modular Monolith with Separate Worker Processes — **Proposed**; Feature 001 remains inside the monolith and introduces no worker.
-- **ADR-002**: Layered Boundaries — **Proposed**; implemented through domain/application/infrastructure/api dependency direction.
-- **ADR-003**: Provider-Neutral Market Data Contract — **Proposed**; implemented because its identity and isolation rules also come from the approved SRS/Constitution.
-- **ADR-005**: Reproducible Backtesting — **Proposed**; informs immutable dataset/checksum behavior without implementing backtesting.
-- **Deviations**: None from an Accepted ADR. Proposed-document approval remains a team review item, not a hidden code decision.
+- **Architecture baseline**: `docs/ARCHITECTURE.md` — Status: **Accepted**; component boundaries and historical flow are binding and consistent with the Constitution and feature requirements.
+- **ADR-001**: Modular Monolith with Separate Worker Processes — **Accepted**; Feature 001 remains inside the monolith and introduces no worker.
+- **ADR-002**: Layered Boundaries — **Accepted**; implemented through domain/application/infrastructure/api dependency direction.
+- **ADR-003**: Provider-Neutral Market Data Contract — **Accepted**; its identity and isolation rules bind the shared market-data boundary.
+- **ADR-005**: Reproducible Backtesting — **Accepted**; informs immutable dataset/checksum behavior without implementing backtesting.
+- **Deviations**: None from an Accepted ADR. The team confirmed these authorities and the cross-feature contract review on 2026-08-19.
 
 ## Design Overview
 

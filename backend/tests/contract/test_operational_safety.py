@@ -4,11 +4,11 @@ import logging
 import httpx
 import pytest
 from pydantic import ValidationError
-from tests.contract.test_market_data_api import build_test_container
 
 from crypto_lab.infrastructure.logging import JsonFormatter, configure_logging, sanitize_fields
 from crypto_lab.infrastructure.settings import Settings
 from crypto_lab.main import create_app
+from tests.contract.test_market_data_api import build_test_container
 
 
 def test_provider_url_requires_server_controlled_https_shape() -> None:

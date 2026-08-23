@@ -4,7 +4,6 @@ from datetime import UTC, datetime, timedelta
 from time import perf_counter
 
 import pytest
-from tests.fixtures.market_data import FakeProvider, FixedClock, make_candle
 
 from crypto_lab.application.market_data.historical_service import HistoricalMarketDataService
 from crypto_lab.domain.market_data.candle import MarketSelection
@@ -13,6 +12,7 @@ from crypto_lab.domain.market_data.timeframe import Timeframe
 from crypto_lab.infrastructure.persistence.market_data_repository import (
     SqlAlchemyMarketDataRepository,
 )
+from tests.fixtures.market_data import FakeProvider, FixedClock, make_candle
 
 pytestmark = [pytest.mark.performance, pytest.mark.integration]
 

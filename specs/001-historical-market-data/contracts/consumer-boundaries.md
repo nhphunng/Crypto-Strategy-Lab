@@ -3,6 +3,8 @@
 **Owner**: TV1 / Feature 001  
 **Consumers**: TV2 chart delivery, TV3 strategy foundation, TV4 backtest/evaluation  
 **Version**: `1`
+**Status**: Accepted
+**Cross-review**: TV1/TV2/TV3/TV4 completed on 2026-08-19.
 
 ## Shared Candle Meaning
 

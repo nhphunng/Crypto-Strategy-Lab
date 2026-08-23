@@ -188,7 +188,7 @@ As a market-data maintainer, I want provider-specific behavior isolated behind o
 - Version `1` stores provider base-asset volume and closed historical Candles. Quote-asset volume, trades, order book, and provider corrections require a future compatible extension or explicit new dataset/contract version.
 - Public chart/backfill reads are bounded to 1,000 Candles. Larger reusable datasets are materialized internally in bounded provider pages and consumed through paginated dataset reads.
 - Authentication and multi-user ownership are outside this feature; deployment access control remains an application-level concern.
-- Team approval of Proposed ADR-003 remains a review gate; this implementation follows it because it is consistent with the approved SRS and Constitution.
+- ADR-003 is `Accepted`; TV1/TV2/TV3/TV4 completed the shared market-data boundary review on 2026-08-19.
 
 ## Explicit Exclusions
 

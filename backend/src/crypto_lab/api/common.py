@@ -41,5 +41,5 @@ def success_envelope(data: T, message: str, request_id: str) -> SuccessEnvelope[
         message=message,
         data=data,
         timestamp=format_utc_millis(datetime.now(UTC)),
-        requestId=request_id,
+        request_id=request_id,
     )
