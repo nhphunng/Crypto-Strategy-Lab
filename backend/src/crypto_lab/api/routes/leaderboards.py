@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from datetime import UTC, datetime
 from decimal import Decimal, InvalidOperation
 from uuid import UUID
 
@@ -14,8 +15,17 @@ from crypto_lab.api.leaderboard_dependencies import (
     leaderboard_container,
 )
 from crypto_lab.api.middleware import request_id
-from crypto_lab.api.schemas.leaderboards import LeaderboardSnapshotDto, page_to_dto
-from crypto_lab.application.leaderboard.errors import query_invalid
+from crypto_lab.api.schemas.leaderboards import (
+    LeaderboardSnapshotDto,
+    RankedResultDetailDto,
+    TradePageDto,
+    VisualizationDataDto,
+    detail_to_dto,
+    page_to_dto,
+    trade_page_to_dto,
+    visualization_to_dto,
+)
+from crypto_lab.application.leaderboard.errors import query_invalid, range_invalid
 from crypto_lab.application.leaderboard.query_leaderboard import (
     DEFAULT_PAGE_SIZE,
     LeaderboardQuery,
@@ -140,3 +150,81 @@ async def list_leaderboard_entries(
         "Leaderboard snapshot loaded.",
         request_id(request),
     )
+
+
+@router.get(
+    "/{leaderboard_id}/entries/{evaluation_result_id}",
+    response_model=SuccessEnvelope[RankedResultDetailDto],
+)
+async def ranked_result_detail(
+    request: Request,
+    leaderboard_id: UUID,
+    evaluation_result_id: UUID,
+    container: LeaderboardContainer = Depends(leaderboard_container),
+) -> SuccessEnvelope[RankedResultDetailDto]:
+    view = await container.ranked_results.detail(leaderboard_id, evaluation_result_id)
+    return success_envelope(
+        detail_to_dto(view),
+        "Ranked result detail loaded.",
+        request_id(request),
+    )
+
+
+@router.get(
+    "/{leaderboard_id}/entries/{evaluation_result_id}/visualization",
+    response_model=SuccessEnvelope[VisualizationDataDto],
+)
+async def ranked_result_visualization(
+    request: Request,
+    leaderboard_id: UUID,
+    evaluation_result_id: UUID,
+    start_time: datetime = Query(alias="startTime"),
+    end_time: datetime = Query(alias="endTime"),
+    container: LeaderboardContainer = Depends(leaderboard_container),
+) -> SuccessEnvelope[VisualizationDataDto]:
+    view = await container.ranked_results.visualization(
+        leaderboard_id,
+        evaluation_result_id,
+        _as_utc(start_time, "startTime"),
+        _as_utc(end_time, "endTime"),
+    )
+    return success_envelope(
+        visualization_to_dto(view),
+        "Ranked result visualization loaded.",
+        request_id(request),
+    )
+
+
+@router.get(
+    "/{leaderboard_id}/entries/{evaluation_result_id}/trades",
+    response_model=SuccessEnvelope[TradePageDto],
+)
+async def ranked_result_trades(
+    request: Request,
+    leaderboard_id: UUID,
+    evaluation_result_id: UUID,
+    page: int = Query(default=1),
+    page_size: int = Query(default=DEFAULT_PAGE_SIZE, alias="pageSize"),
+    sort_by: str = Query(default="ENTRY_TIME", alias="sortBy"),
+    sort_direction: str = Query(default="ASC", alias="sortDirection"),
+    container: LeaderboardContainer = Depends(leaderboard_container),
+) -> SuccessEnvelope[TradePageDto]:
+    view = await container.ranked_results.trades(
+        leaderboard_id,
+        evaluation_result_id,
+        page=page,
+        page_size=page_size,
+        sort_by=sort_by,
+        sort_direction=sort_direction,
+    )
+    return success_envelope(
+        trade_page_to_dto(view),
+        "Ranked result Trades loaded.",
+        request_id(request),
+    )
+
+
+def _as_utc(value: datetime, field: str) -> datetime:
+    if value.tzinfo is None:
+        raise range_invalid("Timestamps must carry a UTC offset.", field=field)
+    return value.astimezone(UTC)

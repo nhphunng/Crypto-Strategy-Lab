@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { fetchLeaderboardSnapshot } from '../../features/leaderboard/api/leaderboardApi'
 import { LeaderboardStatus } from '../../features/leaderboard/components/LeaderboardStatus'
+import { RankedResultDetail } from '../../features/leaderboard/components/RankedResultDetail'
 import { LeaderboardTable } from '../../features/leaderboard/components/LeaderboardTable'
 import {
   useLeaderboardUpdates,
@@ -185,7 +186,17 @@ export function LeaderboardRoute({
             }}
           />
         </div>
-        {selection && renderDetail ? renderDetail(selection) : null}
+        {selection ? (
+          renderDetail ? (
+            renderDetail(selection)
+          ) : (
+            <RankedResultDetail
+              leaderboardId={selection.leaderboardId}
+              evaluationResultId={selection.evaluationResultId}
+              onClose={() => setSelectedId(null)}
+            />
+          )
+        ) : null}
       </div>
     </div>
   )
