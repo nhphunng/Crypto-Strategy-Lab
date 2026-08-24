@@ -7,7 +7,7 @@
 
 ## Result
 
-No unresolved **CRITICAL** or **HIGH** implementation risk remains. Every high-impact finding below was reproduced or converted into a deterministic test before being closed. Two deliberate product trade-offs remain accepted at **MEDIUM**: synchronous dataset materialization is capped at 10,000 expected Candles, and provider corrections require an explicit future revision workflow rather than silent overwrite. Proposed ADRs still require the team's governance approval; this implementation does not change their status.
+No unresolved **CRITICAL** or **HIGH** implementation risk remains. Every high-impact finding below was reproduced or converted into a deterministic test before being closed. Two deliberate product trade-offs remain accepted at **MEDIUM**: synchronous dataset materialization is capped at 10,000 expected Candles, and provider corrections require an explicit future revision workflow rather than silent overwrite. Architecture and the foundation ADRs are Accepted, and cross-feature contract review was completed on 2026-08-19.
 
 ## Review Matrix
 
@@ -30,7 +30,7 @@ No unresolved **CRITICAL** or **HIGH** implementation risk remains. Every high-i
 | R15 | Dataset read size | MEDIUM | Returning full immutable datasets could produce unbounded memory/API responses. | Public range reads are capped at 1,000; dataset builds at 10,000; membership uses validated opaque cursor pages of 1–1,000. Invalid cursors fail safely. | LOW |
 | R16 | Synchronous materialization | MEDIUM | A dataset near the cap occupies one request while fetching multiple provider pages. | Deliberately accepted for MVP with bounded size, timeout/retry, durable claim/lease, and observed 10,000-row target. Revisit when measured builds routinely exceed the API timeout/cap; move orchestration to a job without changing Candle/provider/repository contracts. | MEDIUM (accepted) |
 | R17 | Official historical corrections | MEDIUM | Rejecting changed closed content means an official provider correction cannot be ingested automatically. | Deliberately fail closed to preserve old checksums/results. Revisit only with a real correction case by adding explicit Candle/dataset revisioning; never mutate old complete datasets. | MEDIUM (accepted) |
-| R18 | Governance | MEDIUM | Architecture and ADR-001/002/003/005 remain `Proposed`; code cannot confer team approval. | Implementation follows the SRS/Constitution-compatible direction and records evidence, but leaves status unchanged. TV2/TV4 cross-review and team acceptance remain human merge gates. | MEDIUM (governance) |
+| R18 | Governance | MEDIUM | Architecture/ADR and cross-feature contract approval required an explicit human decision. | The team accepted Architecture and ADR-001/002/003/005 and completed TV2/TV3/TV4 cross-review on 2026-08-19; implementation remains aligned with the approved SRS/Constitution. | CLOSED |
 
 ## Verification Evidence
 

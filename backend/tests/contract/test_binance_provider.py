@@ -6,13 +6,13 @@ from decimal import Decimal
 
 import httpx
 import pytest
-from tests.fixtures.market_data import FixedClock
 
 from crypto_lab.application.market_data.errors import ProviderPayloadInvalid
 from crypto_lab.domain.market_data.candle import MarketSelection
 from crypto_lab.domain.market_data.ranges import TimeRange
 from crypto_lab.domain.market_data.timeframe import Timeframe
 from crypto_lab.infrastructure.binance.market_data_provider import BinanceMarketDataProvider
+from tests.fixtures.market_data import FixedClock
 
 NOW = datetime(2026, 8, 13, 12, tzinfo=UTC)
 SELECTION = MarketSelection("BINANCE", "BTCUSDT", Timeframe.FIVE_MINUTES)

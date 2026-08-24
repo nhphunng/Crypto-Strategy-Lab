@@ -8,29 +8,29 @@ Repo hiện có backend và frontend chạy được độc lập hoặc cùng n
 
 | Phần | Thư mục | Trạng thái |
 |---|---|---|
-| Market Data backend | `backend/` | Đã có API dữ liệu lịch sử Binance, dataset bất biến, PostgreSQL, migration và test |
+| Market Data backend | `backend/` | Đã có API lịch sử, WebSocket realtime version 1, subscription sharing, recovery/backfill, PostgreSQL, migration và test |
 | Database features 003–005 | `backend/migrations/` | Đã có schema cho Strategy, Backtest/Evaluation và Leaderboard; application/API tương ứng chưa hoàn chỉnh |
-| Web frontend | `frontend/` | Giao diện React prototype đã được hợp nhất vào frontend chính; hiện sử dụng adapter dữ liệu mô phỏng |
+| Web frontend | `frontend/` | Dashboard `/market` dùng REST/WebSocket thật, TanStack Query và TradingView Lightweight Charts; hỗ trợ 1–4 chart độc lập |
 
-`frontend/` là vị trí frontend chính thức. Giao diện đã chạy được nhưng vẫn cần thay mock adapter bằng kết nối backend thật trong các feature tương ứng.
+`frontend/` là vị trí frontend chính thức. Market dashboard đã nối với backend Feature 001/002; các màn hình strategy, backtest và leaderboard vẫn thuộc các feature sau.
 
 Backend đang đăng ký các route Market Data trong runtime. Các file Backtest/Evaluation/Leaderboard đã có package hoặc persistence foundation nhưng chưa đồng nghĩa với API nghiệp vụ chạy hoàn chỉnh.
 
 ## Tiến độ theo implementation plan
 
-Trạng thái được tính từ checkbox trong `specs/*/tasks.md` ngày 2026-08-19:
+Trạng thái được tính từ checkbox trong `specs/*/tasks.md` ngày 2026-08-20:
 
 | Feature | Hoàn thành | Trạng thái hiện tại |
 |---|---:|---|
 | `001-historical-market-data` | 54/54 | Hoàn thành implementation, test, migration và cross-feature contract |
-| `002-realtime-multi-chart` | 0/54 | Spec/plan/tasks đã sẵn sàng; realtime WebSocket và frontend tích hợp chưa implement |
+| `002-realtime-multi-chart` | 58/58 | Hoàn thành code, test, docs, reverse proxy REST/WebSocket, multi-session fan-out, convergence và final analysis gate |
 | `003-strategy-foundation` | 2/55 | Đã có Strategy Definition migration và persistence mapping |
 | `004-backtest-evaluation` | 4/64 | Đã có package foundation, database mappings và migration |
 | `005-leaderboard-visualization` | 3/52 | Đã có package foundation, database mappings và migration |
 
-Tổng theo năm feature chính: **63/279 task, khoảng 23%**. Tỷ lệ này chỉ thể hiện số checkbox, không phải phần trăm effort vì độ lớn mỗi task khác nhau.
+Tổng theo năm feature chính: **121/283 task, khoảng 43%**. Tỷ lệ này chỉ thể hiện số checkbox, không phải phần trăm effort vì độ lớn mỗi task khác nhau.
 
-Frontend prototype có plan lưu tham khảo tại `docs/archive/frontend-prototype/001-frontend-prototype-system/` và đã hoàn thành **43/43 task**. Đây là bản demo dùng mock adapter, chưa chứng minh các backend feature 002–005 đã hoàn thành.
+Frontend prototype có plan lưu tham khảo tại `docs/archive/frontend-prototype/001-frontend-prototype-system/` và đã hoàn thành **43/43 task**. Feature 002 không còn dựa vào mock adapter của prototype cho Market dashboard.
 
 ## Cách chạy nhanh
 
@@ -102,7 +102,7 @@ npm run dev
 
 Mở [http://localhost:5173](http://localhost:5173).
 
-Giao diện hiện dùng adapter mô phỏng trong `frontend/src/services/mock/`. Vì vậy, frontend vẫn hiển thị dữ liệu demo ngay cả khi chưa kết nối API thật.
+Mở [http://localhost:5173/market](http://localhost:5173/market) để dùng dashboard realtime. Trang này gọi `/api/v1/market-data/candles` và dùng `/ws/v1/market-data`; backend hoặc provider không sẵn sàng sẽ được hiển thị bằng trạng thái `STALE`, `RECONNECTING`, hoặc `ERROR`, không giả làm dữ liệu live.
 
 ### 4. Tắt hệ thống
 
@@ -132,6 +132,12 @@ npm ci
 npm run typecheck
 npm run test:unit
 npm run build
+```
+
+Chạy browser acceptance từ thư mục gốc:
+
+```powershell
+F:\nodejs\node.exe node_modules/@playwright/test/cli.js test tests/e2e/realtime-multi-chart.spec.ts --project=chromium
 ```
 
 ### Backend bằng Python local
@@ -167,10 +173,10 @@ pytest backend/tests/integration -q
 ```text
 Crypto-Strategy-Lab/
 ├── backend/             # FastAPI, domain, persistence, Alembic và backend tests
-├── frontend/            # Frontend React chính thức; prototype hiện dùng mock adapter
+├── frontend/            # React app; Market dashboard dùng TanStack Query + Lightweight Charts
 ├── docs/                # Requirement, SRS, Architecture và ADR
 ├── specs/               # Spec Kit artifacts theo từng feature
-├── tests/               # E2E/load-test skeleton cấp repo
+├── tests/               # Playwright E2E và k6 realtime load/soak tests
 ├── docker-compose.yml
 ├── Dockerfile
 └── .env.example
