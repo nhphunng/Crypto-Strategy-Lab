@@ -26,6 +26,10 @@ docker compose up -d api                             # or: uvicorn crypto_lab.ma
 npm --prefix frontend run dev                        # http://localhost:5173
 ```
 
+The frontend calls the API on its own origin and relies on the Vite dev proxy
+(and the nginx container in Compose) to forward `/api` and `/ws`. Set
+`VITE_API_BASE_URL` only when the API is reached directly on another origin.
+
 The seed script writes only immutable upstream records. The leaderboard projection is always derived by the feature itself; it is never seeded directly.
 
 ## 2. Run Automated Quality Gates
@@ -47,11 +51,15 @@ npm run typecheck
 npm run test
 
 cd ..
-npx playwright test tests/e2e/leaderboard-visualization.spec.ts
+npm run test:e2e:leaderboard                         # or npm run test:e2e for every suite
 k6 run tests/load/leaderboard.js                     # add -e EVENTS=1 for the event target
 ```
 
-**Measured 2026-08-23**: 176 backend tests pass (`pytest -q`, including the pre-existing Feature 001 suite), 54 frontend tests pass, 6 Playwright scenarios pass, `npm run typecheck` is clean, and `ruff check` is clean for every file this feature owns.
+`playwright.config.ts` starts the dev server itself and uses the `chrome`
+channel, so install it once with `npx playwright install chrome`. The API must
+already be running and seeded.
+
+**Measured 2026-08-23**, on the merge with `main` that includes feature 002: **272 backend tests**, **124 frontend tests**, and **11/11 Playwright scenarios** (6 leaderboard + 5 realtime multi-chart) pass. `npm run typecheck` is clean and `ruff check` is clean for every file this feature owns.
 
 ## 3. Validate `LV-US-01`: View Top-K Strategies
 
@@ -127,3 +135,5 @@ k6 run -e DURATION=20s -e VUS=4 -e EVENTS=1 tests/load/leaderboard.js
 
 - Overlay descriptors are reported as `UNAVAILABLE` until an upstream Strategy/Backtest feature publishes them. The contract, renderer, and tests already support `LINE`, `BAND`, and `ZONE`.
 - The demo database is shared with the integration suite, which truncates leaderboard and upstream tables. Re-run `python backend/scripts/seed_leaderboard_demo.py` after running the backend tests.
+- The ranked-result chart is `features/leaderboard/components/RankedResultChart.tsx`, not the feature 002 `market-chart` component. The realtime chart is built on lightweight-charts and exposes no scale for shape-based markers or selection rings, so the leaderboard keeps its own dependency-free SVG surface until a second feature needs it.
+- Error responses use the repository-wide `error` payload from feature 001 rather than the `data` payload originally drafted in `contracts/openapi.yaml`; the contract file now documents the shared shape and a contract-sync test enforces it.

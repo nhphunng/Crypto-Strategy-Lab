@@ -93,9 +93,8 @@ def test_marker_and_overlay_enums_match(document: dict[str, Any]) -> None:
 
 
 def test_error_codes_match(document: dict[str, Any]) -> None:
-    published = set(
-        schema(document, "ErrorEnvelope")["properties"]["data"]["properties"]["code"]["enum"]
-    )
+    envelope = schema(document, "ErrorEnvelope")["properties"]
+    published = set(envelope["error"]["properties"]["code"]["enum"])
     implemented = {
         error_codes.LEADERBOARD_NOT_FOUND,
         error_codes.LEADERBOARD_ENTRY_NOT_FOUND,
@@ -104,6 +103,13 @@ def test_error_codes_match(document: dict[str, Any]) -> None:
         error_codes.LEADERBOARD_DEPENDENCY_UNAVAILABLE,
     }
     assert published == implemented
+    assert set(schema(document, "ErrorEnvelope")["required"]) == {
+        "success",
+        "message",
+        "error",
+        "timestamp",
+        "requestId",
+    }, "the leaderboard error contract must match the repository-wide envelope"
 
 
 @pytest.mark.parametrize(

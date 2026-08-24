@@ -5,7 +5,7 @@
  * here: the renderer dispatches on LINE / BAND / ZONE, never on a strategy name.
  */
 
-import type { ChartScale } from '../../market-chart/components/CandlestickChart'
+import type { ChartScale } from './RankedResultChart'
 import type { Overlay, OverlayPoint } from '../types'
 
 export type StrategyOverlayLayerProps = {

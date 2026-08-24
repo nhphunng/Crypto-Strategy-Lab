@@ -2,12 +2,12 @@ from datetime import UTC, datetime, timedelta
 
 import httpx
 import pytest
-from tests.fixtures.market_data import FakeProvider, FixedClock, make_candle
 
 from crypto_lab.domain.market_data.candle import MarketSelection
 from crypto_lab.domain.market_data.ranges import TimeRange
 from crypto_lab.domain.market_data.timeframe import Timeframe
 from crypto_lab.infrastructure.binance.market_data_provider import BinanceMarketDataProvider
+from tests.fixtures.market_data import FakeProvider, FixedClock, make_candle
 
 
 @pytest.mark.asyncio

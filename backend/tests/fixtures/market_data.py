@@ -27,10 +27,28 @@ class FixedClock:
         return self.value
 
 
+class MutableClock:
+    """Test clock whose reported instant can be advanced between phases."""
+
+    def __init__(self, value: datetime) -> None:
+        self.value = value
+
+    def now(self) -> datetime:
+        return self.value
+
+    def advance(self, value: datetime) -> None:
+        if value < self.value:
+            raise ValueError("mutable clock cannot move backward")
+        self.value = value
+
+
 def make_candle(
     open_time: datetime,
     *,
     selection: MarketSelection | None = None,
+    open: str = "100",
+    high: str = "102",
+    low: str = "99",
     close: str = "101.25",
     closed: bool = True,
     received_at: datetime | None = None,
@@ -42,9 +60,9 @@ def make_candle(
         timeframe=selection.timeframe,
         open_time=open_time,
         close_time=selection.timeframe.close_time(open_time),
-        open=Decimal("100"),
-        high=Decimal("102"),
-        low=Decimal("99"),
+        open=Decimal(open),
+        high=Decimal(high),
+        low=Decimal(low),
         close=Decimal(close),
         volume=Decimal("12.5"),
         closed=closed,

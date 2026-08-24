@@ -17,8 +17,15 @@ import type {
   VisualizationData,
 } from '../types'
 
+/**
+ * Same-origin by default so the Vite dev proxy and the nginx container both
+ * serve `/api` and `/ws` without a cross-origin hop. Override with
+ * VITE_API_BASE_URL when the API is reached directly.
+ */
 export const API_BASE_URL: string =
-  (import.meta.env?.VITE_API_BASE_URL as string | undefined) ?? 'http://localhost:8000'
+  (import.meta.env?.VITE_API_BASE_URL as string | undefined) ??
+  globalThis.location?.origin ??
+  'http://localhost:8000'
 
 export class LeaderboardRequestError extends Error {
   constructor(
@@ -76,7 +83,7 @@ async function request<T>(
   const body: unknown = await response.json().catch(() => null)
   if (!response.ok) {
     const envelope = (body ?? {}) as Record<string, unknown>
-    const detail = (envelope.data ?? envelope.error ?? {}) as Record<string, unknown>
+    const detail = (envelope.error ?? {}) as Record<string, unknown>
     throw new LeaderboardRequestError(response.status, {
       code: typeof detail.code === 'string' ? detail.code : 'LEADERBOARD_REQUEST_FAILED',
       message:

@@ -30,7 +30,7 @@ Build the TV2 vertical slice that bootstraps bounded historical candles from the
 
 ## Constitution Check
 
-*GATE: Passed for planning before Phase 0 research and re-checked after Phase 1 design. Implementation approval remains pending until the team accepts or replaces the Proposed architecture and ADR-003.*
+*GATE: Passed for planning before Phase 0 research, re-checked after Phase 1 design, and approved for implementation on 2026-08-19 after Architecture/ADR acceptance and TV1/TV2 contract cross-review.*
 
 | Gate | Result | Design evidence |
 |---|---|---|
@@ -49,10 +49,10 @@ Build the TV2 vertical slice that bootstraps bounded historical candles from the
 
 ### Architecture Decision References
 
-- **Architecture baseline**: `docs/ARCHITECTURE.md` — Status: `Proposed`; used as a planning input for Market Data and Chart Delivery boundaries.
-- **Relevant ADRs**: `ADR-002 Layered Boundaries and Ports/Adapters` — `Proposed`; `ADR-003 Provider-Neutral Market Data Contract` — `Proposed`.
-- **Deviations**: None. Exact Candle fields, decimal precision, REST range semantics, and WebSocket event version are drafted here for TV1/TV2 cross-review as ADR-003 requires.
-- **Implementation gate**: Team MUST accept the Architecture and ADR-003, or accept a replacement decision, before approving implementation tasks.
+- **Architecture baseline**: `docs/ARCHITECTURE.md` — Status: `Accepted`; binding for Market Data and Chart Delivery boundaries.
+- **Relevant ADRs**: `ADR-002 Layered Boundaries and Ports/Adapters` — `Accepted`; `ADR-003 Provider-Neutral Market Data Contract` — `Accepted`.
+- **Deviations**: None. TV1 and TV2 accepted the Candle fields, decimal precision, UTC/timeframe encoding, REST range semantics, errors, and version 1 WebSocket boundary on 2026-08-19.
+- **Implementation gate**: `Passed` on 2026-08-19. Architecture/ADR decisions and the shared TV1/TV2 contract are accepted; later semantic contract changes require coordinated review and versioning.
 
 ## Architecture and Data Flow
 
@@ -84,7 +84,7 @@ Completed in [research.md](research.md). Decisions cover transport, connection m
 ## Phase 1: Design and Contracts
 
 - [data-model.md](data-model.md) defines Candle consumption, Chart Slot and Live Subscription state, identity, validation, and transitions.
-- [contracts/openapi.yaml](contracts/openapi.yaml) drafts the TV1/TV2 historical bootstrap and supported-dimensions REST contract.
+- [contracts/openapi.yaml](contracts/openapi.yaml) records the accepted TV1/TV2 historical bootstrap and supported-dimensions REST contract.
 - [contracts/market-data-events.md](contracts/market-data-events.md) defines commands, events, state transitions, deduplication, reconnect, and gap recovery.
 - [contracts/chart-slot.md](contracts/chart-slot.md) defines the frontend chart primitive, slot isolation, accessibility, responsive layout, and TV5 extension seam.
 - [quickstart.md](quickstart.md) provides runnable acceptance scenarios for all four canonical stories and the propagation target.

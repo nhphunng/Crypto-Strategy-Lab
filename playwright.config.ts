@@ -1,20 +1,31 @@
-import { defineConfig } from '@playwright/test'
+import path from "node:path";
 
-/**
- * Browser acceptance tests for the leaderboard feature.
- *
- * The suite runs against an already-running API and dev server, both seeded
- * with the deterministic TV5 fixture (see the feature quickstart).
- */
+import { defineConfig, devices } from "@playwright/test";
+
+const quote = (value: string) => `"${value.replaceAll('"', '\\"')}"`;
+const viteCli = path.resolve("frontend/node_modules/vite/bin/vite.js");
+
 export default defineConfig({
-  testDir: './tests/e2e',
-  timeout: 30_000,
-  expect: { timeout: 7_500 },
+  testDir: "./tests/e2e",
   fullyParallel: false,
-  reporter: [['list']],
-  use: {
-    baseURL: process.env.E2E_BASE_URL ?? 'http://localhost:5173',
-    trace: 'retain-on-failure',
+  timeout: 30_000,
+  expect: {
+    timeout: 5_000,
   },
-  projects: [{ name: 'chromium', use: { browserName: 'chromium' } }],
-})
+  use: {
+    baseURL: "http://127.0.0.1:43681",
+    trace: "retain-on-failure",
+  },
+  webServer: {
+    command: `${quote(process.execPath)} ${quote(viteCli)} frontend --config frontend/vite.config.ts --host 127.0.0.1 --port 43681 --strictPort`,
+    url: "http://127.0.0.1:43681",
+    reuseExistingServer: true,
+    timeout: 120_000,
+  },
+  projects: [
+    {
+      name: "chromium",
+      use: { ...devices["Desktop Chrome"], channel: "chrome" },
+    },
+  ],
+});

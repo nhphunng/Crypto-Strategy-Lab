@@ -2,8 +2,11 @@
 
 **Status:** Accepted  
 **Date:** 2026-08-13  
+**Last reviewed:** 2026-08-19
 **Review owner:** Crypto Strategy Lab Team  
 **Related documents:** [Requirement](REQUIREMENT.md), [SRS](SRS.md), [Constitution](../.specify/memory/constitution.md), [ADR Index](ADR/README.md)
+
+**Acceptance record:** The team confirmed this baseline for Feature 002 implementation on 2026-08-19. Market Data and Chart Delivery follow ADR-002/ADR-003, with TV1 owning Candle/history and TV2 owning realtime subscription/chart lifecycle.
 
 Tài liệu này mô tả kiến trúc chung để các feature plan dùng cùng boundary và data flow. Các chi tiết chỉ thuộc một feature được quyết định trong `specs/<feature>/plan.md`, `research.md` và ADR của feature đó.
 
@@ -213,25 +216,25 @@ Docker Compose
 - Mỗi container có health check phù hợp; API tách liveness và readiness.
 - Local setup phải chạy được từ clone sạch theo quickstart của feature.
 
-## 9. Proposed Foundation ADRs
+## 9. Accepted Foundation ADRs
 
-| ADR | Phạm vi |
-|---|---|
-| [ADR-001](ADR/ADR-001-modular-monolith-and-workers.md) | Modular monolith và worker tách process |
-| [ADR-002](ADR/ADR-002-layered-boundaries.md) | Layer và dependency boundaries |
-| [ADR-003](ADR/ADR-003-normalized-market-data.md) | Provider-neutral market data |
-| [ADR-004](ADR/ADR-004-strategy-plugin-and-versioning.md) | Strategy contract, registry và version |
-| [ADR-005](ADR/ADR-005-reproducible-backtesting.md) | Deterministic/reproducible backtesting |
+| ADR | Phạm vi | Trạng thái |
+|---|---|---|
+| [ADR-001](ADR/ADR-001-modular-monolith-and-workers.md) | Modular monolith và worker tách process | Accepted |
+| [ADR-002](ADR/ADR-002-layered-boundaries.md) | Layer và dependency boundaries | Accepted |
+| [ADR-003](ADR/ADR-003-normalized-market-data.md) | Provider-neutral market data | Accepted |
+| [ADR-004](ADR/ADR-004-strategy-plugin-and-versioning.md) | Strategy contract, registry và version | Accepted |
+| [ADR-005](ADR/ADR-005-reproducible-backtesting.md) | Deterministic/reproducible backtesting | Accepted |
 
 Các ADR về Redis/Celery, scoring policy/formula và sentiment model/runtime được tạo khi nhóm làm feature tương ứng. Trước khi review, chúng vẫn là `Proposed` và chưa phải quyết định cuối.
 
 ## 10. Team Review Checklist
 
-- [ ] System Context thể hiện đúng actor và external systems.
-- [ ] Container boundaries đủ để chia frontend, API, worker và storage.
-- [ ] Mỗi module có một trách nhiệm rõ và không trùng ownership.
-- [ ] Dependency rules khớp Constitution.
-- [ ] Ba flow cấp cao khớp SRS và feature roadmap.
-- [ ] Docker Compose topology đủ cho local demo và worker scaling.
-- [ ] Các quyết định chưa đến thời điểm đã được ghi rõ là deferred.
-- [ ] Feature plan liên kết ADR liên quan và không tự định nghĩa contract trái nhau.
+- [x] System Context thể hiện đúng actor và external systems.
+- [x] Container boundaries đủ để chia frontend, API, worker và storage.
+- [x] Mỗi module có một trách nhiệm rõ và không trùng ownership.
+- [x] Dependency rules khớp Constitution.
+- [x] Ba flow cấp cao khớp SRS và feature roadmap.
+- [x] Docker Compose topology đủ cho local demo và worker scaling.
+- [x] Các quyết định chưa đến thời điểm đã được ghi rõ là deferred.
+- [x] Feature plan liên kết ADR liên quan và không tự định nghĩa contract trái nhau.

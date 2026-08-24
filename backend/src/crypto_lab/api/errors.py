@@ -82,17 +82,15 @@ def install_error_handlers(app: FastAPI) -> None:
 
 
 def _response(request: Request, descriptor: ErrorDescriptor) -> JSONResponse:
-    detail = ErrorDetail(
-        code=descriptor.code,
-        retryable=descriptor.retryable,
-        details=dict(descriptor.details) if descriptor.details else None,
-    )
     envelope = ErrorEnvelope(
         message=descriptor.message,
-        error=detail,
-        data=detail,
+        error=ErrorDetail(
+            code=descriptor.code,
+            retryable=descriptor.retryable,
+            details=dict(descriptor.details) if descriptor.details else None,
+        ),
         timestamp=format_utc_millis(datetime.now(UTC)),
-        requestId=request_id(request),
+        request_id=request_id(request),
     )
     headers = {}
     if descriptor.retry_after_seconds is not None:

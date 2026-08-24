@@ -109,7 +109,7 @@ async def test_unknown_entry_returns_the_documented_not_found_code(
     body = response.json()
 
     assert response.status_code == 404
-    assert body["data"]["code"] == "LEADERBOARD_ENTRY_NOT_FOUND"
+    assert body["error"]["code"] == "LEADERBOARD_ENTRY_NOT_FOUND"
 
 
 async def test_visualization_returns_bounded_candles_and_aligned_markers(
@@ -205,9 +205,9 @@ async def test_visualization_range_is_bounded(
     )
 
     assert oversized.status_code == 422
-    assert oversized.json()["data"]["code"] == "LEADERBOARD_RANGE_INVALID"
+    assert oversized.json()["error"]["code"] == "LEADERBOARD_RANGE_INVALID"
     assert reversed_range.status_code == 422
-    assert reversed_range.json()["data"]["code"] == "LEADERBOARD_RANGE_INVALID"
+    assert reversed_range.json()["error"]["code"] == "LEADERBOARD_RANGE_INVALID"
 
 
 async def test_trades_are_pageable_and_sortable(
@@ -290,4 +290,4 @@ async def test_invalid_trade_query_is_rejected(
     )
 
     assert response.status_code == 422
-    assert response.json()["data"]["code"] == "LEADERBOARD_RANGE_INVALID"
+    assert response.json()["error"]["code"] == "LEADERBOARD_RANGE_INVALID"

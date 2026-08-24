@@ -1,171 +1,309 @@
-/**
- * Generic SVG candlestick chart.
- *
- * The chart owns scales and candle rendering only. Features extend it through
- * the `overlays` and `markers` render inputs, so it never imports leaderboard,
- * strategy, or evaluation behaviour.
- */
+import {
+  CandlestickSeries,
+  LineSeries,
+  LineStyle,
+  createChart,
+  createSeriesMarkers,
+  type CandlestickData,
+  type ColorType,
+  type IChartApi,
+  type ISeriesApi,
+  type ISeriesMarkersPluginApi,
+  type LineData,
+  type SeriesMarker,
+  type Time,
+  type UTCTimestamp,
+} from "lightweight-charts";
+import { useEffect, useMemo, useRef } from "react";
 
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import type { Candle } from "../types";
 
-export type ChartCandle = {
-  openTime: string
-  open: string
-  high: string
-  low: string
-  close: string
-}
+export type ChartOverlayPoint = {
+  openTime: string;
+  value: number;
+};
 
-export type ChartScale = {
-  /** Pixel x for a UTC instant; null when the instant is outside the range. */
-  x: (time: string) => number | null
-  /** Pixel y for a decimal price string. */
-  y: (price: string) => number
-  plotWidth: number
-  plotHeight: number
-  candleWidth: number
-}
+export type ChartOverlaySeries = {
+  id: string;
+  points: readonly ChartOverlayPoint[];
+  color?: string;
+  dashed?: boolean;
+};
+
+export type ChartMarker = {
+  id: string;
+  openTime: string;
+  value: number;
+  label: string;
+  color?: string;
+};
 
 export type CandlestickChartProps = {
-  candles: ChartCandle[]
-  height?: number
-  emptyMessage?: string
-  overlays?: (scale: ChartScale) => ReactNode
-  markers?: (scale: ChartScale) => ReactNode
-  highlightRange?: { startTime: string; endTime: string } | null
-  testId?: string
-}
+  candles: readonly Candle[];
+  maxCandles?: number;
+  height?: number;
+  overlays?: readonly ChartOverlaySeries[];
+  markers?: readonly ChartMarker[];
+  className?: string;
+  onEventRendered?: (eventId: string) => void;
+  renderedEventId?: string;
+};
 
-const PAD_RIGHT = 56
-const PAD_BOTTOM = 18
+const CANDLE_SERIES_OPTIONS = {
+  upColor: "#21c58b",
+  downColor: "#f05b64",
+  borderVisible: false,
+  wickUpColor: "#21c58b",
+  wickDownColor: "#f05b64",
+} as const;
 
 export function CandlestickChart({
   candles,
-  height = 320,
-  emptyMessage = 'No Candle is available for this range.',
-  overlays,
-  markers,
-  highlightRange = null,
-  testId = 'chart-candles',
+  maxCandles = 1_000,
+  height = 280,
+  overlays = [],
+  markers = [],
+  className,
+  onEventRendered,
+  renderedEventId,
 }: CandlestickChartProps) {
-  const wrapper = useRef<HTMLDivElement>(null)
-  const [width, setWidth] = useState(720)
-
-  useEffect(() => {
-    const element = wrapper.current
-    if (!element || typeof ResizeObserver === 'undefined') return
-    if (element.clientWidth) setWidth(element.clientWidth)
-    const observer = new ResizeObserver(() => setWidth(element.clientWidth || width))
-    observer.observe(element)
-    return () => observer.disconnect()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
-  const plotWidth = Math.max(160, width - PAD_RIGHT)
-  const plotHeight = Math.max(80, height - PAD_BOTTOM)
-
-  const scale = useMemo<ChartScale>(() => {
-    const times = candles.map((candle) => candle.openTime)
-    const index = new Map(times.map((time, position) => [time, position]))
-    let low = Number.POSITIVE_INFINITY
-    let high = Number.NEGATIVE_INFINITY
-    for (const candle of candles) {
-      low = Math.min(low, Number(candle.low))
-      high = Math.max(high, Number(candle.high))
-    }
-    if (!Number.isFinite(low) || !Number.isFinite(high)) {
-      low = 0
-      high = 1
-    }
-    const padding = (high - low) * 0.08 || 1
-    const min = low - padding
-    const max = high + padding
-    const step = plotWidth / Math.max(1, candles.length)
-    return {
-      x: (time: string) => {
-        const position = index.get(time)
-        if (position === undefined) return null
-        return position * step + step / 2
-      },
-      y: (price: string) => {
-        const value = Number(price)
-        if (!Number.isFinite(value)) return plotHeight
-        return plotHeight - ((value - min) / (max - min)) * plotHeight
-      },
-      plotWidth,
-      plotHeight,
-      candleWidth: Math.max(1, step * 0.6),
-    }
-  }, [candles, plotWidth, plotHeight])
-
-  if (candles.length === 0) {
-    return (
-      <div
-        ref={wrapper}
-        data-testid={`${testId}-empty`}
-        className="flex items-center justify-center rounded-[6px] border border-subtle bg-workspace p-6 text-[12px] text-dim"
-        style={{ height }}
-      >
-        {emptyMessage}
-      </div>
-    )
+  if (!Number.isInteger(maxCandles) || maxCandles < 1 || maxCandles > 1_000) {
+    throw new Error("maxCandles must be between one and 1,000");
   }
 
-  const highlightStart = highlightRange ? scale.x(highlightRange.startTime) : null
-  const highlightEnd = highlightRange ? scale.x(highlightRange.endTime) : null
+  const boundedCandles = useMemo(
+    () =>
+      [...candles]
+        .sort((left, right) => left.openTime.localeCompare(right.openTime))
+        .slice(-maxCandles),
+    [candles, maxCandles],
+  );
+  const chartData = useMemo(
+    () => boundedCandles.map(toCandlestickData),
+    [boundedCandles],
+  );
+  const latest = boundedCandles.at(-1);
+  const hasCandles = latest !== undefined;
+
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const chartRef = useRef<IChartApi | null>(null);
+  const candleSeriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
+  const overlaySeriesRef = useRef(new Map<string, ISeriesApi<"Line">>());
+  const markersPluginRef = useRef<ISeriesMarkersPluginApi<Time> | null>(null);
+  const previousDataRef = useRef<CandlestickData<Time>[]>([]);
+  const bootstrapDataRef = useRef(chartData);
+  const heightRef = useRef(height);
+
+  bootstrapDataRef.current = chartData;
+  heightRef.current = height;
+
+  useEffect(() => {
+    if (!hasCandles) return;
+    const container = containerRef.current;
+    if (container === null) return;
+
+    const chart = createChart(container, {
+      height: heightRef.current,
+      layout: {
+        attributionLogo: true,
+        background: { type: "solid" as ColorType, color: "#0b111a" },
+        textColor: "#94a3b8",
+      },
+      grid: {
+        vertLines: { color: "#1c2735" },
+        horzLines: { color: "#1c2735" },
+      },
+      rightPriceScale: { borderColor: "#334155" },
+      timeScale: { borderColor: "#334155", timeVisible: true },
+      crosshair: {
+        vertLine: { color: "#64748b", labelBackgroundColor: "#334155" },
+        horzLine: { color: "#64748b", labelBackgroundColor: "#334155" },
+      },
+    });
+    const candleSeries = chart.addSeries(CandlestickSeries, CANDLE_SERIES_OPTIONS);
+    const initialData = [...bootstrapDataRef.current];
+
+    chartRef.current = chart;
+    candleSeriesRef.current = candleSeries;
+    previousDataRef.current = initialData;
+    candleSeries.setData(initialData);
+
+    const resizeObserver =
+      typeof ResizeObserver === "undefined"
+        ? undefined
+        : new ResizeObserver((entries) => {
+            const entry = entries[0];
+            if (entry === undefined) return;
+            chart.resize(Math.max(1, Math.round(entry.contentRect.width)), heightRef.current);
+          });
+    resizeObserver?.observe(container);
+
+    return () => {
+      resizeObserver?.disconnect();
+      markersPluginRef.current?.detach();
+      markersPluginRef.current = null;
+      overlaySeriesRef.current.clear();
+      previousDataRef.current = [];
+      candleSeriesRef.current = null;
+      chartRef.current = null;
+      chart.remove();
+    };
+  }, [hasCandles]);
+
+  useEffect(() => {
+    const candleSeries = candleSeriesRef.current;
+    if (candleSeries === null) return;
+
+    const previousData = previousDataRef.current;
+    if (sameData(previousData, chartData)) return;
+
+    const tail = chartData.at(-1);
+    if (tail !== undefined && supportsTailUpdate(previousData, chartData)) {
+      candleSeries.update(tail);
+    } else {
+      candleSeries.setData([...chartData]);
+    }
+    previousDataRef.current = chartData;
+  }, [chartData]);
+
+  useEffect(() => {
+    const chart = chartRef.current;
+    if (chart === null) return;
+
+    const activeIds = new Set(overlays.map((overlay) => overlay.id));
+    for (const [id, overlaySeries] of overlaySeriesRef.current) {
+      if (activeIds.has(id)) continue;
+      chart.removeSeries(overlaySeries);
+      overlaySeriesRef.current.delete(id);
+    }
+
+    const visibleTimes = new Set(boundedCandles.map((candle) => candle.openTime));
+    for (const overlay of overlays) {
+      let overlaySeries = overlaySeriesRef.current.get(overlay.id);
+      const options = {
+        color: overlay.color ?? "#4f7cff",
+        lineStyle: overlay.dashed ? LineStyle.Dashed : LineStyle.Solid,
+      };
+      if (overlaySeries === undefined) {
+        overlaySeries = chart.addSeries(LineSeries, options);
+        overlaySeriesRef.current.set(overlay.id, overlaySeries);
+      } else {
+        overlaySeries.applyOptions(options);
+      }
+      const points: LineData<Time>[] = overlay.points
+        .filter((point) => visibleTimes.has(point.openTime))
+        .sort((left, right) => left.openTime.localeCompare(right.openTime))
+        .map((point) => ({
+          time: toUtcTimestamp(point.openTime),
+          value: point.value,
+        }));
+      overlaySeries.setData(points);
+    }
+  }, [boundedCandles, overlays]);
+
+  useEffect(() => {
+    const candleSeries = candleSeriesRef.current;
+    if (candleSeries === null) return;
+
+    const visibleTimes = new Set(boundedCandles.map((candle) => candle.openTime));
+    const visibleMarkers: SeriesMarker<Time>[] = markers
+      .filter((marker) => visibleTimes.has(marker.openTime))
+      .sort((left, right) => left.openTime.localeCompare(right.openTime))
+      .map((marker) => ({
+        id: marker.id,
+        time: toUtcTimestamp(marker.openTime),
+        position: "atPriceMiddle",
+        price: marker.value,
+        shape: "circle",
+        color: marker.color ?? "#e6b94a",
+        text: marker.label,
+      }));
+
+    if (markersPluginRef.current === null) {
+      if (visibleMarkers.length === 0) return;
+      markersPluginRef.current = createSeriesMarkers(candleSeries, visibleMarkers);
+      return;
+    }
+    markersPluginRef.current.setMarkers(visibleMarkers);
+  }, [boundedCandles, markers]);
+
+  useEffect(() => {
+    if (renderedEventId !== undefined) onEventRendered?.(renderedEventId);
+  }, [onEventRendered, renderedEventId]);
+
+  if (latest === undefined) {
+    return (
+      <div className={className} role="note">
+        No Candles are available for this range.
+      </div>
+    );
+  }
 
   return (
-    <div ref={wrapper} className="w-full overflow-hidden rounded-[6px] border border-subtle bg-workspace">
-      <svg
-        data-testid={testId}
+    <figure className={`${className ?? ""} min-w-0 overflow-hidden`}>
+      <div
+        ref={containerRef}
+        data-testid="candlestick-series"
+        data-series-length={boundedCandles.length}
         role="img"
-        aria-label="Simulated historical Candles with strategy overlays and trade markers"
-        width="100%"
-        height={height}
-        viewBox={`0 0 ${plotWidth + PAD_RIGHT} ${height}`}
-        preserveAspectRatio="none"
+        aria-label={`${latest.pair} ${latest.timeframe} Candlestick chart`}
+        style={{ height, width: "100%" }}
+      />
+      <figcaption
+        aria-label="Latest Candle summary"
+        className="truncate px-1 pt-1 font-mono text-[10px] leading-4 text-faint"
       >
-        {highlightStart !== null && highlightEnd !== null && (
-          <rect
-            data-testid="chart-highlight"
-            x={Math.min(highlightStart, highlightEnd) - scale.candleWidth}
-            y={0}
-            width={Math.abs(highlightEnd - highlightStart) + scale.candleWidth * 2}
-            height={scale.plotHeight}
-            fill="currentColor"
-            opacity={0.08}
-          />
-        )}
-        {candles.map((candle) => {
-          const x = scale.x(candle.openTime) ?? 0
-          const openY = scale.y(candle.open)
-          const closeY = scale.y(candle.close)
-          const rising = Number(candle.close) >= Number(candle.open)
-          const top = Math.min(openY, closeY)
-          const body = Math.max(1, Math.abs(closeY - openY))
-          return (
-            <g key={candle.openTime} data-testid={`candle-${candle.openTime}`}>
-              <line
-                x1={x}
-                x2={x}
-                y1={scale.y(candle.high)}
-                y2={scale.y(candle.low)}
-                stroke={rising ? '#26A69A' : '#EF5350'}
-                strokeWidth={1}
-              />
-              <rect
-                x={x - scale.candleWidth / 2}
-                y={top}
-                width={scale.candleWidth}
-                height={body}
-                fill={rising ? '#26A69A' : '#EF5350'}
-              />
-            </g>
-          )
-        })}
-        {overlays?.(scale)}
-        {markers?.(scale)}
-      </svg>
-    </div>
-  )
+        {latest.pair} {latest.timeframe} at {latest.openTime} · O {latest.open} H {latest.high} L{" "}
+        {latest.low} C {latest.close} V {latest.volume}
+      </figcaption>
+    </figure>
+  );
+}
+
+function toUtcTimestamp(value: string): UTCTimestamp {
+  return Math.floor(Date.parse(value) / 1_000) as UTCTimestamp;
+}
+
+function toCandlestickData(candle: Candle): CandlestickData<Time> {
+  return {
+    time: toUtcTimestamp(candle.openTime),
+    open: Number(candle.open),
+    high: Number(candle.high),
+    low: Number(candle.low),
+    close: Number(candle.close),
+  };
+}
+
+function samePoint(left: CandlestickData<Time>, right: CandlestickData<Time>) {
+  return (
+    left.time === right.time &&
+    left.open === right.open &&
+    left.high === right.high &&
+    left.low === right.low &&
+    left.close === right.close
+  );
+}
+
+function sameData(
+  left: readonly CandlestickData<Time>[],
+  right: readonly CandlestickData<Time>[],
+) {
+  return left.length === right.length && left.every((point, index) => samePoint(point, right[index]));
+}
+
+function supportsTailUpdate(
+  previous: readonly CandlestickData<Time>[],
+  next: readonly CandlestickData<Time>[],
+) {
+  if (previous.length === 0 || next.length === 0) return false;
+
+  if (next.length === previous.length + 1) {
+    return previous.every((point, index) => samePoint(point, next[index]));
+  }
+
+  if (next.length !== previous.length) return false;
+  if (previous.at(-1)?.time !== next.at(-1)?.time) return false;
+  return previous
+    .slice(0, -1)
+    .every((point, index) => samePoint(point, next[index]));
 }

@@ -1,23 +1,21 @@
 /**
  * TV5 browser acceptance flow.
  *
- * Prerequisites (see specs/005-leaderboard-visualization/quickstart.md):
+ * The dev server is started by playwright.config.ts. The API must be running
+ * and seeded first (see specs/005-leaderboard-visualization/quickstart.md):
  *   docker compose up -d postgres
- *   alembic -c backend/alembic.ini upgrade head
+ *   docker compose run --rm migrate
  *   python backend/scripts/seed_leaderboard_demo.py
- *   uvicorn crypto_lab.main:app --port 8000     # backend
- *   npm --prefix frontend run dev               # http://localhost:5173
+ *   docker compose up -d api
  *
  * Run with:
- *   npx playwright test tests/e2e/leaderboard-visualization.spec.ts
+ *   npm run test:e2e:leaderboard
  */
 
 import { expect, test } from '@playwright/test'
 
-const APP_URL = process.env.E2E_BASE_URL ?? 'http://localhost:5173'
-
 test.beforeEach(async ({ page }) => {
-  await page.goto(`${APP_URL}/leaderboard`)
+  await page.goto('/leaderboard')
   await expect(page.getByTestId('table-leaderboard')).toBeVisible()
 })
 
