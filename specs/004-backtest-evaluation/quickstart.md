@@ -58,3 +58,13 @@ pytest tests/performance/test_backtest_evaluation.py -m performance
 ## Expected Evidence
 
 Record test counts, checksums, policy versions, measured benchmark runtime/p95 reads, reference hardware, and any architecture/ADR approval status before implementation sign-off.
+
+## Implementation Evidence (2026-08-24)
+
+- Feature 004 focused suites: 21 passed, including 100-run checksum determinism, TV1/TV3/TV5 contracts, execution/accounting, metrics, scoring, comparison, architecture, contract sync, and performance.
+- Full repository suite excluding the unavailable migration round-trip: 234 passed and 8 skipped. PostgreSQL at `localhost:55432` was not running, and the Docker Desktop daemon was unavailable in the validation environment.
+- Ruff: all `src` and `tests` checks passed.
+- mypy: 118 source files passed with no issues.
+- 10,000-Candle benchmark: 1.01 seconds test call on the current Windows development machine, below the 5-second gate.
+- Bootstrapped policies: execution `next-open-long-only/1.0.0`, evaluation `standard-metrics/1.0.0`, and scoring `balanced/1.0.0` (`balanced-v1` semantics).
+- ADR-006 remains Proposed; the policy is versioned and historical evaluations are not reinterpreted.

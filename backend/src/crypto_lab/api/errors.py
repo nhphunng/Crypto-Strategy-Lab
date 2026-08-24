@@ -10,6 +10,7 @@ from fastapi.responses import JSONResponse
 from crypto_lab.api.common import ErrorDetail, ErrorEnvelope
 from crypto_lab.api.middleware import request_id
 from crypto_lab.application.market_data.errors import ErrorDescriptor, MarketDataError
+from crypto_lab.domain.backtest.errors import BacktestError, BacktestErrorCode
 from crypto_lab.domain.market_data.candle import format_utc_millis
 from crypto_lab.domain.strategy.errors import ErrorCategory, StrategyError
 
@@ -54,8 +55,43 @@ _STRATEGY_STATUS = {
     ErrorCategory.ACTIVATION_NOT_ALLOWED: 409,
 }
 
+_BACKTEST_STATUS = {
+    BacktestErrorCode.CONFIGURATION_INVALID: 422,
+    BacktestErrorCode.DATASET_INELIGIBLE: 422,
+    BacktestErrorCode.DATASET_INTEGRITY_FAILED: 409,
+    BacktestErrorCode.STRATEGY_INCOMPATIBLE: 409,
+    BacktestErrorCode.SIGNAL_MISALIGNED: 422,
+    BacktestErrorCode.INSUFFICIENT_CAPITAL: 422,
+    BacktestErrorCode.JOB_CONFLICT: 409,
+    BacktestErrorCode.EXECUTION_FAILED: 500,
+}
+
 
 def install_error_handlers(app: FastAPI) -> None:
+    @app.exception_handler(BacktestError)
+    async def backtest_error(request: Request, error: BacktestError) -> JSONResponse:
+        envelope = ErrorEnvelope(
+            message=error.message,
+            error=ErrorDetail(
+                code=error.code.value,
+                retryable=False,
+                details={
+                    "issues": [
+                        {"field": item.field, "code": item.code, "message": item.message}
+                        for item in error.issues
+                    ]
+                }
+                if error.issues
+                else None,
+            ),
+            timestamp=format_utc_millis(datetime.now(UTC)),
+            request_id=request_id(request),
+        )
+        return JSONResponse(
+            status_code=_BACKTEST_STATUS[error.code],
+            content=envelope.model_dump(by_alias=True),
+        )
+
     @app.exception_handler(StrategyError)
     async def strategy_error(request: Request, error: StrategyError) -> JSONResponse:
         envelope = ErrorEnvelope(

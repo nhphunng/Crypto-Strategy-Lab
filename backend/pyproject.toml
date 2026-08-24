@@ -39,6 +39,7 @@ asyncio_mode = "auto"
 pythonpath = ["src", "."]
 testpaths = ["tests"]
 markers = [
+  "feature004: deterministic backtest and evaluation coverage",
   "contract: cross-boundary contract tests",
   "integration: requires PostgreSQL",
   "performance: opt-in performance gate",
