@@ -9,12 +9,14 @@ Repo hiện có backend và frontend chạy được độc lập hoặc cùng n
 | Phần | Thư mục | Trạng thái |
 |---|---|---|
 | Market Data backend | `backend/` | Đã có API lịch sử, WebSocket realtime version 1, subscription sharing, recovery/backfill, PostgreSQL, migration và test |
-| Database features 003–005 | `backend/migrations/` | Đã có schema cho Strategy, Backtest/Evaluation và Leaderboard; application/API tương ứng chưa hoàn chỉnh |
-| Web frontend | `frontend/` | Dashboard `/market` dùng REST/WebSocket thật, TanStack Query và TradingView Lightweight Charts; hỗ trợ 1–4 chart độc lập |
+| Database features 003–004 | `backend/migrations/` | Đã có schema cho Strategy và Backtest/Evaluation; application/API tương ứng chưa hoàn chỉnh |
+| Leaderboard & Visualization backend | `backend/src/crypto_lab/{domain,application}/leaderboard/` | Đã có Top-K projection, REST snapshot/detail/visualization/trades, WebSocket `LEADERBOARD_UPDATED` |
+| Leaderboard & Visualization frontend | `frontend/src/features/leaderboard/` | Đã kết nối API thật: bảng Top-K, live update, chart Buy/Sell + Entry/Exit, trade drill-down |
+| Web frontend | `frontend/` | Dashboard `/market` dùng REST/WebSocket thật, TanStack Query và TradingView Lightweight Charts, hỗ trợ 1–4 chart độc lập; `/leaderboard` dùng REST/WebSocket của feature 005; các màn hình còn lại vẫn dùng adapter mô phỏng |
 
 `frontend/` là vị trí frontend chính thức. Market dashboard đã nối với backend Feature 001/002; các màn hình strategy, backtest và leaderboard vẫn thuộc các feature sau.
 
-Backend đang đăng ký các route Market Data trong runtime. Các file Backtest/Evaluation/Leaderboard đã có package hoặc persistence foundation nhưng chưa đồng nghĩa với API nghiệp vụ chạy hoàn chỉnh.
+Backend đang đăng ký các route Market Data và Leaderboard trong runtime. Feature Backtest/Evaluation (003–004) mới có persistence foundation; Leaderboard đọc trực tiếp các bản ghi bất biến của chúng và không tự tính lại metric hay score.
 
 ## Tiến độ theo implementation plan
 
@@ -26,9 +28,9 @@ Trạng thái được tính từ checkbox trong `specs/*/tasks.md` ngày 2026-0
 | `002-realtime-multi-chart` | 58/58 | Hoàn thành code, test, docs, reverse proxy REST/WebSocket, multi-session fan-out, convergence và final analysis gate |
 | `003-strategy-foundation` | 2/55 | Đã có Strategy Definition migration và persistence mapping |
 | `004-backtest-evaluation` | 4/64 | Đã có package foundation, database mappings và migration |
-| `005-leaderboard-visualization` | 3/52 | Đã có package foundation, database mappings và migration |
+| `005-leaderboard-visualization` | 52/52 | Hoàn thành Top-K projection, live update, visualization, test, k6 và E2E |
 
-Tổng theo năm feature chính: **121/283 task, khoảng 43%**. Tỷ lệ này chỉ thể hiện số checkbox, không phải phần trăm effort vì độ lớn mỗi task khác nhau.
+Tổng theo năm feature chính: **170/283 task, khoảng 60%**. Tỷ lệ này chỉ thể hiện số checkbox, không phải phần trăm effort vì độ lớn mỗi task khác nhau.
 
 Frontend prototype có plan lưu tham khảo tại `docs/archive/frontend-prototype/001-frontend-prototype-system/` và đã hoàn thành **43/43 task**. Feature 002 không còn dựa vào mock adapter của prototype cho Market dashboard.
 
@@ -111,6 +113,50 @@ docker compose down
 ```
 
 `docker compose down` giữ lại dữ liệu PostgreSQL. Lệnh `docker compose down -v` xóa cả volume và toàn bộ dữ liệu local; chỉ dùng khi muốn tạo database mới hoàn toàn.
+
+## Leaderboard và trực quan hóa giao dịch (feature 005)
+
+Leaderboard xếp hạng Top-K từ các `EvaluationResult` bất biến theo `ScoringPolicy` có version, rồi giải thích từng kết quả bằng Candle, Signal và Trade đã ghi nhận. Toàn bộ dữ liệu là mô phỏng lịch sử, không phải lời khuyên đầu tư.
+
+### Luồng API và sự kiện
+
+```text
+EvaluationResult (bất biến)
+  -> UpdateLeaderboard  : khóa projection, xếp hạng lại, tăng projectionVersion khi có thay đổi
+  -> leaderboard_update_records (outbox bền vững)
+  -> dispatcher         -> WS /ws/v1/leaderboards : LEADERBOARD_UPDATED v1
+  -> REST snapshot      : GET /api/v1/leaderboards  (nguồn dữ liệu có thẩm quyền)
+```
+
+Frontend gọi API trên cùng origin và dựa vào Vite dev proxy (hoặc nginx trong Compose) để chuyển tiếp `/api` và `/ws`, giống feature 002. Chỉ đặt `VITE_API_BASE_URL` khi gọi API ở origin khác.
+
+| Endpoint | Mục đích |
+|---|---|
+| `GET /api/v1/leaderboards` | Snapshot Top-K hiện tại kèm metric, direction/unit, provenance và phân trang |
+| `GET /api/v1/leaderboards/{leaderboardId}/entries/{evaluationResultId}` | Provenance đầy đủ và trạng thái sẵn sàng của dữ liệu trực quan |
+| `.../visualization?startTime=&endTime=` | Candle, overlay chung, marker BUY/SELL/HOLD/ENTRY/EXIT trong khoảng đã giới hạn |
+| `.../trades?page=&pageSize=&sortBy=&sortDirection=` | Danh sách Trade mô phỏng có phân trang và sắp xếp |
+| `WS /ws/v1/leaderboards` | Đăng ký theo đúng định danh xếp hạng và nhận `LEADERBOARD_UPDATED` |
+
+Định danh projection gồm phạm vi so sánh (pair, timeframe, runId), `scoringPolicyId`/version, `rankBy` và `k`. Đổi `k` hoặc `rankBy` là một projection khác.
+
+### Chạy demo
+
+```powershell
+docker compose up -d postgres
+docker compose run --rm migrate
+python backend/scripts/seed_leaderboard_demo.py
+docker compose up -d api
+cd frontend; npm run dev
+```
+
+Mở [http://localhost:5173/leaderboard](http://localhost:5173/leaderboard). Để xem cập nhật realtime, giữ trang mở và chạy:
+
+```powershell
+python backend/scripts/seed_leaderboard_demo.py --complete
+```
+
+Bảng xếp hạng sẽ tăng `projectionVersion` và cập nhật dòng mới mà không cần refresh. Bấm vào một dòng để mở chart, marker và bảng Trade kèm provenance.
 
 ## Thử API dữ liệu lịch sử
 

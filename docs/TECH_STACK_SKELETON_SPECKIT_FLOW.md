@@ -102,6 +102,22 @@ Grafana và OpenTelemetry là bước tiếp theo, không phải điều kiện 
 
 ## 4. Project skeleton
 
+### Trạng thái implementation Feature 005 (Leaderboard & Visualization)
+
+Feature 005 đã được implement trên baseline này và giữ nguyên ranh giới lớp:
+
+| Lớp | Thành phần | Ghi chú |
+|---|---|---|
+| Domain | `domain/leaderboard/{policy,entry,ranking}.py` | Định danh projection, eligibility, comparator tất định; không import framework |
+| Application | `application/leaderboard/{ports,update_leaderboard,query_leaderboard,get_ranked_result,publish_leaderboard_updates}.py` | Orchestration, outbox dispatcher, boundary `LeaderboardIngestion` cho Feature 004 |
+| Infrastructure | `persistence/repositories/leaderboard_repository.py`, `observability/leaderboard.py` | Transaction + row lock, đọc provenance bất biến, metric/log đã lọc |
+| API | `api/routes/leaderboards.py`, `api/schemas/leaderboards.py`, `api/websocket/leaderboard_channel.py` | REST `/api/v1/leaderboards/**`, WS `/ws/v1/leaderboards` |
+| Frontend | `features/leaderboard/**`, `features/market-chart/components/CandlestickChart.tsx` | Chart chỉ nhận overlay/marker qua contract chung, không import logic leaderboard |
+
+Điểm nối với Feature 004: khi một `EvaluationResult` được ghi bền vững, gọi
+`container.leaderboard.ingestion.on_evaluation_completed(evaluation_result_id)`.
+Gọi lặp lại là no-op vì projection được tính lại từ chính dữ liệu bất biến đó.
+
 ### Baseline đã review cho Feature 001–005
 
 Skeleton dưới đây là baseline được dùng để setup repository ở giai đoạn hiện
