@@ -54,8 +54,8 @@
 - [X] T022 [P] [US1] Write failing unit tests for configuration validation, next-open timing, last-Candle exclusion, canonical fingerprints, and 100-run determinism in `backend/tests/unit/backtest/test_engine.py`
 - [X] T023 [P] [US1] Write failing TV1 Dataset contract tests for COMPLETE status, version/checksum/membership verification, no provider access, and fail-closed integrity in `backend/tests/contract/test_backtest_market_data_contract.py`
 - [X] T024 [P] [US1] Write failing TV3 contract tests for exact definition/version, ordered Signals, warm-up, alignment, compatibility errors, and no MA/RSI branches in `backend/tests/contract/test_backtest_strategy_contract.py`
-- [ ] T025 [P] [US1] Write failing REST contract tests for create/start/get envelopes, lifecycle, validation codes, and analysis-only fields in `backend/tests/contract/test_backtest_api.py`
-- [ ] T026 [P] [US1] Write failing PostgreSQL integration tests for atomic result persistence, duplicate `jobId` idempotency/conflict, terminal states, and migration round-trip in `backend/tests/integration/test_backtest_persistence.py`
+- [X] T025 [P] [US1] Write failing REST contract tests for create/start/get envelopes, lifecycle, validation codes, and analysis-only fields in `backend/tests/contract/test_backtest_api.py`
+- [X] T026 [P] [US1] Write failing PostgreSQL integration tests for atomic result persistence, duplicate `jobId` idempotency/conflict, terminal states, and migration round-trip in `backend/tests/integration/test_backtest_persistence.py`
 
 ### Implementation for User Story 1
 
@@ -78,8 +78,8 @@
 ### Tests for User Story 2
 
 - [X] T032 [P] [US2] Write failing unit tests for quantity rounding, entry/exit costs, redundant Signal no-ops, forced close, P/L, Trade return, and accounting identity in `backend/tests/unit/backtest/test_accounting.py`
-- [ ] T033 [P] [US2] Write failing REST contract tests for bounded Trade/Equity pagination, decimal/UTC encoding, close reasons, and provenance in `backend/tests/contract/test_backtest_detail_api.py`
-- [ ] T034 [P] [US2] Write failing PostgreSQL integration tests for ordered child persistence, exact counts, pagination, and immutable retrieval in `backend/tests/integration/test_backtest_detail_persistence.py`
+- [X] T033 [P] [US2] Write failing REST contract tests for bounded Trade/Equity pagination, decimal/UTC encoding, close reasons, and provenance in `backend/tests/contract/test_backtest_detail_api.py`
+- [X] T034 [P] [US2] Write failing PostgreSQL integration tests for ordered child persistence, exact counts, pagination, and immutable retrieval in `backend/tests/integration/test_backtest_detail_persistence.py`
 
 ### Implementation for User Story 2
 
@@ -102,7 +102,7 @@
 
 - [X] T039 [P] [US3] Write failing table-driven tests for Total Return, Win Rate, Maximum Drawdown, Number of Trades, Profit Factor, Sharpe annualization, precision, and null semantics in `backend/tests/unit/evaluation/test_metrics.py`
 - [X] T040 [P] [US3] Write failing contract tests proving Evaluation consumes Backtest Result only and never concrete Strategy behavior in `backend/tests/contract/test_evaluation_domain_contract.py`
-- [ ] T041 [P] [US3] Write failing persistence/API tests for policy identity, idempotent Evaluation Result creation, immutable historical metrics, and no NaN/infinity in `backend/tests/integration/test_evaluation_persistence.py`
+- [X] T041 [P] [US3] Write failing persistence/API tests for policy identity, idempotent Evaluation Result creation, immutable historical metrics, and no NaN/infinity in `backend/tests/integration/test_evaluation_persistence.py`
 
 ### Implementation for User Story 3
 
@@ -125,7 +125,7 @@
 
 - [X] T046 [P] [US4] Write failing unit tests for fixed-bound normalization, directions, weights, score bounds, null eligibility, and total tie-break order in `backend/tests/unit/evaluation/test_scoring.py`
 - [X] T047 [P] [US4] Write failing TV5 consumer contract tests for required score, eligibility, policy versions, metric nulls, provenance, and idempotency in `backend/tests/contract/test_evaluation_result_contract.py`
-- [ ] T048 [P] [US4] Write failing PostgreSQL tests for immutable policy versions and historical re-evaluation without overwrite in `backend/tests/integration/test_scoring_policy_persistence.py`
+- [X] T048 [P] [US4] Write failing PostgreSQL tests for immutable policy versions and historical re-evaluation without overwrite in `backend/tests/integration/test_scoring_policy_persistence.py`
 
 ### Implementation for User Story 4
 
@@ -146,7 +146,7 @@
 ### Tests for User Story 5
 
 - [X] T052 [P] [US5] Write failing unit tests for complete comparison-dimension detection, strict/contextual modes, and stable metric ordering in `backend/tests/unit/evaluation/test_comparison.py`
-- [ ] T053 [P] [US5] Write failing REST contract tests for bounded ID count, difference payloads, ordering, validation, and immutable values in `backend/tests/contract/test_evaluation_comparison_api.py`
+- [X] T053 [P] [US5] Write failing REST contract tests for bounded ID count, difference payloads, ordering, validation, and immutable values in `backend/tests/contract/test_evaluation_comparison_api.py`
 
 ### Implementation for User Story 5
 
@@ -164,10 +164,10 @@
 - [X] T058 [P] Add architecture fitness tests preventing framework imports and concrete Strategy-name branches in `backend/tests/architecture/test_backtest_evaluation_boundaries.py`
 - [X] T059 [P] Add executable OpenAPI/domain/TV1/TV3/TV5 contract-sync coverage in `backend/tests/contract/test_backtest_evaluation_contract_sync.py`
 - [X] T060 [P] Add the documented 10,000-Candle runtime and bounded-read benchmark in `backend/tests/performance/test_backtest_evaluation.py`
-- [ ] T061 Add transaction-failure, duplicate/concurrent submission, checksum corruption, and safe-error recovery tests in `backend/tests/integration/test_backtest_evaluation_reliability.py`
-- [ ] T062 Execute every quickstart scenario and record checksums, policy versions, counts, p95/runtime, environment, and Proposed-ADR review status in `specs/004-backtest-evaluation/quickstart.md`
+- [X] T061 Add transaction-failure, duplicate/concurrent submission, checksum corruption, and safe-error recovery tests in `backend/tests/integration/test_backtest_evaluation_reliability.py`
+- [X] T062 Execute every quickstart scenario and record checksums, policy versions, counts, p95/runtime, environment, and Proposed-ADR review status in `specs/004-backtest-evaluation/quickstart.md`
 - [X] T063 [P] Add feature test markers and benchmark configuration in `backend/pyproject.toml`
-- [ ] T064 Run Ruff, mypy, complete pytest suites, migration upgrade/downgrade, OpenAPI validation, and secret/dependency checks from `backend/pyproject.toml`
+- [X] T064 Run Ruff, mypy, complete pytest suites, migration upgrade/downgrade, OpenAPI validation, and secret/dependency checks from `backend/pyproject.toml`
 
 ## Phase 9: Single Backtest Frontend Integration
 
@@ -226,3 +226,8 @@ Implement Phases 1–3 to deliver one deterministic direct Backtest Run with imm
 ## Format Validation
 
 All 64 tasks use the required checkbox, sequential ID, optional `[P]`, required story label within user-story phases, actionable description, and concrete file path.
+
+## Phase 10: Convergence
+
+- [X] T071 Standardize Feature 004 not-found and semantic HTTP failures as safe versioned `ErrorEnvelope` responses with stable domain codes in `backend/src/crypto_lab/api/errors.py`, `backend/src/crypto_lab/api/routes/backtests.py`, `backend/src/crypto_lab/api/routes/evaluations.py`, and REST contract tests per FR-020 and Constitution API-02 (partial)
+- [X] T072 Preserve and expose every incompatible context dimension when STRICT Evaluation comparison is rejected in `backend/src/crypto_lab/api/routes/evaluations.py` and `backend/tests/contract/test_evaluation_comparison_api.py` per FR-018 (partial)

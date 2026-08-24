@@ -16,6 +16,11 @@ from crypto_lab.infrastructure.persistence.market_data_repository import (
 )
 from crypto_lab.infrastructure.settings import Settings
 from crypto_lab.main import create_app
+from tests.fixtures.backtest_evaluation.persistence import (
+    BacktestPersistenceContext,
+    persist_backtest,
+    prepare_backtest_context,
+)
 from tests.fixtures.leaderboard import (
     LeaderboardFixture,
     reset_leaderboard_fixture,
@@ -92,3 +97,32 @@ async def leaderboard_client(leaderboard_app: FastAPI) -> AsyncIterator[AsyncCli
     transport = ASGITransport(app=leaderboard_app)
     async with AsyncClient(transport=transport, base_url="http://testserver") as client:
         yield client
+
+
+@pytest.fixture
+async def backtest_database() -> AsyncIterator[Database]:
+    """A clean PostgreSQL database for Feature 004 persistence tests."""
+
+    database = Database.create(TEST_DATABASE_URL)
+    if not await database.ping():
+        await database.dispose()
+        pytest.skip("PostgreSQL integration database is unavailable")
+    async with database.sessions() as session, session.begin():
+        await reset_leaderboard_fixture(session)
+    yield database
+    async with database.sessions() as session, session.begin():
+        await reset_leaderboard_fixture(session)
+    await database.dispose()
+
+
+@pytest.fixture
+async def backtest_context(backtest_database: Database) -> BacktestPersistenceContext:
+    return await prepare_backtest_context(backtest_database)
+
+
+@pytest.fixture
+async def persisted_backtest(
+    backtest_context: BacktestPersistenceContext,
+) -> BacktestPersistenceContext:
+    await persist_backtest(backtest_context)
+    return backtest_context

@@ -241,7 +241,7 @@ components:
         disclaimer: { type: string, minLength: 1 }
     Trade:
       type: object
-      required: [id, sequence, entryTime, exitTime, entryPrice, exitPrice, side, quantity, entryFee, exitFee, profitLoss, returnPercent, closeReason]
+      required: [id, sequence, entrySignalId, exitSignalId, entryTime, exitTime, entryReferencePrice, exitReferencePrice, entryPrice, exitPrice, side, quantity, entryFee, exitFee, profitLoss, returnPercent, closeReason]
       properties:
         id: { type: string, format: uuid }
         sequence: { type: integer, minimum: 0 }
@@ -249,6 +249,8 @@ components:
         exitSignalId: { type: [string, 'null'], format: uuid }
         entryTime: { type: string, format: date-time }
         exitTime: { type: string, format: date-time }
+        entryReferencePrice: { $ref: '#/components/schemas/Decimal' }
+        exitReferencePrice: { $ref: '#/components/schemas/Decimal' }
         entryPrice: { $ref: '#/components/schemas/Decimal' }
         exitPrice: { $ref: '#/components/schemas/Decimal' }
         side: { type: string, const: LONG }
@@ -260,10 +262,11 @@ components:
         closeReason: { type: string, enum: [SELL_SIGNAL, END_OF_RANGE] }
     EquityPoint:
       type: object
-      required: [position, candleOpenTime, closePrice, cash, quantity, positionValue, equity]
+      required: [position, candleOpenTime, valuedAt, closePrice, cash, quantity, positionValue, equity]
       properties:
         position: { type: integer, minimum: 0 }
         candleOpenTime: { type: string, format: date-time }
+        valuedAt: { type: string, format: date-time }
         closePrice: { $ref: '#/components/schemas/Decimal' }
         cash: { $ref: '#/components/schemas/Decimal' }
         quantity: { $ref: '#/components/schemas/Decimal' }
@@ -319,7 +322,7 @@ components:
       type: object
       required: [evaluationResultIds, mode]
       properties:
-        evaluationResultIds: { type: array, minItems: 2, maxItems: 200, uniqueItems: true, items: { type: string, format: uuid } }
+        evaluationResultIds: { type: array, minItems: 2, maxItems: 20, uniqueItems: true, items: { type: string, format: uuid } }
         mode: { type: string, enum: [STRICT, CONTEXTUAL] }
     Comparison:
       type: object
@@ -348,17 +351,23 @@ components:
     BacktestResultEnvelope: { allOf: [{ $ref: '#/components/schemas/ResponseMeta' }, { type: object, required: [data], properties: { data: { $ref: '#/components/schemas/BacktestResult' } } }] }
     EvaluationResultEnvelope: { allOf: [{ $ref: '#/components/schemas/ResponseMeta' }, { type: object, required: [data], properties: { data: { $ref: '#/components/schemas/EvaluationResult' } } }] }
     ComparisonEnvelope: { allOf: [{ $ref: '#/components/schemas/ResponseMeta' }, { type: object, required: [data], properties: { data: { $ref: '#/components/schemas/Comparison' } } }] }
-    TradePage: { type: object, required: [items, pagination], properties: { items: { type: array, items: { $ref: '#/components/schemas/Trade' } }, pagination: { $ref: '#/components/schemas/PageMeta' } } }
+    TradePage: { type: object, required: [items, pagination, nextCursor], properties: { items: { type: array, items: { $ref: '#/components/schemas/Trade' } }, pagination: { $ref: '#/components/schemas/PageMeta' }, nextCursor: { type: [string, 'null'] } } }
     TradePageEnvelope: { allOf: [{ $ref: '#/components/schemas/ResponseMeta' }, { type: object, required: [data], properties: { data: { $ref: '#/components/schemas/TradePage' } } }] }
-    EquityPage: { type: object, required: [items, pagination], properties: { items: { type: array, items: { $ref: '#/components/schemas/EquityPoint' } }, pagination: { $ref: '#/components/schemas/PageMeta' } } }
+    EquityPage: { type: object, required: [items, pagination, nextCursor], properties: { items: { type: array, items: { $ref: '#/components/schemas/EquityPoint' } }, pagination: { $ref: '#/components/schemas/PageMeta' }, nextCursor: { type: [string, 'null'] } } }
     EquityPageEnvelope: { allOf: [{ $ref: '#/components/schemas/ResponseMeta' }, { type: object, required: [data], properties: { data: { $ref: '#/components/schemas/EquityPage' } } }] }
     ErrorEnvelope:
       type: object
-      required: [success, message, data, timestamp, requestId]
+      required: [success, message, error, timestamp, requestId]
       properties:
         success: { type: boolean, const: false }
         message: { type: string }
-        data: { type: object, required: [code], properties: { code: { type: string }, issues: { type: array, items: { type: object } } } }
+        error:
+          type: object
+          required: [code, retryable]
+          properties:
+            code: { type: string }
+            retryable: { type: boolean }
+            details: { type: [object, 'null'], additionalProperties: true }
         timestamp: { type: string, format: date-time }
         requestId: { type: string }
   responses:

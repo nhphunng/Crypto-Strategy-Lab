@@ -51,6 +51,14 @@ class SqlAlchemyBacktestRepository:
                 )
                 .on_conflict_do_nothing(index_elements=["policy_id", "version"])
             )
+            row = await session.scalar(
+                select(ExecutionPolicyRow).where(
+                    ExecutionPolicyRow.policy_id == policy.policy_id,
+                    ExecutionPolicyRow.version == policy.version,
+                )
+            )
+            if row is None or row.fingerprint != policy.fingerprint:
+                raise ValueError("execution policy identity conflicts with immutable rules")
 
     async def get(self, policy_id: UUID, version: str) -> ExecutionPolicy | None:
         async with self._sessions() as session:
@@ -105,19 +113,27 @@ class SqlAlchemyBacktestRepository:
 
     async def save_result(self, result: BacktestResult) -> BacktestResult:
         async with self._sessions() as session, session.begin():
-            existing = await session.scalar(
-                select(BacktestResultRow).where(
-                    (BacktestResultRow.job_id == result.configuration.job_id)
-                    | (BacktestResultRow.input_fingerprint == result.input_fingerprint)
-                )
+            inserted_id = await session.scalar(
+                insert(BacktestResultRow)
+                .values(_result_values(result))
+                .on_conflict_do_nothing()
+                .returning(BacktestResultRow.id)
             )
-            if existing is not None:
+            if inserted_id is None:
+                existing = await session.scalar(
+                    select(BacktestResultRow).where(
+                        (BacktestResultRow.job_id == result.configuration.job_id)
+                        | (BacktestResultRow.input_fingerprint == result.input_fingerprint)
+                        | (BacktestResultRow.result_checksum == result.result_checksum)
+                    )
+                )
+                if existing is None:
+                    raise RuntimeError("conflicting backtest result could not be resolved")
                 if existing.result_checksum != result.result_checksum:
                     raise BacktestError(
                         BacktestErrorCode.JOB_CONFLICT, "job result content conflicts"
                     )
                 return await _load_result(session, existing)
-            await session.execute(insert(BacktestResultRow).values(_result_values(result)))
             config = result.configuration
             for snapshot in result.signals:
                 await session.execute(
@@ -175,6 +191,18 @@ class SqlAlchemyBacktestRepository:
         return tuple(_trade_domain(row) for row in rows[:limit]), str(rows[limit].sequence) if len(
             rows
         ) > limit else None
+
+    async def result_counts(self, result_id: UUID) -> tuple[int, int] | None:
+        async with self._sessions() as session:
+            row = (
+                await session.execute(
+                    select(
+                        BacktestResultRow.trade_count,
+                        BacktestResultRow.equity_point_count,
+                    ).where(BacktestResultRow.id == result_id)
+                )
+            ).one_or_none()
+        return None if row is None else (row.trade_count, row.equity_point_count)
 
     async def list_equity(
         self, result_id: UUID, cursor: str | None, limit: int

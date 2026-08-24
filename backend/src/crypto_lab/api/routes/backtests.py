@@ -12,6 +12,7 @@ from crypto_lab.api.schemas.backtest_evaluation import (
     BacktestRunDto,
     CreateBacktestRunRequest,
     EquityPageDto,
+    PageMetaDto,
     TradePageDto,
     equity_to_dto,
     policy_bundle_to_dto,
@@ -114,7 +115,13 @@ async def start_backtest_run(request: Request, run_id: UUID) -> SuccessEnvelope[
 async def get_backtest_run(request: Request, run_id: UUID) -> SuccessEnvelope[BacktestRunDto]:
     run = await request.app.state.container.backtest_repository.get_run(run_id)
     if run is None:
-        raise HTTPException(404, "Backtest run not found")
+        raise HTTPException(
+            404,
+            {
+                "code": "BACKTEST_RUN_NOT_FOUND",
+                "message": "Backtest run not found.",
+            },
+        )
     return success_envelope(run_to_dto(run), "Backtest run loaded.", request_id(request))
 
 
@@ -124,7 +131,13 @@ async def get_backtest_result(
 ) -> SuccessEnvelope[BacktestResultDto]:
     result = await request.app.state.container.get_backtest.get(result_id)
     if result is None:
-        raise HTTPException(404, "Backtest result not found")
+        raise HTTPException(
+            404,
+            {
+                "code": "BACKTEST_RESULT_NOT_FOUND",
+                "message": "Backtest result not found.",
+            },
+        )
     return success_envelope(result_to_dto(result), "Backtest result loaded.", request_id(request))
 
 
@@ -135,13 +148,24 @@ async def list_backtest_trades(
     page: int = Query(1, ge=1),
     page_size: int = Query(25, alias="pageSize", ge=1, le=200),
 ) -> SuccessEnvelope[TradePageDto]:
-    if await request.app.state.container.get_backtest.get(result_id) is None:
-        raise HTTPException(404, "Backtest result not found")
+    counts = await request.app.state.container.get_backtest.counts(result_id)
+    if counts is None:
+        raise HTTPException(
+            404,
+            {
+                "code": "BACKTEST_RESULT_NOT_FOUND",
+                "message": "Backtest result not found.",
+            },
+        )
     items, next_cursor = await request.app.state.container.get_backtest.trades(
         result_id, str((page - 1) * page_size), page_size
     )
     return success_envelope(
-        TradePageDto(items=tuple(trade_to_dto(item) for item in items), next_cursor=next_cursor),
+        TradePageDto(
+            items=tuple(trade_to_dto(item) for item in items),
+            pagination=PageMetaDto(page=page, page_size=page_size, total=counts[0]),
+            next_cursor=next_cursor,
+        ),
         "Backtest trades loaded.",
         request_id(request),
     )
@@ -156,13 +180,24 @@ async def list_backtest_equity(
     page: int = Query(1, ge=1),
     page_size: int = Query(25, alias="pageSize", ge=1, le=200),
 ) -> SuccessEnvelope[EquityPageDto]:
-    if await request.app.state.container.get_backtest.get(result_id) is None:
-        raise HTTPException(404, "Backtest result not found")
+    counts = await request.app.state.container.get_backtest.counts(result_id)
+    if counts is None:
+        raise HTTPException(
+            404,
+            {
+                "code": "BACKTEST_RESULT_NOT_FOUND",
+                "message": "Backtest result not found.",
+            },
+        )
     items, next_cursor = await request.app.state.container.get_backtest.equity(
         result_id, str((page - 1) * page_size), page_size
     )
     return success_envelope(
-        EquityPageDto(items=tuple(equity_to_dto(item) for item in items), next_cursor=next_cursor),
+        EquityPageDto(
+            items=tuple(equity_to_dto(item) for item in items),
+            pagination=PageMetaDto(page=page, page_size=page_size, total=counts[1]),
+            next_cursor=next_cursor,
+        ),
         "Backtest equity loaded.",
         request_id(request),
     )

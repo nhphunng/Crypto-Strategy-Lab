@@ -49,6 +49,14 @@ class SqlAlchemyEvaluationRepository:
                 )
                 .on_conflict_do_nothing(index_elements=["policy_id", "version"])
             )
+            evaluation_row = await session.scalar(
+                select(EvaluationPolicyRow).where(
+                    EvaluationPolicyRow.policy_id == evaluation.policy_id,
+                    EvaluationPolicyRow.version == evaluation.version,
+                )
+            )
+            if evaluation_row is None or evaluation_row.fingerprint != evaluation.fingerprint:
+                raise ValueError("evaluation policy identity conflicts with immutable rules")
             await session.execute(
                 insert(ScoringPolicyRow)
                 .values(
@@ -63,6 +71,14 @@ class SqlAlchemyEvaluationRepository:
                 )
                 .on_conflict_do_nothing(index_elements=["policy_id", "version"])
             )
+            scoring_row = await session.scalar(
+                select(ScoringPolicyRow).where(
+                    ScoringPolicyRow.policy_id == scoring.policy_id,
+                    ScoringPolicyRow.version == scoring.version,
+                )
+            )
+            if scoring_row is None or scoring_row.fingerprint != scoring.fingerprint:
+                raise ValueError("scoring policy identity conflicts with immutable rules")
 
     async def get_evaluation(self, policy_id: UUID, version: str) -> EvaluationPolicy | None:
         async with self._sessions() as session:

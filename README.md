@@ -27,10 +27,10 @@ Trạng thái được tính từ checkbox trong `specs/*/tasks.md` ngày 2026-0
 | `001-historical-market-data` | 54/54 | Hoàn thành implementation, test, migration và cross-feature contract |
 | `002-realtime-multi-chart` | 58/58 | Hoàn thành code, test, docs, reverse proxy REST/WebSocket, multi-session fan-out, convergence và final analysis gate |
 | `003-strategy-foundation` | 91/95 | Đã có strategy contract, registry, built-in/generated strategy flow, persistence, API và test; còn một số validation gate |
-| `004-backtest-evaluation` | 60/70 | Đã có deterministic engine, accounting, metrics, scoring, comparison, persistence, REST API, Single Backtest frontend integration và PostgreSQL smoke; còn các reliability/API contract task gốc |
+| `004-backtest-evaluation` | 72/72 | Hoàn thành deterministic engine, accounting, metrics, scoring, comparison, persistence, REST/frontend integration, reliability, PostgreSQL và convergence gates |
 | `005-leaderboard-visualization` | 52/52 | Hoàn thành Top-K projection, live update, visualization, test, k6 và E2E |
 
-Tổng theo năm feature chính: **315/329 task, khoảng 96%**. Tỷ lệ này chỉ thể hiện số checkbox, không phải phần trăm effort vì độ lớn mỗi task khác nhau.
+Tổng theo năm feature chính: **327/331 task, khoảng 99%**. Tỷ lệ này chỉ thể hiện số checkbox, không phải phần trăm effort vì độ lớn mỗi task khác nhau.
 
 Frontend prototype có plan lưu tham khảo tại `docs/archive/frontend-prototype/001-frontend-prototype-system/` và đã hoàn thành **43/43 task**. Feature 002 không còn dựa vào mock adapter của prototype cho Market dashboard.
 

@@ -5,7 +5,7 @@ from pathlib import Path
 
 
 def test_domain_has_no_framework_dependencies_or_concrete_strategy_branches() -> None:
-    root = Path("src/crypto_lab/domain")
+    root = Path(__file__).parents[2] / "src" / "crypto_lab" / "domain"
     feature_files = tuple((root / "backtest").glob("*.py")) + tuple(
         (root / "evaluation").glob("*.py")
     )

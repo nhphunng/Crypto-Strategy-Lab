@@ -16,6 +16,9 @@ class GetBacktestResult:
     async def get(self, result_id: UUID) -> BacktestResult | None:
         return await self.repository.get_result(result_id)
 
+    async def counts(self, result_id: UUID) -> tuple[int, int] | None:
+        return await self.repository.result_counts(result_id)
+
     async def trades(
         self, result_id: UUID, cursor: str | None = None, limit: int = 25
     ) -> tuple[tuple[Trade, ...], str | None]:

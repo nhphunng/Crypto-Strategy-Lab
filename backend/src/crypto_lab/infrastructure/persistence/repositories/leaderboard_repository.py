@@ -579,9 +579,9 @@ class SqlAlchemyLeaderboardRepository:
             return UUID(str(source.evaluation_result_id))
         for group in (change.added, change.moved, change.removed):
             if group:
-                return group[0]
+                return UUID(str(group[0]))
         if entries:  # pragma: no cover - defensive
-            return entries[0].evaluation_result_id
+            return UUID(str(entries[0].evaluation_result_id))
         return None
 
 

@@ -134,13 +134,21 @@ class EquityPointDto(ApiModel):
     equity: str
 
 
+class PageMetaDto(ApiModel):
+    page: int
+    page_size: int = Field(alias="pageSize")
+    total: int
+
+
 class TradePageDto(ApiModel):
     items: tuple[TradeDto, ...]
+    pagination: PageMetaDto
     next_cursor: str | None = Field(alias="nextCursor")
 
 
 class EquityPageDto(ApiModel):
     items: tuple[EquityPointDto, ...]
+    pagination: PageMetaDto
     next_cursor: str | None = Field(alias="nextCursor")
 
 

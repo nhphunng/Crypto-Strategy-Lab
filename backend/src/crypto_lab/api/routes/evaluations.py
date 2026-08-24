@@ -14,7 +14,10 @@ from crypto_lab.api.schemas.backtest_evaluation import (
     comparison_to_dto,
     evaluation_to_dto,
 )
-from crypto_lab.domain.evaluation.comparison import ComparisonMode
+from crypto_lab.domain.evaluation.comparison import (
+    ComparisonMode,
+    IncompatibleComparisonError,
+)
 
 router = APIRouter(prefix="/api/v1", tags=["evaluations"])
 
@@ -36,7 +39,17 @@ async def evaluate_backtest_result(
             body.scoring_policy_version,
         )
     except ValueError as exc:
-        raise HTTPException(422, str(exc)) from exc
+        message = str(exc)
+        missing_result = message == "backtest result is unavailable"
+        raise HTTPException(
+            404 if missing_result else 422,
+            {
+                "code": "EVALUATION_BACKTEST_RESULT_NOT_FOUND"
+                if missing_result
+                else "EVALUATION_POLICY_UNAVAILABLE",
+                "message": message,
+            },
+        ) from exc
     return success_envelope(evaluation_to_dto(value), "Evaluation completed.", request_id(request))
 
 
@@ -49,7 +62,13 @@ async def get_evaluation_result(
 ) -> SuccessEnvelope[EvaluationResultDto]:
     value = await request.app.state.container.evaluation_repository.get(evaluation_result_id)
     if value is None:
-        raise HTTPException(404, "Evaluation result not found")
+        raise HTTPException(
+            404,
+            {
+                "code": "EVALUATION_RESULT_NOT_FOUND",
+                "message": "Evaluation result not found.",
+            },
+        )
     return success_envelope(evaluation_to_dto(value), "Evaluation loaded.", request_id(request))
 
 
@@ -61,8 +80,28 @@ async def compare_evaluation_results(
         value = await request.app.state.container.compare_evaluations.execute(
             body.evaluation_result_ids, ComparisonMode(body.mode)
         )
+    except IncompatibleComparisonError as exc:
+        raise HTTPException(
+            422,
+            {
+                "code": "EVALUATION_CONTEXT_INCOMPATIBLE",
+                "message": str(exc),
+                "details": {
+                    "differences": [
+                        {"dimension": item.dimension, "values": list(item.values)}
+                        for item in exc.differences
+                    ]
+                },
+            },
+        ) from exc
     except ValueError as exc:
-        raise HTTPException(422, str(exc)) from exc
+        raise HTTPException(
+            422,
+            {
+                "code": "EVALUATION_COMPARISON_INVALID",
+                "message": str(exc),
+            },
+        ) from exc
     return success_envelope(
         comparison_to_dto(value), "Evaluation comparison completed.", request_id(request)
     )

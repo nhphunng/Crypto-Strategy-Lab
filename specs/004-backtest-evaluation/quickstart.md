@@ -61,11 +61,11 @@ Record test counts, checksums, policy versions, measured benchmark runtime/p95 r
 
 ## Implementation Evidence (2026-08-24)
 
-- Feature 004 focused suites: 21 passed, including 100-run checksum determinism, TV1/TV3/TV5 contracts, execution/accounting, metrics, scoring, comparison, architecture, contract sync, and performance.
-- Full repository suite excluding the unavailable migration round-trip: 234 passed and 8 skipped. PostgreSQL at `localhost:55432` was not running, and the Docker Desktop daemon was unavailable in the validation environment.
-- Ruff: all `src` and `tests` checks passed.
-- mypy: 118 source files passed with no issues.
-- 10,000-Candle benchmark: 1.01 seconds test call on the current Windows development machine, below the 5-second gate.
+- Scenarios A-D are executable across the Feature 004 unit, REST contract, PostgreSQL integration, architecture, and performance suites. The final complete backend run passed `396` tests with one unrelated generated-strategy sandbox test skipped because its optional prebuilt Docker image was unavailable.
+- Canonical two-Trade fixture evidence: input fingerprint `47858cbc826d7bd27ca3cb1fba8fba491a9b8348917d4cc8ed6b632dff8d8f03`, result checksum `69af199087fd5bcbc913d2a1f7d556cf1665dcd32251c83e5b9905851671f2a5`, Evaluation fingerprint `06994387766851ef98c9d50ee03d816f6c388c66f4fd6d1e68073295a54bd4a4`, `5` Signals, `2` Trades, `5` Equity Points, score `92.300000000000000000`, eligible `true`.
+- PostgreSQL tests at `localhost:55432` prove atomic child persistence/rollback, concurrent duplicate submission, immutable policy versions, idempotent evaluation, exact pagination/counts, checksum-conflict detection, terminal safe failure, and both Feature 004 and full migration upgrade/downgrade round-trips.
+- Ruff passed over all `src` and `tests` with cache disabled; mypy passed all `133` source files; checked-in/generated OpenAPI validation passed; `pip check` reported no broken requirements; the tracked-source secret scan found no populated credential assignment and no populated `.env` file is committed (`.env.example` only).
+- 10,000-Candle benchmark: `1.20s`; bounded PostgreSQL Result/Trade/Equity read p95: `12.249ms`, below the `300ms` interactive gate. Reference environment: Python `3.12.7`, Windows NT `10.0.26200` AMD64, Intel64 Family 6 Model 154, local PostgreSQL.
 - Bootstrapped policies: execution `next-open-long-only/1.0.0`, evaluation `standard-metrics/1.0.0`, and scoring `balanced/1.0.0` (`balanced-v1` semantics).
 - ADR-006 remains Proposed; the policy is versioned and historical evaluations are not reinterpreted.
 
