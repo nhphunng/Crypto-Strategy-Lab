@@ -36,13 +36,13 @@ async def dimensions(request: Request) -> SuccessEnvelope[MarketDimensionsDto]:
     settings = container.settings
     capabilities = settings.capabilities
     data = MarketDimensionsDto(
-        schemaVersion="1",
+        schema_version="1",
         providers=capabilities.providers,
         pairs=capabilities.pairs,
         timeframes=capabilities.timeframes,
-        defaultRangeLimit=settings.default_range_candles,
-        maxRangeLimit=settings.max_range_candles,
-        maxDatasetCandles=settings.max_dataset_candles,
+        default_range_limit=settings.default_range_candles,
+        max_range_limit=settings.max_range_candles,
+        max_dataset_candles=settings.max_dataset_candles,
     )
     return success_envelope(data, "Market dimensions loaded.", request_id(request))
 

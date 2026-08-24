@@ -1,5 +1,8 @@
 # Data Model: Realtime Multi-Chart Dashboard
 
+**Status**: Accepted
+**Cross-review**: TV1/TV2 completed on 2026-08-19 for the shared Candle/history version 1 boundary.
+
 ## Ownership
 
 - TV1 owns durable `Candle` and `CandleDataset` storage and the historical query contract.
@@ -120,4 +123,4 @@ any state ── slot removed/reconfigured ──→ RELEASED
 - JSON fields use camelCase; backend/domain fields use snake_case with explicit mappers.
 - Decimal values remain strings at REST/WebSocket boundaries.
 - All public messages declare version `1`; unknown major versions are rejected with an actionable error.
-- TV1 and TV2 must approve Candle fields, timestamp precision, range inclusivity, missing-range semantics, and error codes together.
+- TV1 and TV2 approved the documented Candle fields, timestamp precision, `[startTime, endTime)` inclusivity, missing-range semantics, limits, versions, and error categories on 2026-08-19. Semantic changes require a new coordinated review.

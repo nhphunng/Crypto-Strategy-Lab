@@ -249,8 +249,8 @@ async def test_invalid_query_returns_the_standard_validation_error(
 
     assert response.status_code == 422
     assert body["success"] is False
-    assert body["data"]["code"] == "LEADERBOARD_QUERY_INVALID"
     assert body["error"]["code"] == "LEADERBOARD_QUERY_INVALID"
+    assert body["error"]["retryable"] is False
     assert body["requestId"]
 
 

@@ -1,12 +1,6 @@
 from datetime import UTC, datetime, timedelta
 
 import pytest
-from tests.fixtures.market_data import (
-    FakeProvider,
-    FixedClock,
-    InMemoryMarketDataRepository,
-    make_candle,
-)
 
 from crypto_lab.application.market_data.dataset_service import DatasetService
 from crypto_lab.application.market_data.historical_service import HistoricalMarketDataService
@@ -14,6 +8,12 @@ from crypto_lab.domain.market_data.candle import MarketSelection
 from crypto_lab.domain.market_data.dataset import DatasetStatus
 from crypto_lab.domain.market_data.ranges import TimeRange
 from crypto_lab.domain.market_data.timeframe import Timeframe
+from tests.fixtures.market_data import (
+    FakeProvider,
+    FixedClock,
+    InMemoryMarketDataRepository,
+    make_candle,
+)
 
 NOW = datetime(2026, 8, 13, 12, tzinfo=UTC)
 SELECTION = MarketSelection("BINANCE", "BTCUSDT", Timeframe.FIVE_MINUTES)

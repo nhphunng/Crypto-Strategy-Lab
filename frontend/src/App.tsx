@@ -3,7 +3,7 @@ import { AppProviders } from './app/providers/AppProviders'
 import { AppShell } from './components/Shell'
 import { Toasts } from './components/ui'
 import { Landing } from './screens/Landing'
-import { Market } from './screens/Market'
+import { ConnectedMarketRoute } from './app/routes/market'
 import { Strategies } from './screens/Strategies'
 import { Backtests } from './screens/Backtests'
 import { LeaderboardRoute } from './app/routes/leaderboard'
@@ -19,7 +19,7 @@ function Router() {
 
   return (
     <AppShell>
-      {page === 'market' && <Market />}
+      {page === 'market' && <ConnectedMarketRoute />}
       {page === 'strategies' && <Strategies />}
       {page === 'backtests' && <Backtests />}
       {page === 'leaderboard' && <LeaderboardRoute />}
