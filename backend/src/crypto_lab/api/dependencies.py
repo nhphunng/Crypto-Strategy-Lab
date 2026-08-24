@@ -9,6 +9,10 @@ from uuid import NAMESPACE_URL, UUID, uuid5
 
 import httpx
 
+from crypto_lab.api.leaderboard_dependencies import (
+    LeaderboardContainer,
+    build_leaderboard_container,
+)
 from crypto_lab.application.backtests.create_run import CreateBacktestRun
 from crypto_lab.application.backtests.execute_run import ExecuteBacktestRun
 from crypto_lab.application.backtests.get_result import GetBacktestResult
@@ -254,6 +258,8 @@ class Container:
                 )
             )
 
+    leaderboard: LeaderboardContainer | None = None
+
     async def close(self) -> None:
         if self.realtime_hub is not None:
             await self.realtime_hub.close()
@@ -412,4 +418,5 @@ def build_container(settings: Settings | None = None) -> Container:
         evaluation_repository=evaluation_repository,
         evaluate_backtest=evaluate_backtest,
         compare_evaluations=compare_evaluations,
+        leaderboard=build_leaderboard_container(database),
     )

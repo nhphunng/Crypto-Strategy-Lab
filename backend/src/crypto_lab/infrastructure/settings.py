@@ -51,6 +51,10 @@ class Settings(BaseSettings):
     max_dataset_candles: int = Field(default=10_000, ge=1000, le=1_000_000)
     dataset_build_lease_seconds: int = Field(default=120, ge=10, le=3600)
     max_chart_slots_per_connection: int = Field(default=4, ge=1, le=4)
+    cors_allowed_origins: tuple[str, ...] = (
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    )
     log_level: str = "INFO"
     llm_endpoint: str | None = None
     llm_provider: str = "configured-provider"

@@ -487,15 +487,17 @@ components:
           properties:
             data: { $ref: '#/components/schemas/TradePage' }
     ErrorEnvelope:
+      description: Repository-wide error envelope established by Feature 001 and shared by every feature.
       type: object
-      required: [success, message, data, timestamp, requestId]
+      required: [success, message, error, timestamp, requestId]
       properties:
         success: { type: boolean, const: false }
         message: { type: string }
-        data:
+        error:
           type: object
-          required: [code]
+          required: [code, retryable]
           properties:
+            retryable: { type: boolean }
             code:
               type: string
               enum: [LEADERBOARD_NOT_FOUND, LEADERBOARD_ENTRY_NOT_FOUND, LEADERBOARD_QUERY_INVALID, LEADERBOARD_RANGE_INVALID, LEADERBOARD_DEPENDENCY_UNAVAILABLE]
