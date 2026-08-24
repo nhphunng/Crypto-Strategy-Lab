@@ -1,9 +1,9 @@
 from pathlib import Path
 
 import yaml
-from tests.contract.test_market_data_api import build_test_container
 
 from crypto_lab.main import create_app
+from tests.contract.test_market_data_api import build_test_container
 
 CONTRACT = (
     Path(__file__).parents[3]

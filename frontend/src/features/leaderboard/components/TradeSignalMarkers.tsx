@@ -6,7 +6,7 @@
  * coordinates are used as-is; an unaligned marker is reported, never moved.
  */
 
-import type { ChartScale } from '../../market-chart/components/CandlestickChart'
+import type { ChartScale } from './RankedResultChart'
 import type { Marker, MarkerShape, MarkerType } from '../types'
 
 export type TradeSignalMarkersProps = {

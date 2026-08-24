@@ -13,6 +13,7 @@ from crypto_lab.api.middleware import RequestIdMiddleware
 from crypto_lab.api.routes.leaderboards import router as leaderboards_router
 from crypto_lab.api.routes.market_data import router as market_data_router
 from crypto_lab.api.websocket.leaderboard_channel import router as leaderboard_ws_router
+from crypto_lab.api.websocket.market_data_channel import router as market_data_websocket_router
 from crypto_lab.infrastructure.logging import configure_logging
 
 
@@ -46,6 +47,7 @@ def create_app(container: Container | None = None) -> FastAPI:
     )
     install_error_handlers(app)
     app.include_router(market_data_router)
+    app.include_router(market_data_websocket_router)
     app.include_router(leaderboards_router)
     app.include_router(leaderboard_ws_router)
 

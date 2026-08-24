@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { CandlestickChart } from '../../market-chart/components/CandlestickChart'
+import { RankedResultChart } from './RankedResultChart'
 import {
   fetchRankedResultDetail,
   fetchRankedResultTrades,
@@ -213,7 +213,7 @@ export function RankedResultDetail({
       </div>
 
       <div className="px-4 pb-3">
-        <CandlestickChart
+        <RankedResultChart
           candles={visualization?.candles ?? []}
           height={260}
           highlightRange={

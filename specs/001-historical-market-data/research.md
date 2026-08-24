@@ -2,7 +2,7 @@
 
 **Feature**: `001-historical-market-data`  
 **Date**: 2026-08-13  
-**Decision owner**: TV1; cross-review required from TV2 and TV4
+**Decision owner**: TV1; cross-review completed with TV2, TV3, and TV4 on 2026-08-19
 
 ## Decision Summary
 

@@ -1,9 +1,8 @@
 from datetime import UTC, datetime
 
-from tests.fixtures.market_data import make_candle
-
 from crypto_lab.api.schemas.market_data import candle_to_dto
 from crypto_lab.domain.market_data.timeframe import Timeframe
+from tests.fixtures.market_data import make_candle
 
 
 def test_tv1_candle_open_time_is_tv2_identity_and_tv3_signal_timestamp() -> None:
