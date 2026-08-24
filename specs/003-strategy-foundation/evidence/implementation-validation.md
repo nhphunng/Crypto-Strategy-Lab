@@ -1,8 +1,8 @@
 # Implementation Validation Evidence
 
-Date: 2026-08-23  
+Date: 2026-08-24  
 Branch: `feat/implement-003-strategy-foundation`  
-Validated revision baseline: `7d7e177` plus the benchmark/evidence changes recorded by this file.
+Validated change set: completed secure-deployment tasks T100–T104 in the current branch working tree.
 
 ## Reference environment
 
@@ -23,7 +23,7 @@ Validated revision baseline: `7d7e177` plus the benchmark/evidence changes recor
 | `docker compose -f infra/compose.yaml --profile strategy-sandbox-build-only build strategy-sandbox` | PASS; multi-architecture digest selected native arm64 image |
 | `cd backend && .venv/bin/ruff check src tests` | PASS |
 | `cd backend && .venv/bin/mypy src` | PASS; 118 source files |
-| `cd backend && .venv/bin/pytest -q` | PASS; 226 tests, zero skip/failure |
+| `cd backend && .venv/bin/pytest -q` | PASS; 235 passed, 1 expected opt-in E2E skip |
 | `cd backend && .venv/bin/pytest -q tests/contract/test_generated_strategy_sandbox.py` | PASS; 5 tests against built image |
 | `cd backend && .venv/bin/pytest -q tests/performance/test_strategy_benchmark.py` | PASS; 3 tests |
 | 20 repetitions of the 10,000-candle MA fixture | PASS; p95 0.759004 s, min 0.654890 s, max 0.760975 s |
@@ -32,6 +32,11 @@ Validated revision baseline: `7d7e177` plus the benchmark/evidence changes recor
 | `cd frontend && npm run build` | PASS |
 | `$speckit-analyze` | PASS; 60/60 FR and 20/20 SC mapped, zero CRITICAL/HIGH, zero Constitution conflict |
 | `$speckit-converge` | No new remediation task; T085 remains the only substantive unmet acceptance gate |
+| Secure generated Compose profile | PASS; file-backed Docker secrets, mode-0700 encrypted artifact volume, dedicated credentialless Docker Engine, and no host Docker socket in API |
+| Migration `20260824_007_integrity` | PASS; repaired legacy dangling activation references and enforced artifact/report/provenance/definition foreign keys; migration round trip passed |
+| `CSL_RUN_GENERATED_E2E=1 ... test_generated_strategy_user_stories.py` | PASS; 1 test in 3.98 s covering US5 name generation, US6 zero-to-many natural-language extraction, US7 activation/restart/rediscovery after full migration round trip |
+| Browser US5 activation flow | PASS; exact rules/evidence/assumptions/fingerprints and 11 passing validation checks shown; confirmation refreshed catalog and selected `donchian-breakout@1.0.0` for configuration |
+| Encryption/runtime inspection | PASS; 2/2 final-run retained request payloads protected, zero plaintext matches, artifact volume `0700` owned by UID/GID 65532, zero leaked sandbox containers/prepared images |
 
 No acceptance assertion used a live market provider or live LLM response.
 

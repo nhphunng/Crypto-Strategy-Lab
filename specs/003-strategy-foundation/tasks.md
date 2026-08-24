@@ -410,3 +410,15 @@ T071: immutable generated revisions
 - [X] T097 Render built-in and generated catalog entries from backend-owned identities and parameter schemas with loading, retry, empty, and safe presentation-fallback states; remove runtime assumptions about `ma-cross-v3`, `rsi-reversal-v2`, and unsupported mock-only strategies, per FR-017, FR-025, FR-026, FE-01, and FE-06 (contradicts)
 - [X] T098 Invalidate and refetch strategy discovery after successful generated-draft activation, automatically expose/select the exact activated ID and version for parameter configuration, and prove a later mount/reload rediscovers it without local-only persistence, per US7/AC1-2, FR-055, FR-056, and FR-060 (partial)
 - [X] T099 Synchronize generated draft `failureIssues` and validation findings with the backend contract and add frontend integration coverage for discovery, activation-to-selection, failure feedback, and remount reuse using API fixtures, per FR-046, FR-047, DOD-05, and DOD-06 (partial)
+
+---
+
+## Phase 13: Secure Generated-Strategy Deployment
+
+**Purpose**: Make User Stories 5–7 runnable end to end without exposing the host Docker socket or placing LLM/encryption secrets in Compose environment values.
+
+- [X] T100 Add fail-closed file-backed secret loading, explicit LLM data-policy acknowledgement, persistent encrypted-artifact volume wiring, and configuration tests for FR-040, FR-052, FR-053, ADR-006, and the generated-strategy security policy in `backend/src/crypto_lab/infrastructure/settings.py`, `backend/src/crypto_lab/api/dependencies.py`, `docker-compose.generated.yml`, `.env.example`, and backend contract tests
+- [X] T101 Add a dedicated credentialless Docker Engine boundary and Docker Engine API sandbox transport that preserves the ADR-006 non-root, networkless, read-only, capability-free, seccomp, CPU, memory, PID, tmpfs, output, and timeout controls without mounting the host Docker socket into the API, in `backend/src/crypto_lab/infrastructure/sandbox/generated_strategy_runtime.py`, `backend/sandbox/runner.py`, `docker-compose.generated.yml`, and sandbox contract tests
+- [X] T102 Add a deterministic provider-compatible LLM fixture, automated API E2E coverage, and a browser walkthrough for name generation, natural-language zero-to-many extraction, explicit activation, catalog refresh, application restart, and exact generated-version reuse for US5–US7 in `backend/tests/e2e/`, `docker-compose.e2e.yml`, and validation evidence
+- [X] T103 Update the deployment/verification documentation and record the secure runtime plus US5–US7 E2E evidence in `README.md`, `specs/003-strategy-foundation/quickstart.md`, and `specs/003-strategy-foundation/evidence/implementation-validation.md`
+- [X] T104 Repair legacy dangling generated-strategy references, enforce database foreign keys across drafts/artifacts/reports/provenance/definitions, fail closed during hydration, and canonicalize content-addressed artifact identities from database metadata so exact generated versions survive migration and application restart
