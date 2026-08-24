@@ -190,6 +190,32 @@ async def test_activation_persists_a_default_generated_strategy_definition() -> 
     assert definition.generated_artifact_id == artifact.id
 
 
+async def test_activation_uses_database_identity_when_content_store_reuses_source() -> None:
+    draft, artifact, report = fixture()
+    stored_copy = replace(artifact, id=UUID(int=99), draft_id=UUID(int=98))
+    repository = Repository(draft, artifact, report)
+    definitions = Definitions()
+    registry = StrategyRegistry(ContractVersionRange(1, 0, 0))
+    use_case = ActivateGeneratedStrategy(
+        repository,
+        Artifacts(stored_copy),
+        registry,
+        DockerGeneratedStrategyRuntime(),
+        Model(),
+        Clock(),
+        definitions,
+    )  # type: ignore[arg-type]
+
+    provenance = await use_case.execute(
+        ActivateGeneratedStrategyCommand(
+            draft.id, draft.draft_fingerprint, artifact.content_fingerprint, report.id, True
+        )
+    )
+
+    assert provenance.artifact_id == artifact.id
+    assert definitions.values[0].generated_artifact_id == artifact.id
+
+
 async def test_duplicate_content_activation_links_the_new_draft_to_existing_version() -> None:
     draft, artifact, report = fixture()
     repository = Repository(draft, artifact, report)

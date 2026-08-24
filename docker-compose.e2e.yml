@@ -1,0 +1,24 @@
+services:
+  llm-fixture:
+    build:
+      context: ./backend/tests/e2e
+      dockerfile: Dockerfile.llm-fixture
+    read_only: true
+    cap_drop: ["ALL"]
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8081/health', timeout=2)"]
+      interval: 2s
+      timeout: 2s
+      retries: 15
+
+  api:
+    environment:
+      CSL_LLM_ENDPOINT: http://llm-fixture:8081/generate
+      CSL_LLM_PROVIDER: deterministic-e2e-fixture
+      CSL_LLM_MODEL_ID: strategy-fixture
+      CSL_LLM_MODEL_VERSION: "1"
+    depends_on:
+      llm-fixture:
+        condition: service_healthy
