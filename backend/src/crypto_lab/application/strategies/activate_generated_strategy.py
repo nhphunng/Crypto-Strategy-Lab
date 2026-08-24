@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from uuid import UUID, uuid4, uuid5
 
 from crypto_lab.application.strategies.ports import (
@@ -80,7 +80,12 @@ class ActivateGeneratedStrategy:
             or not report.passed
         ):
             raise _not_allowed("artifact or current validation evidence does not match")
-        artifact = await self._artifacts.get(artifact_metadata.content_fingerprint)
+        stored_artifact = await self._artifacts.get(artifact_metadata.content_fingerprint)
+        artifact = replace(
+            stored_artifact,
+            id=artifact_metadata.id,
+            draft_id=artifact_metadata.draft_id,
+        )
         existing = await self._repository.find_activated_by_content(
             draft.normalized_name, artifact.content_fingerprint
         )

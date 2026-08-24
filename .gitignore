@@ -28,3 +28,6 @@ Thumbs.db
 .idea/
 .specify/feature.json
 .codegraph/
+.data/
+.runtime-secrets/
+*.secret

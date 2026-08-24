@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import base64
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -114,8 +114,15 @@ class Container:
                 provenance.artifact_id
             )
             if draft is None or metadata is None:
-                continue
-            artifact = await self.generated_artifacts.get(metadata.content_fingerprint)
+                raise RuntimeError(
+                    "activated generated-strategy provenance has missing durable references"
+                )
+            stored_artifact = await self.generated_artifacts.get(metadata.content_fingerprint)
+            artifact = replace(
+                stored_artifact,
+                id=metadata.id,
+                draft_id=metadata.draft_id,
+            )
             self.strategy_registry.register(
                 IsolatedGeneratedStrategy(
                     strategy_id=provenance.strategy_id,
@@ -133,6 +140,8 @@ class Container:
             await self.realtime_hub.close()
         if self.http_client is not None:
             await self.http_client.aclose()
+        if self.generated_runtime is not None:
+            await self.generated_runtime.close()
         if self.database is not None:
             await self.database.dispose()
 
@@ -178,11 +187,13 @@ def build_container(settings: Settings | None = None) -> Container:
     strategy_activation = None
     artifacts = None
     runtime = None
-    storage_configured = settings.source_encryption_key_base64 is not None
+    source_encryption_key = settings.resolved_source_encryption_key()
+    llm_api_key = settings.resolved_llm_api_key()
+    storage_configured = source_encryption_key is not None
     if storage_configured:
-        assert settings.source_encryption_key_base64 is not None
+        assert source_encryption_key is not None
         master_key = base64.b64decode(
-            settings.source_encryption_key_base64.get_secret_value(), validate=True
+            source_encryption_key.get_secret_value(), validate=True
         )
         protector = SourceContentProtector(
             LocalAesKeyProvider(master_key, settings.source_encryption_key_id)
@@ -193,21 +204,23 @@ def build_container(settings: Settings | None = None) -> Container:
         )
         runtime = DockerGeneratedStrategyRuntime(
             image=settings.strategy_sandbox_image,
-            apparmor_profile=settings.strategy_sandbox_apparmor_profile
+            apparmor_profile=settings.strategy_sandbox_apparmor_profile,
+            engine_url=settings.strategy_sandbox_engine_url,
         )
     generation_configured = storage_configured and all(
         (
             settings.llm_endpoint,
             settings.llm_model_id,
             settings.llm_model_version,
-            settings.llm_api_key,
+            llm_api_key,
+            settings.llm_data_policy_confirmed,
         )
     )
     if generation_configured:
         assert settings.llm_endpoint is not None
         assert settings.llm_model_id is not None
         assert settings.llm_model_version is not None
-        assert settings.llm_api_key is not None
+        assert llm_api_key is not None
         assert generation_repository is not None
         assert artifacts is not None
         assert runtime is not None
@@ -217,7 +230,7 @@ def build_container(settings: Settings | None = None) -> Container:
             provider=settings.llm_provider,
             model_id=settings.llm_model_id,
             model_version=settings.llm_model_version,
-            api_key=settings.llm_api_key.get_secret_value(),
+            api_key=llm_api_key.get_secret_value(),
         )
         source_reader = SafeWebSourceAdapter(client)
         strategy_generation = GenerateStrategies(

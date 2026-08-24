@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 from urllib.parse import urlparse
 
 from pydantic import Field, SecretStr, field_validator, model_validator
@@ -57,11 +58,15 @@ class Settings(BaseSettings):
     llm_model_id: str | None = None
     llm_model_version: str | None = None
     llm_api_key: SecretStr | None = None
+    llm_api_key_file: str | None = None
+    llm_data_policy_confirmed: bool = False
     source_encryption_key_base64: SecretStr | None = None
+    source_encryption_key_file: str | None = None
     source_encryption_key_id: str = "local-source-key-v1"
     generated_artifact_root: str = ".data/generated-strategies"
     strategy_sandbox_image: str = Field(default="crypto-lab-strategy-sandbox:1", min_length=1)
     strategy_sandbox_apparmor_profile: str | None = None
+    strategy_sandbox_engine_url: str | None = None
 
     @field_validator("binance_base_url")
     @classmethod
@@ -96,6 +101,48 @@ class Settings(BaseSettings):
             raise ValueError("reconnect max delay must not be below the initial delay")
         return self
 
+    @model_validator(mode="after")
+    def validate_generation_configuration(self) -> Settings:
+        if self.llm_api_key is not None and self.llm_api_key_file is not None:
+            raise ValueError("configure only one LLM API key source")
+        if (
+            self.source_encryption_key_base64 is not None
+            and self.source_encryption_key_file is not None
+        ):
+            raise ValueError("configure only one source-encryption key source")
+        llm_configuration = (
+            self.llm_endpoint,
+            self.llm_model_id,
+            self.llm_model_version,
+            self.llm_api_key or self.llm_api_key_file,
+        )
+        if any(llm_configuration) and not all(llm_configuration):
+            raise ValueError("LLM generation configuration must be complete")
+        if all(llm_configuration) and not (
+            self.source_encryption_key_base64 or self.source_encryption_key_file
+        ):
+            raise ValueError("LLM generation requires encrypted artifact storage")
+        if all(llm_configuration) and not self.llm_data_policy_confirmed:
+            raise ValueError("live generation requires explicit LLM data-policy confirmation")
+        return self
+
+    def resolved_llm_api_key(self) -> SecretStr | None:
+        return self.llm_api_key or _secret_from_file(self.llm_api_key_file)
+
+    def resolved_source_encryption_key(self) -> SecretStr | None:
+        return self.source_encryption_key_base64 or _secret_from_file(
+            self.source_encryption_key_file
+        )
+
     @property
     def capabilities(self) -> ProviderCapabilities:
         return ProviderCapabilities()
+
+
+def _secret_from_file(path: str | None) -> SecretStr | None:
+    if path is None:
+        return None
+    value = Path(path).read_text(encoding="utf-8").strip()
+    if not value:
+        raise ValueError("configured secret file is empty")
+    return SecretStr(value)

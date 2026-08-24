@@ -3,11 +3,16 @@ from __future__ import annotations
 import ast
 import asyncio
 import hashlib
+import io
 import json
+import tarfile
 import tempfile
 from datetime import UTC, datetime
 from pathlib import Path
+from urllib.parse import quote
 from uuid import uuid4
+
+import httpx
 
 from crypto_lab.domain.strategy.errors import ErrorIssue
 from crypto_lab.domain.strategy.generation import (
@@ -30,9 +35,19 @@ class DockerGeneratedStrategyRuntime:
         self,
         image: str = "crypto-lab-strategy-sandbox:1",
         apparmor_profile: str | None = None,
+        engine_url: str | None = None,
     ) -> None:
         self._image = image
         self._apparmor_profile = apparmor_profile
+        self._engine = (
+            httpx.AsyncClient(base_url=engine_url.rstrip("/"), timeout=10)
+            if engine_url is not None
+            else None
+        )
+
+    async def close(self) -> None:
+        if self._engine is not None:
+            await self._engine.aclose()
 
     async def validate(self, artifact: GeneratedStrategyArtifact) -> StrategyValidationReport:
         started = datetime.now(UTC)
@@ -114,6 +129,13 @@ class DockerGeneratedStrategyRuntime:
     async def _run_container(
         self, source_code: str, payload: dict[str, object]
     ) -> tuple[bool, str]:
+        if self._engine is not None:
+            return await self._run_remote_container(source_code, payload)
+        return await self._run_cli_container(source_code, payload)
+
+    async def _run_cli_container(
+        self, source_code: str, payload: dict[str, object]
+    ) -> tuple[bool, str]:
         project_root = Path(__file__).parents[5]
         seccomp_profile = project_root / "infra/security/strategy-sandbox-seccomp.json"
         container_name = f"crypto-lab-strategy-{uuid4().hex}"
@@ -169,6 +191,142 @@ class DockerGeneratedStrategyRuntime:
                 return False, stderr.decode(errors="replace")[:1000]
             return True, stdout.decode()
 
+    async def _run_remote_container(
+        self, source_code: str, payload: dict[str, object]
+    ) -> tuple[bool, str]:
+        assert self._engine is not None
+        container_name = f"crypto-lab-strategy-{uuid4().hex}"
+        container_id: str | None = None
+        staging_id: str | None = None
+        prepared_image: str | None = None
+        try:
+            await self._ensure_remote_image()
+            seccomp = _runtime_path(
+                "infra/security/strategy-sandbox-seccomp.json",
+                Path("/app/infra/security/strategy-sandbox-seccomp.json"),
+            ).read_text(encoding="utf-8")
+            security = ["no-new-privileges", f"seccomp={seccomp}"]
+            if self._apparmor_profile is not None:
+                security.append(f"apparmor={self._apparmor_profile}")
+            response = await self._engine.post(
+                "/containers/create",
+                params={"name": f"{container_name}-prepare"},
+                json={
+                    "Image": self._image,
+                    "NetworkDisabled": True,
+                    "HostConfig": {"NetworkMode": "none"},
+                },
+            )
+            response.raise_for_status()
+            staging_id = response.json()["Id"]
+            archive = _sandbox_input_archive(source_code, payload)
+            response = await self._engine.put(
+                f"/containers/{staging_id}/archive",
+                params={"path": "/sandbox"},
+                content=archive,
+                headers={"Content-Type": "application/x-tar"},
+            )
+            response.raise_for_status()
+            prepared_image = f"crypto-lab-strategy-prepared:{uuid4().hex}"
+            repository, tag = prepared_image.split(":", 1)
+            response = await self._engine.post(
+                "/commit",
+                params={"container": staging_id, "repo": repository, "tag": tag},
+            )
+            response.raise_for_status()
+            await self._engine.delete(
+                f"/containers/{staging_id}", params={"force": "1", "v": "1"}
+            )
+            staging_id = None
+            response = await self._engine.post(
+                "/containers/create",
+                params={"name": container_name},
+                json={
+                    "Image": prepared_image,
+                    "AttachStdout": True,
+                    "AttachStderr": True,
+                    "NetworkDisabled": True,
+                    "Env": [],
+                    "HostConfig": {
+                        "NetworkMode": "none",
+                        "ReadonlyRootfs": True,
+                        "CapDrop": ["ALL"],
+                        "SecurityOpt": security,
+                        "PidsLimit": 32,
+                        "NanoCpus": 1_000_000_000,
+                        "Memory": 268_435_456,
+                        "MemorySwap": 268_435_456,
+                        "Tmpfs": {"/tmp": "rw,noexec,nosuid,size=16m"},
+                    },
+                    "User": "65532:65532",
+                },
+            )
+            response.raise_for_status()
+            container_id = response.json()["Id"]
+            response = await self._engine.post(f"/containers/{container_id}/start")
+            response.raise_for_status()
+            wait = self._engine.post(
+                f"/containers/{container_id}/wait", params={"condition": "not-running"}
+            )
+            completed = await asyncio.wait_for(wait, timeout=5)
+            completed.raise_for_status()
+            status = int(completed.json()["StatusCode"])
+            logs = await self._engine.get(
+                f"/containers/{container_id}/logs",
+                params={"stdout": "1", "stderr": "1"},
+            )
+            logs.raise_for_status()
+            output = _decode_docker_stream(logs.content)
+            if len(output) > 1_048_576:
+                return False, "sandbox output exceeded 1 MiB"
+            if status != 0:
+                return False, output.decode(errors="replace")[:1000]
+            return True, output.decode()
+        except (TimeoutError, httpx.HTTPError, KeyError, TypeError, ValueError):
+            return False, "isolated runtime unavailable or timed out"
+        finally:
+            if staging_id is not None:
+                try:
+                    await self._engine.delete(
+                        f"/containers/{staging_id}", params={"force": "1", "v": "1"}
+                    )
+                except httpx.HTTPError:
+                    pass
+            if container_id is not None:
+                try:
+                    await self._engine.delete(
+                        f"/containers/{container_id}", params={"force": "1", "v": "1"}
+                    )
+                except httpx.HTTPError:
+                    pass
+            if prepared_image is not None:
+                try:
+                    await self._engine.delete(
+                        f"/images/{quote(prepared_image, safe='')}", params={"force": "1"}
+                    )
+                except httpx.HTTPError:
+                    pass
+
+    async def _ensure_remote_image(self) -> None:
+        assert self._engine is not None
+        encoded = quote(self._image, safe="")
+        response = await self._engine.get(f"/images/{encoded}/json")
+        if response.status_code == 200:
+            return
+        if response.status_code != 404:
+            response.raise_for_status()
+        context = _runtime_path("backend/sandbox", Path("/app/backend/sandbox"))
+        response = await self._engine.post(
+            "/build",
+            params={"t": self._image, "rm": "1", "forcerm": "1"},
+            content=_sandbox_build_archive(context),
+            headers={"Content-Type": "application/x-tar"},
+            timeout=120,
+        )
+        response.raise_for_status()
+        if b'"error"' in response.content:
+            raise RuntimeError("sandbox image build failed")
+
 
 async def _force_remove_container(container_name: str) -> None:
     try:
@@ -183,6 +341,49 @@ async def _force_remove_container(container_name: str) -> None:
         await asyncio.wait_for(cleanup.wait(), timeout=2)
     except (FileNotFoundError, TimeoutError):
         return
+
+
+def _runtime_path(relative: str, installed: Path) -> Path:
+    source = Path(__file__).parents[5] / relative
+    return source if source.exists() else installed
+
+
+def _sandbox_input_archive(source_code: str, payload: dict[str, object]) -> bytes:
+    files = {
+        "artifact.py": source_code.encode(),
+        "input.json": json.dumps(payload, separators=(",", ":")).encode(),
+    }
+    stream = io.BytesIO()
+    with tarfile.open(fileobj=stream, mode="w") as archive:
+        for name, content in files.items():
+            info = tarfile.TarInfo(name)
+            info.size = len(content)
+            info.mode = 0o444
+            info.uid = 65532
+            info.gid = 65532
+            archive.addfile(info, io.BytesIO(content))
+    return stream.getvalue()
+
+
+def _sandbox_build_archive(context: Path) -> bytes:
+    stream = io.BytesIO()
+    with tarfile.open(fileobj=stream, mode="w") as archive:
+        for name in ("Dockerfile", "runner.py"):
+            archive.add(context / name, arcname=name, recursive=False)
+    return stream.getvalue()
+
+
+def _decode_docker_stream(payload: bytes) -> bytes:
+    output = bytearray()
+    offset = 0
+    while offset + 8 <= len(payload):
+        size = int.from_bytes(payload[offset + 4 : offset + 8], "big")
+        offset += 8
+        if offset + size > len(payload):
+            return payload
+        output.extend(payload[offset : offset + size])
+        offset += size
+    return bytes(output) if offset == len(payload) else payload
 
 
 def _static_checks(

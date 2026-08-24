@@ -20,7 +20,9 @@ class StrategyGenerationRequestRow(Base):
         DateTime(timezone=True), nullable=False
     )
     submitted_value_purged_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    source_snapshot_id: Mapped[UUID | None]
+    source_snapshot_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("strategy_source_snapshots.id")
+    )
     status: Mapped[str] = mapped_column(String(32), nullable=False)
     requested_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
@@ -78,8 +80,12 @@ class GeneratedStrategyDraftRow(Base):
     evidence: Mapped[list[dict[str, object]]] = mapped_column(JSONB, nullable=False)
     status: Mapped[str] = mapped_column(String(32), nullable=False)
     draft_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
-    generated_artifact_id: Mapped[UUID | None]
-    validation_report_id: Mapped[UUID | None]
+    generated_artifact_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("generated_strategy_artifacts.id")
+    )
+    validation_report_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("strategy_validation_reports.id")
+    )
     failure_issues: Mapped[list[dict[str, object]]] = mapped_column(
         JSONB, nullable=False, default=list
     )
@@ -125,11 +131,15 @@ class StrategyValidationReportRow(Base):
 class StrategyGenerationProvenanceRow(Base):
     __tablename__ = "strategy_generation_provenance"
     id: Mapped[UUID] = mapped_column(primary_key=True)
-    request_id: Mapped[UUID]
-    source_snapshot_id: Mapped[UUID]
-    draft_id: Mapped[UUID]
-    artifact_id: Mapped[UUID]
-    validation_report_id: Mapped[UUID]
+    request_id: Mapped[UUID] = mapped_column(ForeignKey("strategy_generation_requests.id"))
+    source_snapshot_id: Mapped[UUID] = mapped_column(
+        ForeignKey("strategy_source_snapshots.id")
+    )
+    draft_id: Mapped[UUID] = mapped_column(ForeignKey("generated_strategy_drafts.id"))
+    artifact_id: Mapped[UUID] = mapped_column(ForeignKey("generated_strategy_artifacts.id"))
+    validation_report_id: Mapped[UUID] = mapped_column(
+        ForeignKey("strategy_validation_reports.id")
+    )
     strategy_id: Mapped[str] = mapped_column(String(64), nullable=False)
     strategy_version: Mapped[str] = mapped_column(String(32), nullable=False)
     model_provider: Mapped[str] = mapped_column(String(128), nullable=False)
