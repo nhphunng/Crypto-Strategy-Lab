@@ -7,12 +7,14 @@ from fastapi import APIRouter, HTTPException, Query, Request, status
 from crypto_lab.api.common import SuccessEnvelope, success_envelope
 from crypto_lab.api.middleware import request_id
 from crypto_lab.api.schemas.backtest_evaluation import (
+    BacktestEvaluationPolicyBundleDto,
     BacktestResultDto,
     BacktestRunDto,
     CreateBacktestRunRequest,
     EquityPageDto,
     TradePageDto,
     equity_to_dto,
+    policy_bundle_to_dto,
     result_to_dto,
     run_to_dto,
     trade_to_dto,
@@ -21,6 +23,26 @@ from crypto_lab.domain.backtest.configuration import BacktestConfiguration
 from crypto_lab.domain.backtest.errors import BacktestError, BacktestErrorCode
 
 router = APIRouter(prefix="/api/v1", tags=["backtests"])
+
+
+@router.get(
+    "/backtest-evaluation/policies",
+    response_model=SuccessEnvelope[BacktestEvaluationPolicyBundleDto],
+)
+async def get_backtest_evaluation_policies(
+    request: Request,
+) -> SuccessEnvelope[BacktestEvaluationPolicyBundleDto]:
+    from crypto_lab.api.dependencies import (
+        BALANCED_SCORING_POLICY,
+        EVALUATION_POLICY,
+        EXECUTION_POLICY,
+    )
+
+    return success_envelope(
+        policy_bundle_to_dto(EXECUTION_POLICY, EVALUATION_POLICY, BALANCED_SCORING_POLICY),
+        "Backtest and Evaluation policies loaded.",
+        request_id(request),
+    )
 
 
 @router.post(

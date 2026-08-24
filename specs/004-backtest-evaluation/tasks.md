@@ -169,6 +169,15 @@
 - [X] T063 [P] Add feature test markers and benchmark configuration in `backend/pyproject.toml`
 - [ ] T064 Run Ruff, mypy, complete pytest suites, migration upgrade/downgrade, OpenAPI validation, and secret/dependency checks from `backend/pyproject.toml`
 
+## Phase 9: Single Backtest Frontend Integration
+
+- [X] T065 [P] Add backend contract tests for built-in Strategy Definition create-or-resolve and Feature 004 policy discovery in `backend/tests/contract/test_backtest_frontend_support_api.py`
+- [X] T066 [P] Add frontend contract tests for exact workflow requests, runtime response validation, pagination, and safe errors in `frontend/tests/backtests/backtest-api.test.ts`
+- [X] T067 Implement built-in Strategy Definition create-or-resolve and Feature 004 policy-discovery boundaries in `backend/src/crypto_lab/api/routes/strategies.py`, `backend/src/crypto_lab/api/routes/backtests.py`, and their Pydantic schemas
+- [X] T068 Implement the typed Feature 004 REST client, runtime parsers, and orchestration workflow in `frontend/src/features/backtests/`
+- [X] T069 Replace mock Single Backtest execution/results with backend Dataset, Strategy Definition, Run, Evaluation, Trade, Equity, and Candle data in `frontend/src/screens/Backtests.tsx`
+- [X] T070 Run focused backend/frontend contracts, frontend typecheck/test/build, and the Docker-backed Single Backtest smoke workflow; record the evidence in `specs/004-backtest-evaluation/quickstart.md`
+
 ## Dependencies
 
 - Phase 1 → Phase 2 blocks all stories; T004 is an external merge/re-review gate.

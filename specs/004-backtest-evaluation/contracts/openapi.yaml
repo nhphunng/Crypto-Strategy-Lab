@@ -5,6 +5,16 @@ info:
 servers:
   - url: /api/v1
 paths:
+  /backtest-evaluation/policies:
+    get:
+      operationId: getBacktestEvaluationPolicies
+      summary: Discover the exact bootstrapped policy identities required by a client workflow
+      responses:
+        '200':
+          description: Exact Execution, Evaluation, and Scoring Policy identities
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PolicyBundleEnvelope' }
   /backtest-runs:
     post:
       operationId: createBacktestRun
@@ -138,6 +148,27 @@ components:
     Page: { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
     PageSize: { name: pageSize, in: query, schema: { type: integer, minimum: 1, maximum: 200, default: 25 } }
   schemas:
+    PolicyIdentity:
+      type: object
+      required: [id, policyId, version]
+      properties:
+        id: { type: string, format: uuid }
+        policyId: { type: string }
+        version: { type: string }
+    ScoringPolicyIdentity:
+      allOf:
+        - $ref: '#/components/schemas/PolicyIdentity'
+        - type: object
+          required: [name]
+          properties:
+            name: { type: string }
+    BacktestEvaluationPolicyBundle:
+      type: object
+      required: [executionPolicy, evaluationPolicy, scoringPolicy]
+      properties:
+        executionPolicy: { $ref: '#/components/schemas/PolicyIdentity' }
+        evaluationPolicy: { $ref: '#/components/schemas/PolicyIdentity' }
+        scoringPolicy: { $ref: '#/components/schemas/ScoringPolicyIdentity' }
     Decimal: { type: string, pattern: '^-?[0-9]+(\.[0-9]+)?$' }
     NonNegativeDecimal: { type: string, pattern: '^(?:0|[1-9][0-9]*)(?:\.[0-9]+)?$' }
     PositiveDecimal: { type: string, pattern: '^(?:0\.[0-9]*[1-9][0-9]*|[1-9][0-9]*(?:\.[0-9]+)?)$' }
@@ -313,6 +344,7 @@ components:
         timestamp: { type: string, format: date-time }
         requestId: { type: string }
     BacktestRunEnvelope: { allOf: [{ $ref: '#/components/schemas/ResponseMeta' }, { type: object, required: [data], properties: { data: { $ref: '#/components/schemas/BacktestRun' } } }] }
+    PolicyBundleEnvelope: { allOf: [{ $ref: '#/components/schemas/ResponseMeta' }, { type: object, required: [data], properties: { data: { $ref: '#/components/schemas/BacktestEvaluationPolicyBundle' } } }] }
     BacktestResultEnvelope: { allOf: [{ $ref: '#/components/schemas/ResponseMeta' }, { type: object, required: [data], properties: { data: { $ref: '#/components/schemas/BacktestResult' } } }] }
     EvaluationResultEnvelope: { allOf: [{ $ref: '#/components/schemas/ResponseMeta' }, { type: object, required: [data], properties: { data: { $ref: '#/components/schemas/EvaluationResult' } } }] }
     ComparisonEnvelope: { allOf: [{ $ref: '#/components/schemas/ResponseMeta' }, { type: object, required: [data], properties: { data: { $ref: '#/components/schemas/Comparison' } } }] }

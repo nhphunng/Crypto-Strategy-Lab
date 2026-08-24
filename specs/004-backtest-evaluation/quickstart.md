@@ -68,3 +68,12 @@ Record test counts, checksums, policy versions, measured benchmark runtime/p95 r
 - 10,000-Candle benchmark: 1.01 seconds test call on the current Windows development machine, below the 5-second gate.
 - Bootstrapped policies: execution `next-open-long-only/1.0.0`, evaluation `standard-metrics/1.0.0`, and scoring `balanced/1.0.0` (`balanced-v1` semantics).
 - ADR-006 remains Proposed; the policy is versioned and historical evaluations are not reinterpreted.
+
+## Single Backtest Frontend Integration Evidence (2026-08-24)
+
+- The Single Backtest screen now loads exact registered Strategy versions and the bootstrapped Execution/Evaluation/Scoring Policy identities from same-origin REST APIs; it no longer renders calculated mock results after Run.
+- The typed browser workflow materializes Feature 001 Dataset data, creates or resolves an immutable built-in Feature 003 Strategy Definition, creates/starts Feature 004 Backtest Run, evaluates the result, and retrieves every paginated Candle, Trade, and Equity Point. Runtime parsers reject malformed response contracts.
+- Docker-backed smoke through the frontend nginx proxy (`localhost:5173`) completed with a real Binance `BTCUSDT` 15m Dataset for `[2026-08-01,2026-08-02)`: 96 Candles, 6 Trades, 96 Equity Points, Total Return `-0.766270874215122758`, score `46.33010409664556441`, eligible `true`.
+- The smoke exposed and fixed a one-unit-at-18-decimal reconciliation defect: Trade invariants now apply the same published-notional rounding used by entry/exit accounting. A realistic BTC-price regression test preserves the exact accounting gate rather than adding a tolerance.
+- Validation after the fix: Feature 004 focused suites `21 passed`; real PostgreSQL integration `60 passed`; changed backend source mypy `0 issues`; Ruff passed; frontend Vitest `127 passed`; TypeScript typecheck, production Vite build, Docker frontend build, and Sites packaging tests passed.
+- In-app visual inspection was unavailable because no browser session was connected in the validation environment. Docker HTTP proxy, production build, UI compilation, and the full workflow contract remain validated; final manual viewport/interaction acceptance is still recommended.

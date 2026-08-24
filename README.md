@@ -9,12 +9,12 @@ Repo hiện có backend và frontend chạy được độc lập hoặc cùng n
 | Phần | Thư mục | Trạng thái |
 |---|---|---|
 | Market Data backend | `backend/` | Đã có API lịch sử, WebSocket realtime version 1, subscription sharing, recovery/backfill, PostgreSQL, migration và test |
-| Strategy và Backtest/Evaluation backend | `backend/src/crypto_lab/` | Đã có Strategy Foundation, backtest deterministic, metrics, scoring, comparison, REST API, PostgreSQL schema và repository; còn các gate integration/reliability cần PostgreSQL test |
+| Strategy và Backtest/Evaluation | `backend/src/crypto_lab/`, `frontend/src/features/backtests/` | Đã có Strategy Foundation, backtest deterministic, metrics, scoring, comparison, REST API, PostgreSQL schema/repository và Single Backtest frontend integration |
 | Leaderboard & Visualization backend | `backend/src/crypto_lab/{domain,application}/leaderboard/` | Đã có Top-K projection, REST snapshot/detail/visualization/trades, WebSocket `LEADERBOARD_UPDATED` |
 | Leaderboard & Visualization frontend | `frontend/src/features/leaderboard/` | Đã kết nối API thật: bảng Top-K, live update, chart Buy/Sell + Entry/Exit, trade drill-down |
-| Web frontend | `frontend/` | Dashboard `/market` dùng REST/WebSocket thật, TanStack Query và TradingView Lightweight Charts, hỗ trợ 1–4 chart độc lập; `/leaderboard` dùng REST/WebSocket của feature 005; các màn hình còn lại vẫn dùng adapter mô phỏng |
+| Web frontend | `frontend/` | `/market`, `/backtests` (Single Backtest) và `/leaderboard` đã dùng API thật; Strategy Search, Runs và các màn hình ngoài phạm vi các feature đã tích hợp vẫn dùng adapter mô phỏng |
 
-`frontend/` là vị trí frontend chính thức. Market dashboard đã nối với backend Feature 001/002; các màn hình strategy, backtest và leaderboard vẫn thuộc các feature sau.
+`frontend/` là vị trí frontend chính thức. Market dashboard, Single Backtest và Leaderboard đã nối backend; Strategy Search/Runs vẫn thuộc các feature queue/search sau.
 
 Backend đang đăng ký các route Market Data, Strategy, Backtest/Evaluation và Leaderboard trong runtime. Leaderboard đọc trực tiếp các Evaluation Result bất biến của Feature 004 và không tự tính lại metric hay score.
 
@@ -27,10 +27,10 @@ Trạng thái được tính từ checkbox trong `specs/*/tasks.md` ngày 2026-0
 | `001-historical-market-data` | 54/54 | Hoàn thành implementation, test, migration và cross-feature contract |
 | `002-realtime-multi-chart` | 58/58 | Hoàn thành code, test, docs, reverse proxy REST/WebSocket, multi-session fan-out, convergence và final analysis gate |
 | `003-strategy-foundation` | 91/95 | Đã có strategy contract, registry, built-in/generated strategy flow, persistence, API và test; còn một số validation gate |
-| `004-backtest-evaluation` | 54/64 | Đã có deterministic engine, accounting, metrics, scoring, comparison, persistence, REST API và test; còn PostgreSQL/API reliability gate |
+| `004-backtest-evaluation` | 60/70 | Đã có deterministic engine, accounting, metrics, scoring, comparison, persistence, REST API, Single Backtest frontend integration và PostgreSQL smoke; còn các reliability/API contract task gốc |
 | `005-leaderboard-visualization` | 52/52 | Hoàn thành Top-K projection, live update, visualization, test, k6 và E2E |
 
-Tổng theo năm feature chính: **309/323 task, khoảng 96%**. Tỷ lệ này chỉ thể hiện số checkbox, không phải phần trăm effort vì độ lớn mỗi task khác nhau.
+Tổng theo năm feature chính: **315/329 task, khoảng 96%**. Tỷ lệ này chỉ thể hiện số checkbox, không phải phần trăm effort vì độ lớn mỗi task khác nhau.
 
 Frontend prototype có plan lưu tham khảo tại `docs/archive/frontend-prototype/001-frontend-prototype-system/` và đã hoàn thành **43/43 task**. Feature 002 không còn dựa vào mock adapter của prototype cho Market dashboard.
 

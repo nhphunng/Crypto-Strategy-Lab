@@ -7,11 +7,12 @@ from uuid import UUID
 from pydantic import Field, field_validator
 
 from crypto_lab.api.common import ApiModel
-from crypto_lab.domain.backtest.configuration import BacktestRun
+from crypto_lab.domain.backtest.configuration import BacktestRun, ExecutionPolicy
 from crypto_lab.domain.backtest.equity import EquityPoint
 from crypto_lab.domain.backtest.result import BacktestResult
 from crypto_lab.domain.backtest.trade import Trade
 from crypto_lab.domain.evaluation.comparison import EvaluationComparison
+from crypto_lab.domain.evaluation.policy import EvaluationPolicy, ScoringPolicy
 from crypto_lab.domain.evaluation.result import ANALYSIS_TYPE, DISCLAIMER, EvaluationResult
 from crypto_lab.domain.market_data.candle import canonical_decimal, format_utc_millis
 
@@ -37,6 +38,22 @@ class CreateBacktestRunRequest(ApiModel):
         if isinstance(value, float | bool):
             raise ValueError("decimal values must be JSON strings or integers")
         return value
+
+
+class PolicyIdentityDto(ApiModel):
+    id: UUID
+    policy_id: str = Field(alias="policyId")
+    version: str
+
+
+class ScoringPolicyIdentityDto(PolicyIdentityDto):
+    name: str
+
+
+class BacktestEvaluationPolicyBundleDto(ApiModel):
+    execution_policy: PolicyIdentityDto = Field(alias="executionPolicy")
+    evaluation_policy: PolicyIdentityDto = Field(alias="evaluationPolicy")
+    scoring_policy: ScoringPolicyIdentityDto = Field(alias="scoringPolicy")
 
 
 class BacktestRunDto(ApiModel):
@@ -206,6 +223,25 @@ def run_to_dto(run: BacktestRun) -> BacktestRunDto:
         requested_at=format_utc_millis(run.requested_at),
         completed_at=None if run.completed_at is None else format_utc_millis(run.completed_at),
         failure_code=run.failure_code,
+    )
+
+
+def policy_bundle_to_dto(
+    execution: ExecutionPolicy, evaluation: EvaluationPolicy, scoring: ScoringPolicy
+) -> BacktestEvaluationPolicyBundleDto:
+    return BacktestEvaluationPolicyBundleDto(
+        execution_policy=PolicyIdentityDto(
+            id=execution.id, policy_id=execution.policy_id, version=execution.version
+        ),
+        evaluation_policy=PolicyIdentityDto(
+            id=evaluation.id, policy_id=evaluation.policy_id, version=evaluation.version
+        ),
+        scoring_policy=ScoringPolicyIdentityDto(
+            id=scoring.id,
+            policy_id=scoring.policy_id,
+            version=scoring.version,
+            name=scoring.name,
+        ),
     )
 
 

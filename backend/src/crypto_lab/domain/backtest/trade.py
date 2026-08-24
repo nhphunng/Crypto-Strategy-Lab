@@ -75,10 +75,10 @@ class Trade:
             raise ValueError("trade prices and quantity must be positive")
         if self.entry_fee < 0 or self.exit_fee < 0:
             raise ValueError("trade fees must be non-negative")
+        entry_notional = published_decimal(self.quantity * self.entry_price)
+        exit_notional = published_decimal(self.quantity * self.exit_price)
         expected = published_decimal(
-            self.quantity * self.exit_price
-            - self.exit_fee
-            - (self.quantity * self.entry_price + self.entry_fee)
+            exit_notional - self.exit_fee - (entry_notional + self.entry_fee)
         )
         if published_decimal(self.profit_loss) != expected:
             raise ValueError("trade profit/loss does not reconcile")
