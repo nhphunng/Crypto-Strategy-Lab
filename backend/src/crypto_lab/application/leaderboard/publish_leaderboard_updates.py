@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from uuid import UUID
 
 from crypto_lab.application.leaderboard.ports import (
     Clock,
@@ -77,7 +78,7 @@ class LeaderboardIngestion:
 
     async def on_evaluation_completed(
         self,
-        evaluation_result_id,
+        evaluation_result_id: UUID,
         *,
         request_id: str | None = None,
     ) -> tuple[ProjectionOutcome, ...]:

@@ -161,7 +161,7 @@ class _Connection:
 
 def error_event(code: str, message: str, request_id: str | None) -> dict[str, Any]:
     return EventErrorDto(
-        payload=EventErrorPayloadDto(code=code, message=message, requestId=request_id)
+        payload=EventErrorPayloadDto(code=code, message=message, request_id=request_id)
     ).model_dump(by_alias=True, mode="json")
 
 
