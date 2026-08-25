@@ -24,8 +24,9 @@ Thư mục này lưu các quyết định kiến trúc có ảnh hưởng đến
 | [ADR-001](ADR-001-modular-monolith-and-workers.md) | Modular monolith và worker tách process | Accepted |
 | [ADR-002](ADR-002-layered-boundaries.md) | Ranh giới Domain, Application, Infrastructure và Delivery | Accepted |
 | [ADR-003](ADR-003-normalized-market-data.md) | Market Data Provider và Candle chuẩn hóa | Accepted |
-| [ADR-004](ADR-004-strategy-plugin-and-versioning.md) | Strategy contract, registry và version bất biến | Accepted |
+| [ADR-004](ADR-004-strategy-plugin-and-versioning.md) | Strategy contract, registry và version bất biến | Accepted; extended by ADR-006 |
 | [ADR-005](ADR-005-reproducible-backtesting.md) | Backtest xác định và có thể tái tạo | Accepted |
+| [ADR-006](ADR-006-llm-generated-strategy-isolation.md) | Sandbox, source/LLM trust boundary và immutable generated artifact activation | Accepted |
 ## Deferred ADRs
 
 Các ADR sau chỉ được tạo khi nhóm bắt đầu feature tương ứng và đã có `spec.md`/`plan.md` draft:

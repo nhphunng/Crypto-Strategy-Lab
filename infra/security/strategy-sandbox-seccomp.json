@@ -1,0 +1,10 @@
+{
+  "defaultAction": "SCMP_ACT_ERRNO",
+  "architectures": ["SCMP_ARCH_X86_64", "SCMP_ARCH_AARCH64"],
+  "syscalls": [
+    {
+      "names": ["access", "arch_prctl", "brk", "clock_gettime", "close", "execve", "execveat", "exit", "exit_group", "faccessat2", "fcntl", "fsconfig", "fsmount", "fsopen", "fstat", "fstatfs", "futex", "getcwd", "getdents64", "getegid", "geteuid", "getgid", "getpid", "getrandom", "gettid", "getuid", "ioctl", "lseek", "madvise", "mmap", "mprotect", "mremap", "move_mount", "munmap", "newfstatat", "open_tree", "openat", "pread64", "prlimit64", "read", "readlink", "readlinkat", "rseq", "rt_sigaction", "rt_sigprocmask", "rt_sigreturn", "set_robust_list", "set_tid_address", "sigaltstack", "statx", "uname", "write"],
+      "action": "SCMP_ACT_ALLOW"
+    }
+  ]
+}

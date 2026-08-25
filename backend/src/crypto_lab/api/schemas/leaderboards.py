@@ -309,55 +309,55 @@ def entry_to_dto(entry: EntryView) -> LeaderboardEntryDto:
     candidate = entry.candidate
     metrics = candidate.metrics
     return LeaderboardEntryDto(
-        evaluationResultId=str(candidate.evaluation_result_id),
+        evaluation_result_id=str(candidate.evaluation_result_id),
         rank=entry.rank,
-        projectionVersion=entry.projection_version,
+        projection_version=entry.projection_version,
         score=canonical_decimal(metrics.score),
         strategy=StrategySummaryDto(
-            strategyId=candidate.strategy.strategy_id,
-            strategyVersion=candidate.strategy.strategy_version,
-            displayName=candidate.strategy.display_name,
+            strategy_id=candidate.strategy.strategy_id,
+            strategy_version=candidate.strategy.strategy_version,
+            display_name=candidate.strategy.display_name,
             members=tuple(
                 StrategyMemberDto(
-                    strategyId=member.strategy_id,
-                    strategyVersion=member.strategy_version,
-                    displayName=member.display_name,
+                    strategy_id=member.strategy_id,
+                    strategy_version=member.strategy_version,
+                    display_name=member.display_name,
                 )
                 for member in candidate.strategy.members
             ),
         ),
         pair=candidate.pair,
         timeframe=candidate.timeframe.value,
-        datasetId=str(candidate.dataset_id),
-        startTime=_instant(candidate.start_time),
-        endTime=_instant(candidate.end_time),
+        dataset_id=str(candidate.dataset_id),
+        start_time=_instant(candidate.start_time),
+        end_time=_instant(candidate.end_time),
         metrics=MetricSetDto(
-            totalReturn=canonical_decimal(metrics.total_return),
-            winRate=canonical_decimal(metrics.win_rate),
-            maxDrawdown=canonical_decimal(metrics.max_drawdown),
-            numberOfTrades=metrics.number_of_trades,
-            sharpeRatio=_decimal(metrics.sharpe_ratio),
+            total_return=canonical_decimal(metrics.total_return),
+            win_rate=canonical_decimal(metrics.win_rate),
+            max_drawdown=canonical_decimal(metrics.max_drawdown),
+            number_of_trades=metrics.number_of_trades,
+            sharpe_ratio=_decimal(metrics.sharpe_ratio),
         ),
-        scoringPolicyId=candidate.policy.policy_id,
-        scoringPolicyVersion=candidate.policy.version,
-        updatedAt=_instant(entry.updated_at),
+        scoring_policy_id=candidate.policy.policy_id,
+        scoring_policy_version=candidate.policy.version,
+        updated_at=_instant(entry.updated_at),
     )
 
 
 def page_to_dto(page: LeaderboardPage) -> LeaderboardSnapshotDto:
     return LeaderboardSnapshotDto(
-        leaderboardId=str(page.leaderboard_id),
-        scopeKey=page.scope_key,
-        scoringPolicyId=page.policy.policy_id,
-        scoringPolicyVersion=page.policy.version,
-        rankBy=page.rank_metric.value,
+        leaderboard_id=str(page.leaderboard_id),
+        scope_key=page.scope_key,
+        scoring_policy_id=page.policy.policy_id,
+        scoring_policy_version=page.policy.version,
+        rank_by=page.rank_metric.value,
         k=page.k,
-        projectionVersion=page.projection_version,
-        updatedAt=_instant(page.updated_at),
-        runState=page.run_state.value if page.run_state else None,
-        metricMetadata=tuple(metric_descriptor_to_dto(item) for item in page.metric_metadata),
+        projection_version=page.projection_version,
+        updated_at=_instant(page.updated_at),
+        run_state=page.run_state.value if page.run_state else None,
+        metric_metadata=tuple(metric_descriptor_to_dto(item) for item in page.metric_metadata),
         entries=tuple(entry_to_dto(entry) for entry in page.entries),
-        pagination=PageMetaDto(page=page.page, pageSize=page.page_size, total=page.total),
+        pagination=PageMetaDto(page=page.page, page_size=page.page_size, total=page.total),
         disclaimer=ANALYSIS_DISCLAIMER,
     )
 
@@ -383,17 +383,17 @@ def visualization_availability_to_dto(
 
 def provenance_to_dto(provenance: Provenance) -> ProvenanceDto:
     return ProvenanceDto(
-        evaluationResultId=str(provenance.evaluation_result_id),
-        backtestResultId=str(provenance.backtest_result_id),
-        runId=str(provenance.run_id),
-        jobId=str(provenance.job_id),
-        strategyId=provenance.strategy_id,
-        strategyVersion=provenance.strategy_version,
-        datasetId=str(provenance.dataset_id),
-        executionConfig=provenance.execution_config,
-        resultChecksum=provenance.result_checksum,
-        scoringPolicyId=provenance.scoring_policy_id,
-        scoringPolicyVersion=provenance.scoring_policy_version,
+        evaluation_result_id=str(provenance.evaluation_result_id),
+        backtest_result_id=str(provenance.backtest_result_id),
+        run_id=str(provenance.run_id),
+        job_id=str(provenance.job_id),
+        strategy_id=provenance.strategy_id,
+        strategy_version=provenance.strategy_version,
+        dataset_id=str(provenance.dataset_id),
+        execution_config=provenance.execution_config,
+        result_checksum=provenance.result_checksum,
+        scoring_policy_id=provenance.scoring_policy_id,
+        scoring_policy_version=provenance.scoring_policy_version,
     )
 
 
@@ -418,10 +418,10 @@ def marker_to_dto(marker: MarkerView) -> MarkerDto:
         label=marker.label,
         shape=marker.shape.value,
         tone=marker.tone.value if marker.tone else None,
-        sourceStrategyId=marker.source_strategy_id,
-        sourceStrategyVersion=marker.source_strategy_version,
-        signalId=str(marker.signal_id) if marker.signal_id else None,
-        tradeId=str(marker.trade_id) if marker.trade_id else None,
+        source_strategy_id=marker.source_strategy_id,
+        source_strategy_version=marker.source_strategy_version,
+        signal_id=str(marker.signal_id) if marker.signal_id else None,
+        trade_id=str(marker.trade_id) if marker.trade_id else None,
     )
 
 
@@ -430,9 +430,9 @@ def overlay_to_dto(overlay: OverlayView) -> OverlayDto:
         id=overlay.id,
         kind=overlay.kind.value,
         label=overlay.label,
-        styleToken=overlay.style_token,
-        sourceStrategyId=overlay.source_strategy_id,
-        sourceStrategyVersion=overlay.source_strategy_version,
+        style_token=overlay.style_token,
+        source_strategy_id=overlay.source_strategy_id,
+        source_strategy_version=overlay.source_strategy_version,
         points=tuple(
             OverlayPointDto(
                 time=_instant(point.time) if point.time else None,
@@ -440,8 +440,8 @@ def overlay_to_dto(overlay: OverlayView) -> OverlayDto:
                 upper=_decimal(point.upper),
                 middle=_decimal(point.middle),
                 lower=_decimal(point.lower),
-                startTime=_instant(point.start_time) if point.start_time else None,
-                endTime=_instant(point.end_time) if point.end_time else None,
+                start_time=_instant(point.start_time) if point.start_time else None,
+                end_time=_instant(point.end_time) if point.end_time else None,
             )
             for point in overlay.points
         ),
@@ -452,12 +452,12 @@ def visualization_to_dto(view: VisualizationView) -> VisualizationDataDto:
     return VisualizationDataDto(
         pair=view.pair,
         timeframe=view.timeframe,
-        startTime=_instant(view.start_time),
-        endTime=_instant(view.end_time),
+        start_time=_instant(view.start_time),
+        end_time=_instant(view.end_time),
         availability=visualization_availability_to_dto(view.availability),
         candles=tuple(
             CandleDto(
-                openTime=_instant(candle.open_time),
+                open_time=_instant(candle.open_time),
                 open=canonical_decimal(candle.open),
                 high=canonical_decimal(candle.high),
                 low=canonical_decimal(candle.low),
@@ -468,7 +468,7 @@ def visualization_to_dto(view: VisualizationView) -> VisualizationDataDto:
         ),
         overlays=tuple(overlay_to_dto(overlay) for overlay in view.overlays),
         markers=tuple(marker_to_dto(marker) for marker in view.markers),
-        unalignedMarkers=tuple(
+        unaligned_markers=tuple(
             UnalignedMarkerDto(marker=marker_to_dto(item.marker), reason=item.reason)
             for item in view.unaligned_markers
         ),
@@ -479,21 +479,21 @@ def trade_page_to_dto(page: TradePage) -> TradePageDto:
     return TradePageDto(
         items=tuple(
             TradeDto(
-                tradeId=str(trade.trade_id),
-                entrySignalId=str(trade.entry_signal_id) if trade.entry_signal_id else None,
-                exitSignalId=str(trade.exit_signal_id) if trade.exit_signal_id else None,
-                entryTime=_instant(trade.entry_time),
-                entryPrice=canonical_decimal(trade.entry_price),
-                exitTime=_instant(trade.exit_time),
-                exitPrice=canonical_decimal(trade.exit_price),
+                trade_id=str(trade.trade_id),
+                entry_signal_id=str(trade.entry_signal_id) if trade.entry_signal_id else None,
+                exit_signal_id=str(trade.exit_signal_id) if trade.exit_signal_id else None,
+                entry_time=_instant(trade.entry_time),
+                entry_price=canonical_decimal(trade.entry_price),
+                exit_time=_instant(trade.exit_time),
+                exit_price=canonical_decimal(trade.exit_price),
                 side=trade.side,
                 quantity=canonical_decimal(trade.quantity),
-                profitLoss=canonical_decimal(trade.profit_loss),
-                returnPercent=canonical_decimal(trade.return_percent),
+                profit_loss=canonical_decimal(trade.profit_loss),
+                return_percent=canonical_decimal(trade.return_percent),
             )
             for trade in page.items
         ),
-        pagination=PageMetaDto(page=page.page, pageSize=page.page_size, total=page.total),
+        pagination=PageMetaDto(page=page.page, page_size=page.page_size, total=page.total),
     )
 
 
@@ -501,34 +501,34 @@ def event_to_dto(event: LeaderboardUpdatedEvent) -> LeaderboardUpdatedEventDto:
     top_one = None
     if event.top_one is not None:
         top_one = LeaderboardTopOneDto(
-            evaluationResultId=event.top_one["evaluationResultId"],
-            strategyId=event.top_one["strategyId"],
-            strategyVersion=event.top_one["strategyVersion"],
+            evaluation_result_id=event.top_one["evaluationResultId"],
+            strategy_id=event.top_one["strategyId"],
+            strategy_version=event.top_one["strategyVersion"],
             rank=int(event.top_one["rank"]),
             score=event.top_one["score"],
         )
     return LeaderboardUpdatedEventDto(
-        eventId=str(event.event_id),
-        occurredAt=_instant(event.occurred_at),
-        requestId=event.request_id,
-        runId=str(event.run_id) if event.run_id else None,
-        jobId=str(event.job_id) if event.job_id else None,
+        event_id=str(event.event_id),
+        occurred_at=_instant(event.occurred_at),
+        request_id=event.request_id,
+        run_id=str(event.run_id) if event.run_id else None,
+        job_id=str(event.job_id) if event.job_id else None,
         payload=LeaderboardUpdatedPayloadDto(
-            leaderboardId=str(event.leaderboard_id),
-            scopeKey=event.scope_key,
-            scoringPolicyId=event.policy.policy_id,
-            scoringPolicyVersion=event.policy.version,
-            rankBy=event.rank_metric.value,
+            leaderboard_id=str(event.leaderboard_id),
+            scope_key=event.scope_key,
+            scoring_policy_id=event.policy.policy_id,
+            scoring_policy_version=event.policy.version,
+            rank_by=event.rank_metric.value,
             k=event.k,
-            projectionVersion=event.projection_version,
-            updatedAt=_instant(event.updated_at),
-            entryCount=event.entry_count,
+            projection_version=event.projection_version,
+            updated_at=_instant(event.updated_at),
+            entry_count=event.entry_count,
             changed=LeaderboardChangedSetDto(
-                addedEvaluationResultIds=tuple(str(item) for item in event.added),
-                removedEvaluationResultIds=tuple(str(item) for item in event.removed),
-                movedEvaluationResultIds=tuple(str(item) for item in event.moved),
+                added_evaluation_result_ids=tuple(str(item) for item in event.added),
+                removed_evaluation_result_ids=tuple(str(item) for item in event.removed),
+                moved_evaluation_result_ids=tuple(str(item) for item in event.moved),
             ),
-            topOne=top_one,
-            runState=event.run_state.value if event.run_state else None,
+            top_one=top_one,
+            run_state=event.run_state.value if event.run_state else None,
         ),
     )

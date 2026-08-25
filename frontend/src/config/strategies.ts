@@ -31,6 +31,20 @@ export type ParameterConstraint = {
 }
 
 export const STRATEGY_PRESENTATION: Record<string, StrategyPresentation> = {
+  ma: {
+    friendly: 'Moving Average', tech: 'MA · 1.x', catLabel: 'Trend',
+    question: 'Which direction is price generally moving?',
+    plain: 'Compares price with its recent moving average to detect strict crossings.',
+    short: 'Detects price crossings of its average', abbr: 'MA',
+    purpose: 'Detect changes in market direction.', signal: 'hold',
+  },
+  rsi: {
+    friendly: 'RSI', tech: 'RSI · 1.x', catLabel: 'Momentum',
+    question: 'How strong is the recent price move?',
+    plain: 'Measures recent buying and selling strength with Wilder RSI.',
+    short: 'Measures recent buying / selling strength', abbr: 'RSI',
+    purpose: 'Gauge whether a move is over-extended.', signal: 'hold',
+  },
   'ma-cross-v3': {
     friendly: 'Moving Average', tech: 'MA Cross · v3', catLabel: 'Trend',
     question: 'Which direction is price generally moving?',
@@ -62,24 +76,16 @@ export const STRATEGY_PRESENTATION: Record<string, StrategyPresentation> = {
 }
 
 export const STRATEGY_PRESETS: StrategyPreset[] = [
-  { id: 'trend', name: 'Trend Starter', ids: ['ma-cross-v3'], tagline: 'A simple way to understand market direction.' },
+  { id: 'trend', name: 'Trend Starter', ids: ['ma'], tagline: 'A simple way to understand market direction.' },
   {
-    id: 'balanced', name: 'Balanced Starter', ids: ['ma-cross-v3', 'rsi-reversal-v2'],
+    id: 'balanced', name: 'Balanced Starter', ids: ['ma', 'rsi'],
     tagline: 'Combines market direction with momentum.', recommended: true,
-  },
-  {
-    id: 'multi', name: 'Multi-Signal Starter', ids: ['ma-cross-v3', 'rsi-reversal-v2', 'sr-v4'],
-    tagline: 'Combines trend, momentum and market structure.',
   },
 ]
 
 export const STRATEGY_PARAMETER_CONSTRAINTS: ParameterConstraint[] = [
   {
-    strategyId: 'ma-cross-v3', kind: 'lessThan', left: 'fast', right: 'slow',
-    message: 'Fast MA must be shorter than Slow MA.',
-  },
-  {
-    strategyId: 'rsi-reversal-v2', kind: 'lessThan', left: 'buy', right: 'sell',
+    strategyId: 'rsi', kind: 'lessThan', left: 'lower_threshold', right: 'upper_threshold',
     message: 'Oversold level must be below the Overbought level.',
   },
 ]
@@ -100,10 +106,32 @@ export function validateStrategyParameters(
       return `${parameter.label} must be between ${parameter.min} and ${parameter.max}.`
     }
   }
-  for (const constraint of constraints.filter((item) => item.strategyId === strategy.id)) {
+  for (const constraint of constraints.filter((item) => item.strategyId === (strategy.strategyId ?? strategy.id))) {
     if (constraint.kind === 'lessThan' && values[constraint.left] >= values[constraint.right]) return constraint.message
   }
   return null
+}
+
+export function strategyPresentation(strategy: Strategy): StrategyPresentation {
+  const canonicalId = strategy.strategyId ?? strategy.id
+  const curated = STRATEGY_PRESENTATION[canonicalId] ?? STRATEGY_PRESENTATION[strategy.id]
+  if (curated) return { ...curated, tech: `${strategy.name} · ${strategy.version}` }
+  const words = strategy.name.trim().split(/\s+/)
+  const abbr = words.map((word) => word[0]).join('').slice(0, 5).toUpperCase() || 'GEN'
+  const generated = strategy.origin === 'LLM_GENERATED'
+  return {
+    friendly: strategy.name,
+    tech: `${strategy.strategyType ?? 'Strategy'} · ${strategy.version}`,
+    catLabel: generated ? 'Generated' : strategy.category,
+    question: `How does ${strategy.name} interpret this market?`,
+    plain: generated
+      ? 'An approved LLM-generated strategy loaded from the immutable system catalog.'
+      : 'A registered strategy loaded from the system catalog.',
+    short: generated ? 'Approved generated strategy' : 'Registered strategy',
+    abbr,
+    purpose: 'Apply the registered parameter schema to later analysis workflows.',
+    signal: 'hold',
+  }
 }
 
 export function validateStrategyWeights(selected: string[], weights: Record<string, number>) {

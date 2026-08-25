@@ -12,6 +12,8 @@ from crypto_lab.api.errors import install_error_handlers
 from crypto_lab.api.middleware import RequestIdMiddleware
 from crypto_lab.api.routes.leaderboards import router as leaderboards_router
 from crypto_lab.api.routes.market_data import router as market_data_router
+from crypto_lab.api.routes.strategies import router as strategies_router
+from crypto_lab.api.routes.strategy_generation import router as strategy_generation_router
 from crypto_lab.api.websocket.leaderboard_channel import router as leaderboard_ws_router
 from crypto_lab.api.websocket.market_data_channel import router as market_data_websocket_router
 from crypto_lab.infrastructure.logging import configure_logging
@@ -23,6 +25,7 @@ def create_app(container: Container | None = None) -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         app.state.container = owned_container
+        await owned_container.load_generated_strategies()
         if owned_container.leaderboard is not None:
             owned_container.leaderboard.dispatcher_loop.start()
         yield
@@ -47,6 +50,8 @@ def create_app(container: Container | None = None) -> FastAPI:
     )
     install_error_handlers(app)
     app.include_router(market_data_router)
+    app.include_router(strategies_router)
+    app.include_router(strategy_generation_router)
     app.include_router(market_data_websocket_router)
     app.include_router(leaderboards_router)
     app.include_router(leaderboard_ws_router)

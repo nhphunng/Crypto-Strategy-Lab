@@ -10,6 +10,7 @@ requires-python = ">=3.12,<3.13"
 dependencies = [
   "alembic==1.16.1",
   "asyncpg==0.30.0",
+  "cryptography==50.0.0",
   "fastapi==0.115.12",
   "httpx==0.28.1",
   "pydantic==2.11.5",
@@ -38,8 +39,11 @@ asyncio_mode = "auto"
 pythonpath = ["src", "."]
 testpaths = ["tests"]
 markers = [
+  "contract: cross-boundary contract tests",
   "integration: requires PostgreSQL",
   "performance: opt-in performance gate",
+  "security: generated-strategy security boundary tests",
+  "e2e: opt-in tests against the generated-strategy Compose deployment",
 ]
 
 [tool.ruff]

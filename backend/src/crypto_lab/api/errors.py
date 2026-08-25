@@ -12,6 +12,7 @@ from crypto_lab.api.middleware import request_id
 from crypto_lab.application.leaderboard.errors import LeaderboardError
 from crypto_lab.application.market_data.errors import ErrorDescriptor, MarketDataError
 from crypto_lab.domain.market_data.candle import format_utc_millis
+from crypto_lab.domain.strategy.errors import ErrorCategory, StrategyError
 
 logger = logging.getLogger(__name__)
 
@@ -41,8 +42,51 @@ _STATUS_BY_CODE = {
     "LEADERBOARD_DEPENDENCY_UNAVAILABLE": 503,
 }
 
+_STRATEGY_STATUS = {
+    ErrorCategory.INVALID_PARAMETERS: 422,
+    ErrorCategory.INVALID_CONTEXT: 422,
+    ErrorCategory.UNKNOWN_STRATEGY: 404,
+    ErrorCategory.STRATEGY_VERSION_UNAVAILABLE: 404,
+    ErrorCategory.STRATEGY_VERSION_DEPRECATED: 409,
+    ErrorCategory.INCOMPATIBLE_CONTRACT_VERSION: 409,
+    ErrorCategory.DUPLICATE_STRATEGY_ENTRY: 409,
+    ErrorCategory.INVALID_STRATEGY_METADATA: 422,
+    ErrorCategory.STRATEGY_INTENT_UNRESOLVED: 422,
+    ErrorCategory.SOURCE_ACCESS_DENIED: 422,
+    ErrorCategory.SOURCE_UNAVAILABLE: 422,
+    ErrorCategory.GENERATION_FAILED: 502,
+    ErrorCategory.STRATEGY_RULES_INCOMPLETE: 422,
+    ErrorCategory.GENERATED_ARTIFACT_INVALID: 422,
+    ErrorCategory.ACTIVATION_NOT_ALLOWED: 409,
+}
+
 
 def install_error_handlers(app: FastAPI) -> None:
+    @app.exception_handler(StrategyError)
+    async def strategy_error(request: Request, error: StrategyError) -> JSONResponse:
+        envelope = ErrorEnvelope(
+            message=str(error),
+            error=ErrorDetail(
+                code=error.category.value,
+                retryable=error.category
+                in {ErrorCategory.SOURCE_UNAVAILABLE, ErrorCategory.GENERATION_FAILED},
+                details={
+                    "issues": [
+                        {"field": item.field, "code": item.code, "message": item.message}
+                        for item in error.issues
+                    ]
+                }
+                if error.issues
+                else None,
+            ),
+            timestamp=format_utc_millis(datetime.now(UTC)),
+            request_id=request_id(request),
+        )
+        return JSONResponse(
+            status_code=_STRATEGY_STATUS[error.category],
+            content=envelope.model_dump(by_alias=True),
+        )
+
     @app.exception_handler(MarketDataError)
     async def market_error(request: Request, error: MarketDataError) -> JSONResponse:
         return _response(request, error.descriptor)

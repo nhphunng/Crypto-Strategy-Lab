@@ -6,6 +6,8 @@
 
 This contract defines the in-process business boundary. It does not require HTTP, queue, database, or framework types.
 
+Built-in and activated LLM-generated strategies share this boundary. Origin affects provenance and activation trust, not Signal semantics. Draft or validation-failed generated artifacts are never supplied through this contract.
+
 ## Consumer Inputs
 
 TV4 supplies:
@@ -16,6 +18,8 @@ TV4 supplies:
 
 TV4 MUST NOT request “latest” implicitly. It MUST identify an exact strategy version and definition.
 
+For an LLM-generated version, the Strategy Definition additionally resolves an immutable generated-artifact fingerprint and generation-provenance identity. TV4 does not call the LLM, re-fetch source content, or regenerate behavior during analysis/backtest.
+
 ## Strategy Operation
 
 ```text
@@ -25,6 +29,8 @@ analyze(strategy_definition, immutable_strategy_context, supported_contract_rang
 ```
 
 The operation is pure with respect to its supplied values: it does not load data, persist results, access a queue, call a provider, read a clock, or use an implicit random source.
+
+Generated behavior executes only inside the isolation boundary approved for that artifact and contract version. The observable result and error contract remains identical to a built-in Strategy.
 
 ## Strategy Context Rules
 
@@ -44,6 +50,7 @@ The operation is pure with respect to its supplied values: it does not load data
 |-------|---------|
 | contractVersion | Exact strategy contract used |
 | strategyDefinition | Exact definition ID, strategy ID/type/version, and parameter-schema fingerprint |
+| strategyOrigin | `BUILT_IN` or `LLM_GENERATED`; generated origin includes immutable artifact/provenance references |
 | validatedParameters | Canonical complete parameter values |
 | contextProvenance | Dataset ID/version, context fingerprint, provider, pair, timeframe, range, and decision timestamp |
 | historyState | `EMPTY`, `INSUFFICIENT`, or `EVALUABLE` |
@@ -92,6 +99,8 @@ Every error has `category`, human-readable `message`, and structured `issues`. N
 
 Registry-only failures `DUPLICATE_STRATEGY_ENTRY` and `INVALID_STRATEGY_METADATA` cannot damage already registered entries.
 
+Generation-only failures (`STRATEGY_INTENT_UNRESOLVED`, `SOURCE_ACCESS_DENIED`, `SOURCE_UNAVAILABLE`, `GENERATION_FAILED`, `STRATEGY_RULES_INCOMPLETE`, `GENERATED_ARTIFACT_INVALID`, and `ACTIVATION_NOT_ALLOWED`) occur before a version is available to TV4. TV4 MUST never receive a pending or failed draft as a Strategy Definition.
+
 ## Version Compatibility
 
 - Version format is `MAJOR.MINOR.PATCH`.
@@ -106,3 +115,4 @@ Registry-only failures `DUPLICATE_STRATEGY_ENTRY` and `INVALID_STRATEGY_METADATA
 
 TV3 and TV4 share one fixture containing an exact Strategy Definition, normalized dataset/context fingerprint, decision timestamp, and expected ordered Signals. Both features pass when repeated analysis yields byte-equivalent canonical result content and TV4 consumes it without MA/RSI-specific branching.
 
+The fitness pack includes one activated generated Strategy Version. The pack proves restart-safe exact artifact resolution, zero model/source calls during execution, identical repeated Signals, and no branch on `BUILT_IN` versus `LLM_GENERATED` in TV4.

@@ -12,12 +12,14 @@ from crypto_lab.infrastructure.persistence import (
     backtest_models,
     evaluation_models,
     leaderboard_models,
+    strategy_generation_models,
     strategy_models,
 )
 from crypto_lab.infrastructure.persistence.models import Base
 
 _PERSISTENCE_MODEL_MODULES = (
     strategy_models,
+    strategy_generation_models,
     backtest_models,
     evaluation_models,
     leaderboard_models,

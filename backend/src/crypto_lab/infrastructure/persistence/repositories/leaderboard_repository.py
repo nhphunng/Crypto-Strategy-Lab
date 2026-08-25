@@ -37,6 +37,7 @@ from crypto_lab.application.leaderboard.ports import (
 from crypto_lab.domain.leaderboard.entry import (
     LeaderboardEntry,
     MetricSet,
+    ProjectionChange,
     RankableCandidate,
     StrategyMember,
     StrategySummary,
@@ -572,7 +573,7 @@ class SqlAlchemyLeaderboardRepository:
     @staticmethod
     def _source_evaluation_id(
         source: UpdateSource | None,
-        change: Any,
+        change: ProjectionChange,
         entries: tuple[LeaderboardEntry, ...],
     ) -> UUID | None:
         if source is not None:

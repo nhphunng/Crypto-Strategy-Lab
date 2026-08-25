@@ -3,6 +3,7 @@
 | Version | Date | Author | Change |
 |---------|------|--------|--------|
 | 0.1 | 2026-08-11 | Crypto Strategy Lab Team | Khởi tạo SRS từ `REQUIREMENT.md` và thống nhất Feature/User Story baseline |
+| 0.2 | 2026-08-23 | Crypto Strategy Lab Team | Phê duyệt LLM-assisted Strategy Generation, source governance, sandbox validation/execution và reusable generated versions |
 
 ---
 
@@ -42,6 +43,7 @@
   - [4.4 Security](#44-security)
     - [4.4.1 Authentication](#441-authentication)
     - [4.4.2 Authorization](#442-authorization)
+    - [4.4.3 Generated Strategy Isolation](#443-generated-strategy-isolation)
   - [4.5 Privacy](#45-privacy)
   - [4.6 Reliability](#46-reliability)
 - [5. User Experience Requirements](#5-user-experience-requirements-uxr)
@@ -73,6 +75,10 @@
   - [7.4 Strategy Plugin (SP)](#74-strategy-plugin-sp)
     - [7.4.1 SP-US-01: Register a New Strategy](#741-sp-us-01-register-a-new-strategy)
     - [7.4.2 SP-US-02: Version a Strategy Definition](#742-sp-us-02-version-a-strategy-definition)
+    - [7.4.3 SP-US-03: Discover Registered Strategies](#743-sp-us-03-discover-registered-strategies)
+    - [7.4.4 SP-US-04: Generate a Strategy from a Name](#744-sp-us-04-generate-a-strategy-from-a-name)
+    - [7.4.5 SP-US-05: Extract Strategies from Source Content](#745-sp-us-05-extract-strategies-from-source-content)
+    - [7.4.6 SP-US-06: Reuse an Activated Generated Strategy](#746-sp-us-06-reuse-an-activated-generated-strategy)
     - [7.4.3 SP-US-03: Discover Registered Strategies](#743-sp-us-03-discover-registered-strategies)
   - [7.5 Composite Strategy (CS)](#75-composite-strategy-cs)
     - [7.5.1 CS-US-01: Create a Majority-Vote Composite](#751-cs-us-01-create-a-majority-vote-composite)
@@ -136,6 +142,7 @@ Crypto Strategy Lab là nền tảng thử nghiệm chiến lược giao dịch 
 - Hiển thị tối đa bốn candlestick chart với timeframe độc lập.
 - Cung cấp tối thiểu bốn strategy đơn lẻ: MA, RSI, Bollinger Bands và Support/Resistance.
 - Cho phép đăng ký strategy mới qua contract/registry mà không sửa Backtester, Evaluator và Leaderboard.
+- Cho phép Analyst dùng tên strategy, mô tả tự nhiên hoặc public webpage được phép để tạo zero-to-many Strategy Draft bằng LLM, validate trong sandbox, xác nhận và đăng ký version tái sử dụng.
 - Tạo Composite Strategy bằng majority vote hoặc weighted combination.
 - Sinh candidate bằng Random Search và hỗ trợ thay thuật toán search.
 - Backtest strategy trên dữ liệu lịch sử, mô phỏng trade và lưu provenance.
@@ -153,6 +160,7 @@ Crypto Strategy Lab là nền tảng thử nghiệm chiến lược giao dịch 
 - Giá trị backtest chỉ có ý nghĩa khi biết chính xác dataset, strategy version và execution configuration.
 - News và sentiment là dữ liệu bổ sung; market chart và technical backtest vẫn hoạt động khi chúng lỗi.
 - Một strategy mới tuân thủ contract chung có thể đi qua backtest, evaluation và leaderboard hiện có.
+- LLM-generated strategy chỉ có giá trị khi exact source/model/prompt/artifact/validation provenance được lưu và artifact đã pass current security policy.
 
 #### <span style="color:#2563EB;">1.3.2 Constraints</span> <a id="132-constraints"></a>
 
@@ -161,6 +169,8 @@ Crypto Strategy Lab là nền tảng thử nghiệm chiến lược giao dịch 
 - MVP có ít nhất bốn strategy đơn lẻ, một Composite Strategy policy và Random Search.
 - Backtest phải deterministic, không look-ahead và không mất/nhân đôi kết quả khi job retry.
 - Strategy Definition và scoring policy phải có version; kết quả lịch sử không bị overwrite.
+- LLM/web content và generated Python đều là untrusted; không được execute trong API/domain/normal worker và không được activate trước validation + user confirmation.
+- Web source chỉ là public HTTPS content thỏa `docs/GENERATED_STRATEGY_SECURITY_POLICY.md`; private/authenticated/local source và arbitrary code upload bị cấm.
 - Hệ thống chỉ phân tích và mô phỏng, không gửi lệnh giao dịch thật.
 - Công nghệ phức tạp chỉ được dùng khi giải quyết một architectural driver có bằng chứng.
 
@@ -186,6 +196,11 @@ Crypto Strategy Lab là nền tảng thử nghiệm chiến lược giao dịch 
 | MDD | Maximum Drawdown |
 | Provider | Adapter cung cấp market data hoặc news theo contract chuẩn |
 | Sentiment | Nhãn/score POSITIVE, NEUTRAL hoặc NEGATIVE của News Item |
+| Strategy Generation Request | Yêu cầu tạo strategy từ đúng một source mode và theo dõi lifecycle zero-to-many draft |
+| Generated Strategy Draft | Structured rules/evidence/assumptions và artifact chưa được phép dùng qua active registry |
+| Generated Strategy Artifact | Exact content-addressed Python logic do LLM sinh cho một draft |
+| Strategy Validation Report | Kết quả immutable của static, contract, determinism, no-look-ahead và sandbox resource checks |
+| Strategy Generation Provenance | Liên kết source, model, prompt, artifact, policy, validation và confirmation của generated version |
 
 ### <span style="color:#2563EB;">1.5 Roles and Actors 👥</span> <a id="15-roles-and-actors"></a>
 
@@ -209,6 +224,7 @@ Các nội dung ngoài phạm vi SRS hiện tại:
 - Quản lý ví, private key, tài sản hoặc nạp/rút tiền.
 - High-frequency trading với yêu cầu microsecond latency.
 - Các mở rộng Genetic/Bayesian/LLM search, price prediction, multiple exchange, CQRS hoặc microservices nếu chưa có feature được phê duyệt.
+- Arbitrary user-authored code upload, authenticated/private webpage crawling, browser-session reuse, public strategy marketplace và generated code execution ngoài approved sandbox.
 - Một hệ thống identity/RBAC hoàn chỉnh; actor hiện tại chỉ dùng để diễn đạt user story.
 
 ### <span style="color:#2563EB;">1.7 Related Documents 🔗</span> <a id="17-related-documents"></a>
@@ -219,7 +235,8 @@ Các nội dung ngoài phạm vi SRS hiện tại:
 | Constitution | `.specify/memory/constitution.md` | Nguyên tắc quản trị bắt buộc cho mọi feature |
 | Tech Stack and Skeleton | `docs/TECH_STACK_SKELETON_SPECKIT_FLOW.md` | Đề xuất kiến trúc, stack và Spec Kit workflow |
 | Feature Specifications | `specs/<feature>/spec.md` | WHAT/WHY và acceptance criteria chi tiết của từng feature |
-| Architecture/ADR | Chưa tạo | Container/module view, data flow và quyết định kiến trúc |
+| Architecture/ADR | `docs/ARCHITECTURE.md`, `docs/ADR/` | Container/module view, data flow và quyết định kiến trúc |
+| Generated Strategy Security Policy | `docs/GENERATED_STRATEGY_SECURITY_POLICY.md` | Source access, rights/retention, LLM data handling, sandbox và activation controls |
 | RUNBOOK | Chưa tạo | Hướng dẫn setup, vận hành và troubleshooting |
 
 ---
@@ -228,7 +245,7 @@ Các nội dung ngoài phạm vi SRS hiện tại:
 
 > Section này định nghĩa entity, relationship và cross-feature rule của Crypto Strategy Lab.
 >
-> **Last synced with §7 User Stories:** 2026-08-11
+> **Last synced with §7 User Stories:** 2026-08-23
 
 ### <span style="color:#0D9488;">2.1 Domain Diagram 🗺️</span> <a id="21-domain-diagram"></a>
 
@@ -248,6 +265,12 @@ classDiagram
     LeaderboardEntry --> EvaluationResult : ranks
     NewsItem "1" --> "0..n" SentimentResult : analyzedAs
     SentimentResult --> StrategyDefinition : mayFeed
+    StrategyGenerationRequest "1" *-- "0..n" GeneratedStrategyDraft : produces
+    StrategyGenerationRequest --> StrategySourceSnapshot : uses
+    GeneratedStrategyDraft --> GeneratedStrategyArtifact : generates
+    GeneratedStrategyArtifact --> StrategyValidationReport : validatedBy
+    GeneratedStrategyDraft --> StrategyGenerationProvenance : activatesWith
+    StrategyGenerationProvenance --> StrategyDefinition : publishes
 
     class StrategyDefinition {
       <<VersionedAggregate>>
@@ -277,6 +300,12 @@ classDiagram
 | LeaderboardEntry | Projection Top-K | rank, evaluation result, score, updated at | Tính/lưu từ EvaluationResult |
 | NewsItem | News chuẩn hóa từ provider | title, content, source, URL, published/collected at, related coins | Provider-neutral record |
 | SentimentResult | Kết quả model cho NewsItem | label, score, model version, analyzed at | Versioned model output |
+| StrategyGenerationRequest | Intent tạo strategy từ name/text/public URL | source type, request status, correlation, failure | Durable request; zero-to-many draft |
+| StrategySourceSnapshot | Exact permitted source evidence | URL/attribution, retrieval time, content fingerprint, retention class | Immutable fingerprint; raw content retention bounded |
+| GeneratedStrategyDraft | Candidate chưa executable | structured rules, evidence, assumptions, parameters, status | Independently reviewed/validated/rejected/activated |
+| GeneratedStrategyArtifact | Exact Python logic cho một draft | contract version, content digest, declared capabilities | Immutable and quarantined until activation |
+| StrategyValidationReport | Validation của exact artifact/policy | checks, findings, sandbox image/policy fingerprint, status | Immutable; revalidation creates another report |
+| StrategyGenerationProvenance | Lineage của activated generated version | source/model/prompt/artifact/report/confirmation identities | Permanent minimal audit record |
 
 ### <span style="color:#0D9488;">2.3 Entity Relationship and Cardinality 🔗</span> <a id="23-entity-relationship-and-cardinality"></a>
 
@@ -293,6 +322,11 @@ classDiagram
 | BacktestResult | has | EvaluationResult | Composition | 1 | Evaluation tách khỏi Strategy implementation |
 | LeaderboardEntry | references | EvaluationResult | Association | 1 | Rank theo versioned scoring policy |
 | NewsItem | has | SentimentResult | Composition | 0..n | Một News Item có thể được phân tích bởi nhiều model version |
+| StrategyGenerationRequest | uses | StrategySourceSnapshot | Association | 1 | Source exact/fingerprint phải có trước extraction |
+| StrategyGenerationRequest | produces | GeneratedStrategyDraft | Composition | 0..n | Mỗi candidate độc lập review/validation/activation |
+| GeneratedStrategyDraft | has | GeneratedStrategyArtifact | Association | 0..n | Revision tạo artifact/draft identity mới, không overwrite |
+| GeneratedStrategyArtifact | has | StrategyValidationReport | Association | 0..n | Report bind exact artifact và policy version |
+| StrategyGenerationProvenance | publishes | StrategyDefinition | Association | 1 | Chỉ current passing report + exact confirmation mới activate |
 
 ### <span style="color:#0D9488;">2.4 Business Rules 📏</span> <a id="24-business-rules"></a>
 
@@ -308,6 +342,8 @@ classDiagram
 | BR-08 | Job retry MUST idempotent theo `jobId`; worker lỗi không làm mất hoặc nhân đôi result. | BacktestJob, BacktestResult | §3.7, §7.7 |
 | BR-09 | News collection và Sentiment analysis MUST decoupled; lỗi news không dừng chart/backtest. | NewsItem, SentimentResult | §3.10, §3.11 |
 | BR-10 | Hệ thống MUST NOT thực thi lệnh giao dịch thật. | StrategyDefinition, Trade | §1.6, §3.7 |
+| BR-11 | Retrieved content và LLM output MUST được xem là untrusted data; generated Python chỉ execute trong ADR-006 sandbox. | StrategySourceSnapshot, GeneratedStrategyArtifact, StrategyValidationReport | §3.4, §4.4, §6.4 |
+| BR-12 | Activated generated version MUST giữ exact artifact/source/model/prompt/policy provenance và không regenerate/overwrite ngầm. | StrategyDefinition, StrategyGenerationProvenance | §3.4, §7.4 |
 
 ---
 
@@ -353,6 +389,21 @@ classDiagram
 | SP-FR-03 | Parameter metadata | Plugin shall công bố parameter schema/default/range. | Invalid parameter bị reject trước execution. |
 | SP-FR-04 | Versioning | Mỗi behavior/parameter-set được sử dụng shall có immutable version. | Experiment luôn truy nguyên đúng version. |
 | SP-FR-05 | Compatibility | Registry shall từ chối plugin không tương thích contract version. | Lỗi đăng ký không làm hỏng strategy đã hoạt động. |
+| SP-FR-06 | Generation source | Analyst shall submit exactly one supported source mode: existing strategy name, natural-language text or approved public webpage URL. | Arbitrary code upload/private crawling bị cấm. |
+| SP-FR-07 | Name intent | Hệ thống shall resolve a named strategy and stop for selection when materially different interpretations remain. | Không silently invent/activate ambiguous intent. |
+| SP-FR-08 | Zero-to-many extraction | Hệ thống shall extract zero, one or multiple independently reviewable Strategy Drafts from permitted source content. | Sibling failure/rejection không block valid sibling. |
+| SP-FR-09 | Structured draft | Mỗi draft shall expose rules, data/warm-up needs, parameter schema, evidence and explicit assumptions before activation. | Unsupported additions phải được label là assumption. |
+| SP-FR-10 | Generated artifact | Hệ thống shall transform each eligible draft into content-addressed Python logic implementing the common Strategy contract. | Generated origin không đổi downstream contract. |
+| SP-FR-11 | Validation and isolation | Generated artifact shall pass static, contract, fixture, determinism, no-look-ahead and bounded sandbox checks under ADR-006. | Model output không execute trực tiếp trong application process. |
+| SP-FR-12 | Review and activation | Only an exact passing draft confirmed by the requester shall be atomically stored and published to the registry. | Failed/stale/mismatched confirmation leaves registry unchanged. |
+| SP-FR-13 | Web source policy | Public webpage retrieval shall enforce `GENERATED_STRATEGY_SECURITY_POLICY.md` before model processing. | HTTPS/public-only, redirect/DNS/size/type/time bounds and no ambient credentials. |
+| SP-FR-14 | Prompt-injection resistance | Retrieved/user text shall remain inert source data and cannot change policy, prompt authority, tools, validation or activation. | Fail closed on attempted policy bypass. |
+| SP-FR-15 | Generation provenance | Activated generated versions shall retain exact source, model, prompt template, artifact, validation policy/report and confirmation lineage. | Secrets/full protected source không exposed qua API/log. |
+| SP-FR-16 | Rights and retention | Source content, attribution, evidence and deletion shall follow the approved policy; missing permitted-use evidence blocks activation. | Raw content retention tối đa 30 ngày theo baseline. |
+| SP-FR-17 | Durable reuse | Activated generated Strategy Versions shall remain stored, discoverable and executable after restart without source/LLM availability. | Exact digest được verify trước load. |
+| SP-FR-18 | Origin-safe discovery | Registry shall distinguish `BUILT_IN` and `LLM_GENERATED` origin and expose safe provenance summary. | Downstream không branch behavior theo origin. |
+| SP-FR-19 | Immutable revision | Source/rule/parameter/artifact/contract meaning changes shall create a new draft and immutable Strategy Version. | Historical references không đổi. |
+| SP-FR-20 | Non-active isolation | Pending, failed, rejected, archived, quarantined, deprecated-for-execution or unavailable artifacts shall not be offered to new workflows. | Metadata/audit may remain resolvable under policy. |
 
 ### <span style="color:#0D9488;">3.5 Composite Strategy 🧩</span> <a id="35-composite-strategy"></a>
 
@@ -447,6 +498,8 @@ classDiagram
 | Chart update | Candle mới được cập nhật mà không render lại toàn bộ dashboard |
 | Worker scaling benchmark | 4 worker đạt mục tiêu ≥3x throughput của 1 worker khi không có shared bottleneck được đo |
 | Result consistency | Workload giống nhau cho 1 và 4 worker tạo tập result giống nhau theo `jobId` |
+| Generation acknowledgement | Durable generation request được acknowledge trong ≤2 giây ở 95% request dưới demo load |
+| Generation completion | 95% supported single-strategy text fixture hoàn thành trong ≤60 giây, không tính documented provider outage |
 
 ### <span style="color:#8B5CF6;">4.2 Availability 🌐</span> <a id="42-availability"></a>
 
@@ -479,14 +532,27 @@ classDiagram
 | Backtest Worker | Chỉ nhận job và ghi status/result theo service identity |
 | Operator endpoint | Health/metrics/control được bảo vệ theo environment policy |
 | Provider adapter | Chỉ dùng credential tối thiểu cho data collection |
+| LLM adapter | Chỉ gửi permitted minimum source; provider credential không vào prompt/output/log |
+| Strategy sandbox | Không network/secret/host mount; chỉ nhận bounded artifact/context và trả Strategy result/error contract |
 
 Không coi `ANALYST`, `STRATEGY_DEVELOPER`, `OPERATOR` là security role cho tới khi một authorization feature được thống nhất.
+
+#### <span style="color:#8B5CF6;">4.4.3 Generated Strategy Isolation</span> <a id="443-generated-strategy-isolation"></a>
+
+- Mọi generated artifact MUST tuân ADR-006 và `GENERATED_STRATEGY_SECURITY_POLICY.md`.
+- API, domain và normal worker MUST NOT `exec`, import hoặc evaluate generated source trực tiếp.
+- Sandbox deny-by-default network, filesystem, process, environment, credential, clock, implicit randomness và native-extension capability.
+- Artifact chỉ activate khi exact digest, current passing Validation Report và exact user confirmation khớp atomically.
+- Sandbox escape/integrity mismatch làm disable generated execution nhưng không được làm built-in Strategy unavailable nếu common contract không bị compromise.
 
 ### <span style="color:#8B5CF6;">4.5 Privacy 🔏</span> <a id="45-privacy"></a>
 
 - Hệ thống chỉ lưu dữ liệu người dùng tối thiểu cần cho audit/run ownership nếu feature đó tồn tại.
 - API key, token, cookie, IP không được xuất hiện trong business response hoặc log.
 - News content/source attribution và URL phải được lưu/hiển thị theo quyền sử dụng nguồn.
+- Public webpage body và user-supplied draft text được mã hóa khi lưu và giữ tối đa 30 ngày; activated provenance chỉ giữ fingerprint, attribution, URL và minimal evidence cần thiết.
+- Source có missing attribution/permitted-use evidence hoặc explicit no-automation/no-derivatives restriction không được activate.
+- LLM provider phải disable training trên submitted content và dùng minimum available retention; nếu không đáp ứng, live generation bị disable.
 - Exported experiment không chứa secret hoặc internal stack trace.
 
 ### <span style="color:#8B5CF6;">4.6 Reliability 🛡️</span> <a id="46-reliability"></a>
@@ -500,6 +566,10 @@ Không coi `ANALYST`, `STRATEGY_DEVELOPER`, `OPERATOR` là security role cho t�
 | News provider lỗi | Ghi lỗi provider; chart, technical strategy và backtest tiếp tục |
 | Sentiment model lỗi | News vẫn được lưu; pending/failed sentiment hiển thị rõ |
 | Evaluation/leaderboard update lặp | Unique `jobId`/policy version ngăn duplicate score/rank event |
+| LLM timeout/refusal/malformed output | Request có categorized retryable/terminal failure; không publish partial draft/version |
+| Web source SSRF/redirect/rebinding/oversize | Reject trước model call và ghi sanitized source-policy reason |
+| Generated code timeout/resource/prohibited capability | Sandbox terminate/quarantine artifact; active registry unchanged |
+| Artifact digest mismatch or policy superseded | Block new execution pending integrity resolution/revalidation; historical provenance remains immutable |
 
 ---
 
@@ -525,6 +595,7 @@ Không coi `ANALYST`, `STRATEGY_DEVELOPER`, `OPERATOR` là security role cho t�
 - Progress cập nhật queued/running/succeeded/failed và số candidate tested.
 - Khi reconnect/retry, UI cho biết hệ thống đang phục hồi thay vì im lặng.
 - Invalid parameter hiển thị field-level error trước khi tạo job.
+- Generation UI hiển thị source status, zero-to-many draft, evidence/assumptions, validation findings, exact confirmation và retryable/terminal failure riêng biệt.
 
 ### <span style="color:#EA580C;">5.4 Role-aware Navigation 🧭</span> <a id="54-role-aware-navigation"></a>
 
@@ -615,13 +686,27 @@ Không coi `ANALYST`, `STRATEGY_DEVELOPER`, `OPERATOR` là security role cho t�
 6. Composite được lưu như Strategy Definition versioned.
 7. Backtester, Evaluator và Leaderboard xử lý qua contract cũ mà không sửa code.
 
+#### LLM-Assisted Alternative Flow
+
+1. Analyst submit đúng một source mode: strategy name, plain text hoặc approved public HTTPS URL.
+2. Hệ thống persist Strategy Generation Request, áp source policy và tạo immutable source fingerprint/snapshot metadata.
+3. LLM adapter extract zero-to-many structured draft với rule evidence và explicit assumptions.
+4. Mỗi draft tạo exact content-addressed Python artifact cho common Strategy contract.
+5. Static validators và ADR-006 sandbox kiểm tra contract, prohibited capability, fixtures, determinism, no-look-ahead và resource bounds.
+6. Analyst review exact rules/evidence/assumptions/fingerprints và confirm một passing draft.
+7. Activation atomically persist provenance + immutable version rồi publish registry entry.
+8. Later analysis/backtest/search/composite resolve exact stored artifact without re-fetching source hoặc gọi LLM.
+
 #### Alternative Flows
 
 - Strategy mới có thể là SMC, Wyckoff hoặc Sentiment Strategy.
+- Một source có thể tạo nhiều draft; từng draft được accept/reject độc lập.
+- Equivalent canonical generated content resolve existing executable version nhưng vẫn giữ request provenance mới.
 
 #### Negative Flows
 
 - Plugin sai contract/version hoặc parameter schema bị từ chối mà không ảnh hưởng plugin đang hoạt động.
+- Ambiguous name, prohibited/inaccessible source, prompt injection, incomplete rules, malformed model output hoặc failed sandbox validation tạo categorized non-active state; không artifact nào được publish một phần.
 
 ### <span style="color:#E11D48;">6.5 Search and Distributed Backtest Flow 📢</span> <a id="65-search-and-distributed-backtest-flow"></a>
 
@@ -774,7 +859,7 @@ Không coi `ANALYST`, `STRATEGY_DEVELOPER`, `OPERATOR` là security role cho t�
 
 ### <span style="color:#9A3412;">7.4 Strategy Plugin (SP) 🔌</span> <a id="74-strategy-plugin-sp"></a>
 
-> Planned Spec: [specs/004-strategy-plugin/spec.md](../specs/004-strategy-plugin/spec.md)
+> Planned Spec: [specs/003-strategy-foundation/spec.md](../specs/003-strategy-foundation/spec.md)
 
 #### <span style="color:#9A3412;">7.4.1 SP-US-01: Register a New Strategy</span> <a id="741-sp-us-01-register-a-new-strategy"></a>
 
@@ -802,6 +887,39 @@ Không coi `ANALYST`, `STRATEGY_DEVELOPER`, `OPERATOR` là security role cho t�
 - [ ] Registry exposes active strategy type/version/parameter metadata.
 - [ ] Incompatible plugin is rejected without affecting registered plugins.
 - [ ] UI/search consumes registry metadata rather than a fixed strategy list.
+
+#### <span style="color:#9A3412;">7.4.4 SP-US-04: Generate a Strategy from a Name</span> <a id="744-sp-us-04-generate-a-strategy-from-a-name"></a>
+
+**As an** `ANALYST`, **I want to** submit the name of an existing trading strategy **so that** I can review, validate and activate reusable Strategy logic without writing code.
+
+**Acceptance Criteria:**
+- [ ] A sufficiently specific supported name produces one structured draft with rules, parameters, evidence/assumptions and generation provenance.
+- [ ] Material ambiguity requires user selection; unknown/misspelled intent never activates an invented interpretation.
+- [ ] Generated Python targets the common Strategy contract and remains non-active until every ADR-006 validation passes.
+- [ ] Exact requester confirmation atomically publishes the immutable version; failed validation or mismatched fingerprints leave the registry unchanged.
+- [ ] Canonically equivalent generated behavior resolves the existing executable version while retaining request provenance.
+
+#### <span style="color:#9A3412;">7.4.5 SP-US-05: Extract Strategies from Source Content</span> <a id="745-sp-us-05-extract-strategies-from-source-content"></a>
+
+**As an** `ANALYST`, **I want to** submit natural-language content or an approved public webpage **so that** the system can extract zero, one or multiple independently reviewable strategies.
+
+**Acceptance Criteria:**
+- [ ] Each extracted rule maps to minimal source evidence or is clearly labeled as an assumption.
+- [ ] Multiple strategies/variants become separate drafts whose validation and activation states are independent.
+- [ ] HTTPS retrieval enforces destination, redirect, DNS/IP, content type, size, timeout, attribution, rights and retention policy before the LLM sees content.
+- [ ] Source instructions cannot change system prompts, tools, policy, validation or activation rules.
+- [ ] Inaccessible/prohibited/irrelevant/contradictory/incomplete source creates no executable strategy and returns a categorized reason.
+
+#### <span style="color:#9A3412;">7.4.6 SP-US-06: Reuse an Activated Generated Strategy</span> <a id="746-sp-us-06-reuse-an-activated-generated-strategy"></a>
+
+**As an** `ANALYST`, **I want to** discover and reuse an exact activated generated Strategy Version in later workflows **so that** generation creates durable value without behavior drift.
+
+**Acceptance Criteria:**
+- [ ] Activated generated versions remain discoverable and executable after restart with source and LLM adapters unavailable.
+- [ ] Analysis, Backtester, Search, Composite, Evaluator and Leaderboard consume the common contract without generated-origin behavior branches.
+- [ ] Discovery exposes safe origin and provenance summary without protected source, prompt or secret leakage.
+- [ ] Rule, parameter, artifact or contract-meaning changes create a new immutable version; historical references remain unchanged.
+- [ ] Pending, failed, rejected, archived, quarantined, deprecated-for-execution and unavailable artifacts are excluded from new workflow selection.
 
 ### <span style="color:#9A3412;">7.5 Composite Strategy (CS) 🧩</span> <a id="75-composite-strategy-cs"></a>
 
@@ -1081,6 +1199,8 @@ Không coi `ANALYST`, `STRATEGY_DEVELOPER`, `OPERATOR` là security role cho t�
 | Binance WebSocket | Realtime market update | Reconnect, stale status và missing-candle recovery |
 | News Provider(s) | RSS/API/crawler news input | Provider isolation; không dừng market/backtest |
 | Sentiment Model/Runtime | Phân loại NewsItem | Versioned result; news vẫn tồn tại khi model lỗi |
+| Configured LLM Provider | Structured strategy extraction và Python artifact generation | Provider-neutral port; no-training/minimum-retention requirement; categorized timeout/refusal/rate-limit failure |
+| Public HTTPS Strategy Sources | Permitted source content for extraction | Strict source policy; inaccessible/prohibited source creates no executable strategy |
 
 ### <span style="color:#64748B;">8.2 Internal Systems / Legacy Services 🏢</span> <a id="82-internal-systems-legacy-services"></a>
 
@@ -1096,3 +1216,5 @@ Không có internal legacy system bắt buộc trong phạm vi hiện tại. API
 | Realtime transport | Đẩy market/progress/leaderboard event tới UI | Dashboard không polling/reload |
 | Object/file storage (optional) | Lưu dataset export, report hoặc model artifact lớn | Chỉ khi feature spec chứng minh DB không phù hợp |
 | Metrics/logging pipeline | Quan sát stream, queue, worker, run và failure | Architectural driver Observability |
+| Strategy sandbox runtime | Validate/execute generated Python outside application processes | Required by ADR-006; ephemeral, no network/secrets/host mounts, strict resource limits |
+| Generated artifact storage | Store exact content-addressed activated artifacts and provenance | PostgreSQL for baseline; object storage only after measured need and ADR review |

@@ -78,12 +78,25 @@ type Store = {
 const Ctx = createContext<Store | null>(null)
 
 function readStoredList(key: string, fallback: string[]) {
-  if (typeof localStorage === 'undefined') return fallback
+  const storage = browserStorage()
+  if (!storage) return fallback
   try {
-    const value = JSON.parse(localStorage.getItem(key) ?? 'null')
+    const value = JSON.parse(storage.getItem(key) ?? 'null')
     return Array.isArray(value) && value.every((item) => typeof item === 'string') ? value : fallback
   } catch {
     return fallback
+  }
+}
+
+function browserStorage(): Storage | null {
+  if (typeof window === 'undefined') return null
+  try {
+    const storage = window.localStorage
+    return typeof storage?.getItem === 'function' && typeof storage.setItem === 'function'
+      ? storage
+      : null
+  } catch {
+    return null
   }
 }
 
@@ -105,17 +118,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [conn, setConn] = useState<ConnState>('live')
 
   const [showExplain, setShowExplain] = useState<boolean>(() => {
-    if (typeof localStorage === 'undefined') return true
-    return localStorage.getItem('csl.showExplain') !== '0'
+    return browserStorage()?.getItem('csl.showExplain') !== '0'
   })
   const toggleExplain = useCallback((v: boolean) => {
     setShowExplain(v)
-    if (typeof localStorage !== 'undefined') localStorage.setItem('csl.showExplain', v ? '1' : '0')
+    browserStorage()?.setItem('csl.showExplain', v ? '1' : '0')
   }, [])
 
   const [marketPair, setMarketPair] = useState<string>(() => {
-    if (typeof localStorage === 'undefined') return WORKSPACE_DEFAULTS.marketPair
-    return localStorage.getItem('csl.market') ?? WORKSPACE_DEFAULTS.marketPair
+    return browserStorage()?.getItem('csl.market') ?? WORKSPACE_DEFAULTS.marketPair
   })
   const market = useMemo(
     () => services.market.getMarket(marketPair) ?? services.market.listMarkets()[0],
@@ -125,7 +136,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const m = services.market.getMarket(pair)
     if (!m || !m.available) return
     setMarketPair(pair)
-    if (typeof localStorage !== 'undefined') localStorage.setItem('csl.market', pair)
+    browserStorage()?.setItem('csl.market', pair)
   }, [services])
 
   const [watchlist, setWatchlist] = useState<string[]>(() => {
@@ -134,7 +145,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const toggleWatch = useCallback((pair: string) => {
     setWatchlist((w) => {
       const next = w.includes(pair) ? w.filter((p) => p !== pair) : [...w, pair]
-      if (typeof localStorage !== 'undefined') localStorage.setItem('csl.watchlist', JSON.stringify(next))
+      browserStorage()?.setItem('csl.watchlist', JSON.stringify(next))
       return next
     })
   }, [])

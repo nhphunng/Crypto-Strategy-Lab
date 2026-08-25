@@ -1,8 +1,8 @@
 openapi: 3.1.0
 info:
   title: Crypto Strategy Lab - Strategy Foundation API
-  version: 1.0.0
-  description: Discovery and bounded signal analysis for trusted registered strategies.
+  version: 1.1.0
+  description: Discovery, bounded signal analysis, and review-gated LLM-assisted generation of reusable strategies.
 servers:
   - url: /api/v1
 paths:
@@ -84,6 +84,98 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+  /strategy-generation-requests:
+    post:
+      operationId: createStrategyGenerationRequest
+      summary: Create an asynchronous request from one supported source mode
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateStrategyGenerationRequest'
+      responses:
+        '202':
+          description: Request durably accepted; no strategy is active yet
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StrategyGenerationRequestResponse'
+        '422':
+          description: Unsupported, ambiguous, or semantically invalid request input
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /strategy-generation-requests/{requestId}:
+    get:
+      operationId: getStrategyGenerationRequest
+      summary: Inspect request progress and independently reviewable drafts
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      responses:
+        '200':
+          description: Current durable request state and draft summaries
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StrategyGenerationRequestResponse'
+        '404':
+          description: Unknown generation request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /strategy-generation-drafts/{draftId}:
+    get:
+      operationId: getStrategyGenerationDraft
+      summary: Review extracted rules, evidence, assumptions, and validation findings
+      parameters:
+        - $ref: '#/components/parameters/DraftId'
+      responses:
+        '200':
+          description: Exact non-executable draft revision
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GeneratedStrategyDraftResponse'
+        '404':
+          description: Unknown or unavailable draft
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /strategy-generation-drafts/{draftId}/activate:
+    post:
+      operationId: activateGeneratedStrategyDraft
+      summary: Confirm and atomically publish one validated immutable generated version
+      parameters:
+        - $ref: '#/components/parameters/DraftId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ActivateGeneratedStrategyRequest'
+      responses:
+        '201':
+          description: Activated generated version and registry metadata
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StrategyResponse'
+        '404':
+          description: Unknown draft
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Draft state, validation, provenance, duplicate, or policy conflict
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 components:
   parameters:
     StrategyId:
@@ -99,6 +191,16 @@ components:
       required: true
       schema:
         $ref: '#/components/schemas/SemanticVersion'
+    RequestId:
+      name: requestId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    DraftId:
+      name: draftId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
   schemas:
     SemanticVersion:
       type: string
@@ -114,6 +216,9 @@ components:
     StrategyStatus:
       type: string
       enum: [AVAILABLE, DEPRECATED, UNAVAILABLE]
+    StrategyOrigin:
+      type: string
+      enum: [BUILT_IN, LLM_GENERATED]
     SignalAction:
       type: string
       enum: [BUY, SELL, HOLD]
@@ -129,7 +234,7 @@ components:
     ParameterDefinition:
       type: object
       additionalProperties: false
-      required: [name, description, valueType, required]
+      required: [name, description, valueType, defaultValue, minimum, maximum, required]
       properties:
         name: { type: string }
         description: { type: string }
@@ -138,11 +243,6 @@ components:
         defaultValue: {}
         minimum: {}
         maximum: {}
-        minimumInclusive: { type: boolean, default: true }
-        maximumInclusive: { type: boolean, default: true }
-        relationshipRules:
-          type: array
-          items: { type: string }
     StrategyMetadata:
       type: object
       additionalProperties: false
@@ -153,8 +253,11 @@ components:
         - strategyVersion
         - contractVersion
         - status
-        - parameterDefinition
+        - parameters
         - capabilities
+        - origin
+        - generationProvenanceId
+        - generatedArtifactFingerprint
       properties:
         strategyId: { type: string }
         strategyType: { type: string }
@@ -162,7 +265,7 @@ components:
         strategyVersion: { $ref: '#/components/schemas/SemanticVersion' }
         contractVersion: { $ref: '#/components/schemas/SemanticVersion' }
         status: { $ref: '#/components/schemas/StrategyStatus' }
-        parameterDefinition:
+        parameters:
           type: array
           items: { $ref: '#/components/schemas/ParameterDefinition' }
         capabilities:
@@ -171,6 +274,20 @@ components:
           items:
             type: string
             enum: [STRENGTH, REASON]
+        origin: { $ref: '#/components/schemas/StrategyOrigin' }
+        generationProvenanceId:
+          type: [string, 'null']
+          format: uuid
+        generatedArtifactFingerprint:
+          type: [string, 'null']
+    StrategyList:
+      type: object
+      additionalProperties: false
+      required: [strategies]
+      properties:
+        strategies:
+          type: array
+          items: { $ref: '#/components/schemas/StrategyMetadata' }
     StrategyListResponse:
       type: object
       additionalProperties: false
@@ -178,9 +295,7 @@ components:
       properties:
         success: { const: true }
         message: { type: string }
-        data:
-          type: array
-          items: { $ref: '#/components/schemas/StrategyMetadata' }
+        data: { $ref: '#/components/schemas/StrategyList' }
         timestamp: { $ref: '#/components/schemas/UtcInstant' }
         requestId: { type: string }
     StrategyResponse:
@@ -313,6 +428,170 @@ components:
         data: { $ref: '#/components/schemas/StrategyAnalysisResult' }
         timestamp: { $ref: '#/components/schemas/UtcInstant' }
         requestId: { type: string }
+    GenerationSourceType:
+      type: string
+      enum: [STRATEGY_NAME, NATURAL_LANGUAGE, WEBPAGE_URL]
+    GenerationRequestStatus:
+      type: string
+      enum: [RECEIVED, SOURCE_PREPARING, GENERATING, COMPLETED, FAILED]
+    GeneratedDraftStatus:
+      type: string
+      enum: [NEEDS_REVIEW, VALIDATING, VALIDATION_FAILED, READY_FOR_CONFIRMATION, REJECTED, ACTIVATED, ARCHIVED]
+    ValidationStatus:
+      type: string
+      enum: [PASSED, FAILED, ERROR, EXPIRED]
+    CreateStrategyGenerationRequest:
+      type: object
+      additionalProperties: false
+      required: [sourceType]
+      properties:
+        sourceType: { $ref: '#/components/schemas/GenerationSourceType' }
+        strategyName: { type: string, minLength: 1, maxLength: 300 }
+        content: { type: string, minLength: 1 }
+        webpageUrl: { type: string, format: uri }
+      oneOf:
+        - required: [strategyName]
+        - required: [content]
+        - required: [webpageUrl]
+    SourceProvenanceSummary:
+      type: object
+      additionalProperties: false
+      required: [sourceType, contentFingerprint, accessPolicyVersion]
+      properties:
+        sourceType: { $ref: '#/components/schemas/GenerationSourceType' }
+        submittedUrl: { type: [string, 'null'], format: uri }
+        canonicalUrl: { type: [string, 'null'], format: uri }
+        title: { type: [string, 'null'] }
+        attribution: { type: [string, 'null'] }
+        contentFingerprint: { type: string }
+        accessPolicyVersion: { type: string }
+        retrievedAt:
+          anyOf:
+            - $ref: '#/components/schemas/UtcInstant'
+            - type: 'null'
+    RuleEvidence:
+      type: object
+      additionalProperties: false
+      required: [rulePath, evidenceType, summary]
+      properties:
+        rulePath: { type: string }
+        evidenceType: { type: string, enum: [SOURCE, ASSUMPTION] }
+        sourceLocator: { type: [string, 'null'] }
+        summary: { type: string }
+    ValidationCheck:
+      type: object
+      additionalProperties: false
+      required: [name, status, findings]
+      properties:
+        name:
+          type: string
+          enum: [SCHEMA, SYNTAX, IMPORTS_CAPABILITIES, CONTRACT, FIXTURES, DETERMINISM, NO_LOOK_AHEAD, RESOURCE_BOUNDS]
+        status: { type: string, enum: [PASSED, FAILED, ERROR] }
+        findings:
+          type: array
+          items: { $ref: '#/components/schemas/ErrorIssue' }
+    ValidationReportSummary:
+      type: object
+      additionalProperties: false
+      required: [id, artifactFingerprint, policyVersion, status, checks]
+      properties:
+        id: { type: string, format: uuid }
+        artifactFingerprint: { type: string }
+        policyVersion: { type: string }
+        status: { $ref: '#/components/schemas/ValidationStatus' }
+        checks:
+          type: array
+          items: { $ref: '#/components/schemas/ValidationCheck' }
+    GeneratedStrategyDraftSummary:
+      type: object
+      additionalProperties: false
+      required: [id, candidateIndex, normalizedName, displayName, status, draftFingerprint]
+      properties:
+        id: { type: string, format: uuid }
+        candidateIndex: { type: integer, minimum: 0 }
+        normalizedName: { type: string }
+        displayName: { type: string }
+        status: { $ref: '#/components/schemas/GeneratedDraftStatus' }
+        draftFingerprint: { type: string }
+    GeneratedStrategyDraft:
+      allOf:
+        - $ref: '#/components/schemas/GeneratedStrategyDraftSummary'
+        - type: object
+          additionalProperties: false
+          required: [description, structuredRules, parameterDefinition, assumptions, evidence, sourceProvenance, failureIssues]
+          properties:
+            description: { type: string }
+            structuredRules: { type: object, additionalProperties: true }
+            parameterDefinition:
+              type: array
+              items: { $ref: '#/components/schemas/ParameterDefinition' }
+            assumptions:
+              type: array
+              items: { type: string }
+            evidence:
+              type: array
+              items: { $ref: '#/components/schemas/RuleEvidence' }
+            sourceProvenance: { $ref: '#/components/schemas/SourceProvenanceSummary' }
+            validationReport:
+              anyOf:
+                - $ref: '#/components/schemas/ValidationReportSummary'
+                - type: 'null'
+            failureIssues:
+              type: array
+              items:
+                type: object
+                additionalProperties: false
+                required: [code, message]
+                properties:
+                  field:
+                    anyOf: [{ type: string }, { type: 'null' }]
+                  code: { type: string }
+                  message: { type: string }
+    StrategyGenerationRequest:
+      type: object
+      additionalProperties: false
+      required: [id, sourceType, status, requestedAt, drafts]
+      properties:
+        id: { type: string, format: uuid }
+        sourceType: { $ref: '#/components/schemas/GenerationSourceType' }
+        status: { $ref: '#/components/schemas/GenerationRequestStatus' }
+        requestedAt: { $ref: '#/components/schemas/UtcInstant' }
+        failure:
+          anyOf:
+            - $ref: '#/components/schemas/ErrorData'
+            - type: 'null'
+        drafts:
+          type: array
+          items: { $ref: '#/components/schemas/GeneratedStrategyDraftSummary' }
+    StrategyGenerationRequestResponse:
+      type: object
+      additionalProperties: false
+      required: [success, data, timestamp, requestId]
+      properties:
+        success: { const: true }
+        message: { type: string }
+        data: { $ref: '#/components/schemas/StrategyGenerationRequest' }
+        timestamp: { $ref: '#/components/schemas/UtcInstant' }
+        requestId: { type: string }
+    GeneratedStrategyDraftResponse:
+      type: object
+      additionalProperties: false
+      required: [success, data, timestamp, requestId]
+      properties:
+        success: { const: true }
+        message: { type: string }
+        data: { $ref: '#/components/schemas/GeneratedStrategyDraft' }
+        timestamp: { $ref: '#/components/schemas/UtcInstant' }
+        requestId: { type: string }
+    ActivateGeneratedStrategyRequest:
+      type: object
+      additionalProperties: false
+      required: [draftFingerprint, artifactFingerprint, validationReportId, confirmed]
+      properties:
+        draftFingerprint: { type: string }
+        artifactFingerprint: { type: string }
+        validationReportId: { type: string, format: uuid }
+        confirmed: { const: true }
     ErrorIssue:
       type: object
       additionalProperties: false
@@ -336,16 +615,35 @@ components:
             - INCOMPATIBLE_CONTRACT_VERSION
             - STRATEGY_VERSION_UNAVAILABLE
             - STRATEGY_VERSION_DEPRECATED
+            - STRATEGY_INTENT_UNRESOLVED
+            - SOURCE_ACCESS_DENIED
+            - SOURCE_UNAVAILABLE
+            - GENERATION_FAILED
+            - STRATEGY_RULES_INCOMPLETE
+            - GENERATED_ARTIFACT_INVALID
+            - ACTIVATION_NOT_ALLOWED
         issues:
           type: array
           items: { $ref: '#/components/schemas/ErrorIssue' }
     ErrorResponse:
       type: object
       additionalProperties: false
-      required: [success, message, data, timestamp, requestId]
+      required: [message, error, timestamp, requestId]
       properties:
         success: { const: false }
         message: { type: string }
-        data: { $ref: '#/components/schemas/ErrorData' }
+        error: { $ref: '#/components/schemas/ErrorDetail' }
         timestamp: { $ref: '#/components/schemas/UtcInstant' }
         requestId: { type: string }
+    ErrorDetail:
+      type: object
+      additionalProperties: false
+      required: [code, retryable]
+      properties:
+        code: { type: string }
+        retryable: { type: boolean }
+        details:
+          anyOf:
+            - type: object
+              additionalProperties: true
+            - type: 'null'
