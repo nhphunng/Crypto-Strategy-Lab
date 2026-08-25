@@ -7,6 +7,10 @@ from pathlib import Path
 
 import httpx
 
+from crypto_lab.api.leaderboard_dependencies import (
+    LeaderboardContainer,
+    build_leaderboard_container,
+)
 from crypto_lab.application.market_data.dataset_service import DatasetService
 from crypto_lab.application.market_data.historical_service import HistoricalMarketDataService
 from crypto_lab.application.market_data.ports import (
@@ -92,6 +96,7 @@ class Container:
     strategy_definitions: StrategyDefinitionRepository | None = None
     realtime_provider: RealtimeMarketDataProvider | None = None
     realtime_hub: RealtimeSelectionHub | None = None
+    leaderboard: LeaderboardContainer | None = None
 
     async def load_generated_strategies(self) -> None:
         if (
@@ -271,4 +276,5 @@ def build_container(settings: Settings | None = None) -> Container:
         strategy_definitions=strategy_definitions,
         realtime_provider=realtime_provider,
         realtime_hub=realtime_hub,
+        leaderboard=build_leaderboard_container(database),
     )
