@@ -29,5 +29,6 @@ Thumbs.db
 .idea/
 .specify/feature.json
 .codegraph/
-test-results/
-playwright-report/
+.data/
+.runtime-secrets/
+*.secret

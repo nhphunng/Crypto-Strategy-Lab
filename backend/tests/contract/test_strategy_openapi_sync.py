@@ -57,3 +57,17 @@ def test_generation_boundary_models_are_all_published_by_the_runtime_openapi() -
         assert model.__name__ in runtime_schemas
         schema = model.model_json_schema(by_alias=True)
         assert set(runtime_schemas[model.__name__]["properties"]) == set(schema["properties"])
+
+
+def test_discovery_contract_matches_runtime_field_names_and_envelope_shape() -> None:
+    canonical = yaml.safe_load(CONTRACT.read_text())["components"]["schemas"]
+    runtime = create_app().openapi()["components"]["schemas"]
+    assert set(canonical["StrategyMetadata"]["properties"]) == set(
+        runtime["StrategyMetadataDto"]["properties"]
+    )
+    assert canonical["StrategyListResponse"]["properties"]["data"] == {
+        "$ref": "#/components/schemas/StrategyList"
+    }
+    assert set(canonical["StrategyList"]["properties"]) == set(
+        runtime["StrategyListDto"]["properties"]
+    )

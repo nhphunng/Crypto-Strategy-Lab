@@ -1,9 +1,15 @@
 import { useState } from 'react'
 import { Button } from '../../../components/ui'
 import { activateGeneratedDraft } from '../../../services/strategyGeneration'
-import type { GeneratedDraft } from '../types'
+import type { ActivatedStrategy, GeneratedDraft } from '../types'
 
-export function GeneratedStrategyReview({ draft, onActivated }: { draft: GeneratedDraft; onActivated: (label: string) => void }) {
+export function GeneratedStrategyReview({
+  draft,
+  onActivated,
+}: {
+  draft: GeneratedDraft
+  onActivated: (strategy: ActivatedStrategy) => void | Promise<void>
+}) {
   const [confirmed, setConfirmed] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -14,7 +20,7 @@ export function GeneratedStrategyReview({ draft, onActivated }: { draft: Generat
     setError(null)
     try {
       const result = await activateGeneratedDraft(draft)
-      onActivated(`${result.strategyId}@${result.strategyVersion}`)
+      await onActivated(result)
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Activation failed')
     } finally {
@@ -43,6 +49,12 @@ export function GeneratedStrategyReview({ draft, onActivated }: { draft: Generat
         <div>Artifact fingerprint: <code>{report?.artifactFingerprint ?? 'not available'}</code></div>
         <div className="mt-2">Checks: {report?.checks.map((check) => `${check.name}: ${check.status}`).join(' · ') ?? 'none'}</div>
       </div>
+      {(draft.failureIssues.length > 0 || report?.checks.some((check) => check.findings.length > 0)) && (
+        <ReviewBlock
+          title="Validation findings"
+          value={{ failureIssues: draft.failureIssues, checks: report?.checks ?? [] }}
+        />
+      )}
       <label className="mt-3 flex items-start gap-2 text-[12px] text-dim">
         <input type="checkbox" checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} />
         I reviewed these exact rules, evidence, assumptions, fingerprints and the passing validation report.

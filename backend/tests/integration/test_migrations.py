@@ -105,4 +105,4 @@ def test_alembic_has_one_head() -> None:
         text=True,
     )
     heads = [line for line in result.stdout.splitlines() if line.strip().endswith("(head)")]
-    assert heads == ["20260823_006_generation (head)"]
+    assert heads == ["20260824_007_integrity (head)"]

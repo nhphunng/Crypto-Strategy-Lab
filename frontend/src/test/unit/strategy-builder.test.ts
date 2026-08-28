@@ -15,20 +15,22 @@ describe('strategy builder validation', () => {
     expect(validateStrategyParameters(method, { fast: 1, slow: 50 })).toMatch(/between/)
   })
 
-  it('applies declarative cross-field constraints without page-owned id branches', () => {
-    const ma = catalog.getMethod('ma-cross-v3')!
-    const rsi = catalog.getMethod('rsi-reversal-v2')!
-    expect(validateStrategyParameters(ma, { fast: 50, slow: 20 })).toBe(
-      'Fast MA must be shorter than Slow MA.',
-    )
+  it('applies canonical declarative cross-field constraints without page-owned id branches', () => {
+    const rsiMock = catalog.getMethod('rsi-reversal-v2')!
     const rsiWithProviderRanges = {
-      ...rsi,
-      params: rsi.params.map((parameter) => ({ ...parameter, min: 0, max: 100 })),
+      ...rsiMock,
+      strategyId: 'rsi',
+      params: rsiMock.params.map((parameter) => ({
+        ...parameter,
+        key: parameter.key === 'buy' ? 'lower_threshold' : parameter.key === 'sell' ? 'upper_threshold' : parameter.key,
+        min: 0,
+        max: 100,
+      })),
     }
-    expect(validateStrategyParameters(rsiWithProviderRanges, { ...recommendedStrategyValues(rsi), buy: 70, sell: 30 })).toBe(
+    expect(validateStrategyParameters(rsiWithProviderRanges, { period: 14, lower_threshold: 70, upper_threshold: 30 })).toBe(
       'Oversold level must be below the Overbought level.',
     )
-    expect(validateStrategyParameters(ma, recommendedStrategyValues(ma))).toBeNull()
+    expect(validateStrategyParameters(rsiWithProviderRanges, recommendedStrategyValues(rsiWithProviderRanges))).toBeNull()
   })
 
   it('requires selected strategy weights to total exactly 100 percent', () => {

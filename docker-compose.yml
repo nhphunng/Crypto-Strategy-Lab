@@ -24,7 +24,7 @@ services:
       CSL_DATABASE_URL: postgresql+asyncpg://crypto_lab:crypto_lab@postgres:5432/crypto_lab
       CSL_BINANCE_BASE_URL: https://api.binance.com
     ports:
-      - "8000:8000"
+      - "${CSL_API_PORT:-8000}:8000"
     depends_on:
       postgres:
         condition: service_healthy

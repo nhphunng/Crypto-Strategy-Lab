@@ -4,7 +4,6 @@ services:
     build:
       context: ../backend/sandbox
     image: crypto-lab-strategy-sandbox:1
-    platform: linux/amd64
     network_mode: none
     read_only: true
     user: "65532:65532"

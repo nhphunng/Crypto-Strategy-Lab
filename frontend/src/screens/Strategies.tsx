@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import {
   ArrowLeft,
   Check,
@@ -13,16 +14,21 @@ import {
 } from 'lucide-react'
 import { useStore } from '../lib/store'
 import {
-  STRATEGY_PRESENTATION as STRAT_META,
   STRATEGY_PRESETS as PRESETS,
   recommendedStrategyValues,
+  strategyPresentation,
   validateStrategyParameters,
   validateStrategyWeights,
   type StrategyPreset as Preset,
   type StrategyPresentation as StratMeta,
   type StrategySignal as Sig,
 } from '../config'
-import { useServices } from '../services/registry'
+import { useStrategyCatalog } from '../features/strategies/hooks/useStrategyCatalog'
+import {
+  discoverStrategies,
+  STRATEGY_CATALOG_QUERY_KEY,
+  strategyCatalogKey,
+} from '../services/strategyCatalog'
 import { PageHeader } from '../components/Shell'
 import { MarketSelector } from '../components/MarketSelector'
 import { StrategyGenerationForm } from '../features/strategies/components/StrategyGenerationForm'
@@ -46,18 +52,6 @@ import {
 // ---------------------------------------------------------------------------
 
 const SIGNAL_VALUE: Record<Sig, number> = { buy: 1, sell: -1, hold: 0 }
-
-function useStrategyCatalog() {
-  const services = useServices()
-  const methods = services.strategies.listMethods()
-  const byId = (id: string) => {
-    const strategy = services.strategies.getMethod(id)
-    if (!strategy) throw new Error(`Unknown strategy method: ${id}`)
-    return strategy
-  }
-  const recommendedValues = (id: string) => recommendedStrategyValues(byId(id))
-  return { methods, byId, recommendedValues }
-}
 
 function fmtSigned(n: number) {
   const r = Math.round(n * 100) / 100
@@ -189,6 +183,7 @@ function SummaryAside({
   timeframe: string
   status: string
 }) {
+  const { byId } = useStrategyCatalog()
   return (
     <aside className="hidden w-[220px] shrink-0 border-l border-subtle bg-surface/50 p-4 lg:block">
       <div className="text-[10px] font-semibold uppercase tracking-wide text-faint">Your strategy</div>
@@ -201,7 +196,7 @@ function SummaryAside({
       <div className="mt-1.5 space-y-1">
         {selected.map((id) => (
           <div key={id} className="text-[12px] text-dim">
-            {STRAT_META[id].friendly}
+            {strategyPresentation(byId(id)).friendly}
           </div>
         ))}
         {selected.length === 0 && <div className="text-[12px] text-faint">None yet</div>}
@@ -217,8 +212,10 @@ function SummaryAside({
 // ---------------------------------------------------------------------------
 
 export function Strategies() {
+  const queryClient = useQueryClient()
   const { navigate, setActiveStrategy, toast, showExplain, market, timeframe } = useStore()
-  const { byId: stratById, recommendedValues } = useStrategyCatalog()
+  const { byId: stratById } = useStrategyCatalog()
+  const recommendedValues = (id: string) => recommendedStrategyValues(stratById(id))
 
   const [step, setStep] = useState<Phase>(1)
   const [dir, setDir] = useState<'fwd' | 'back'>('fwd')
@@ -274,7 +271,7 @@ export function Strategies() {
     setStep(p)
   }
 
-  const members = selected.map((id) => ({ id, ...STRAT_META[id] }))
+  const members = selected.map((id) => ({ id, ...strategyPresentation(stratById(id)) }))
   const isCombine = !single && selected.length >= 2
 
   const { total: totalWeight, valid: weightValid } = validateStrategyWeights(selected, weights)
@@ -306,7 +303,7 @@ export function Strategies() {
   }, [selected, isCombine, method, members, weights, buyTh, sellTh, tie])
 
   function buildName() {
-    const abbr = selected.map((id) => STRAT_META[id].abbr).join(' + ')
+    const abbr = selected.map((id) => strategyPresentation(stratById(id)).abbr).join(' + ')
     return isCombine ? `${abbr} · ${method === 'majority' ? 'Majority Vote' : 'Weighted'}` : abbr
   }
 
@@ -339,8 +336,21 @@ export function Strategies() {
             <GeneratedStrategyReview
               key={draft.id}
               draft={draft}
-              onActivated={(label) => {
-                toast(`${label} is available for later workflows`, 'positive')
+              onActivated={async (activated) => {
+                await queryClient.invalidateQueries({ queryKey: STRATEGY_CATALOG_QUERY_KEY })
+                const refreshed = await queryClient.fetchQuery({
+                  queryKey: STRATEGY_CATALOG_QUERY_KEY,
+                  queryFn: discoverStrategies,
+                  staleTime: 30_000,
+                })
+                const activatedId = strategyCatalogKey(activated.strategyId, activated.strategyVersion)
+                const strategy = refreshed.find((item) => item.id === activatedId)
+                if (!strategy) throw new Error('Activated strategy was not returned by discovery')
+                setSelected([activatedId])
+                setParams({ [activatedId]: recommendedStrategyValues(strategy) })
+                setConfigActive(activatedId)
+                setStep(2)
+                toast(`${activated.strategyId}@${activated.strategyVersion} is ready to configure`, 'positive')
                 setGeneratedDrafts((items) => items.filter((item) => item.id !== draft.id))
               }}
             />
@@ -478,7 +488,7 @@ export function Strategies() {
             k="Strategy ID"
             v={
               selected.length
-                ? `cs-${selected.map((id) => STRAT_META[id].abbr.toLowerCase().replace('/', '')).join('-')}`
+                ? `cs-${selected.map((id) => strategyPresentation(stratById(id)).abbr.toLowerCase().replace('/', '')).join('-')}`
                 : '—'
             }
           />
@@ -491,7 +501,7 @@ export function Strategies() {
         </DrawerSection>
         {selected.map((id) => {
           const strat = stratById(id)
-          const m = STRAT_META[id]
+          const m = strategyPresentation(stratById(id))
           return (
             <DrawerSection key={id} title={`${m.friendly} · ${m.tech}`}>
               {strat.params.map((p) => (
@@ -503,6 +513,9 @@ export function Strategies() {
                     {r.text} → {r.side.toUpperCase()}
                   </div>
                 ))}
+                {strat.rules.length === 0 && (
+                  <div className="text-[11px] text-faint">Execution rules are retained in the immutable registered artifact.</div>
+                )}
               </div>
             </DrawerSection>
           )
@@ -552,9 +565,17 @@ function StepChoose({
   onToggle: (id: string) => void
   onContinue: () => void
 }) {
-  const { methods } = useStrategyCatalog()
-  const presetSelected = (p: Preset) =>
-    p.ids.length === selected.length && p.ids.every((id) => selected.includes(id))
+  const { methods, isPending, isError, error, refetch } = useStrategyCatalog()
+  const resolvedPreset = (preset: Preset): Preset => ({
+    ...preset,
+    ids: preset.ids
+      .map((strategyId) => methods.find((method) => method.strategyId === strategyId)?.id)
+      .filter((id): id is string => Boolean(id)),
+  })
+  const availablePresets = PRESETS.map(resolvedPreset).filter(
+    (preset, index) => preset.ids.length === PRESETS[index].ids.length,
+  )
+  const presetSelected = (p: Preset) => p.ids.length === selected.length && p.ids.every((id) => selected.includes(id))
 
   return (
     <>
@@ -567,7 +588,7 @@ function StepChoose({
 
           {/* presets */}
           <div className="mt-4 grid gap-2.5 md:grid-cols-3">
-            {PRESETS.map((p) => {
+            {availablePresets.map((p) => {
               const on = presetSelected(p)
               return (
                 <div
@@ -582,7 +603,7 @@ function StepChoose({
                     {p.recommended && <RecoBadge>Recommended</RecoBadge>}
                   </div>
                   <div className="mt-1.5 text-[12px] text-dim">
-                    {p.ids.map((id) => STRAT_META[id].friendly).join(' + ')}
+                    {p.ids.map((id) => strategyPresentation(methods.find((method) => method.id === id)!).friendly).join(' + ')}
                   </div>
                   {showExplain && (
                     <p className="mt-1.5 text-[11.5px] leading-relaxed text-faint">{p.tagline}</p>
@@ -619,8 +640,18 @@ function StepChoose({
 
           {/* build your own */}
           <div className="space-y-2">
+            {isPending && <p className="rounded border border-subtle bg-workspace p-4 text-[12px] text-dim">Loading registered strategies…</p>}
+            {isError && (
+              <div id="message-error" className="flex items-center justify-between gap-3 rounded border border-neg/30 bg-neg/10 p-4 text-[12px] text-neg">
+                <span>{error instanceof Error ? error.message : 'Unable to load registered strategies.'}</span>
+                <Button size="sm" variant="default" onClick={() => void refetch()}>Retry</Button>
+              </div>
+            )}
+            {!isPending && !isError && methods.length === 0 && (
+              <p className="rounded border border-subtle bg-workspace p-4 text-[12px] text-dim">No compatible strategies are currently available.</p>
+            )}
             {methods.map((s) => {
-              const m = STRAT_META[s.id]
+              const m = strategyPresentation(s)
               const on = selected.includes(s.id)
               return (
                 <button
@@ -669,7 +700,7 @@ function StepChoose({
                   key={id}
                   className="rounded-[4px] border border-subtle bg-workspace px-1.5 py-0.5 font-mono text-[11px] text-ink"
                 >
-                  {STRAT_META[id].abbr}
+                  {strategyPresentation(methods.find((method) => method.id === id)!).abbr}
                 </span>
               ))}
               <span className="ml-1 text-faint">
@@ -726,7 +757,7 @@ function StepConfigure({
   const { byId: stratById, recommendedValues } = useStrategyCatalog()
   const activeId = active ?? selected[0]
   const strat = activeId ? stratById(activeId) : null
-  const m = activeId ? STRAT_META[activeId] : null
+  const m = strat ? strategyPresentation(strat) : null
   const values = activeId ? paramsFor(activeId) : {}
   const activeError = activeId ? invalidById[activeId] : null
 
@@ -766,7 +797,7 @@ function StepConfigure({
                       >
                         {err ? <TriangleAlert size={10} /> : <Check size={11} />}
                       </span>
-                      <span className="truncate">{STRAT_META[id].friendly}</span>
+                      <span className="truncate">{strategyPresentation(stratById(id)).friendly}</span>
                     </button>
                   )
                 })}
@@ -842,6 +873,9 @@ function StepConfigure({
                           <SignalTag side={r.side} />
                         </div>
                       ))}
+                      {strat.rules.length === 0 && (
+                        <p className="text-[11.5px] text-faint">This catalog contract exposes parameter metadata; exact generated rules remain available in its activation provenance.</p>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -1194,7 +1228,7 @@ function StepReview({
             <div className="space-y-2">
               {selected.map((id) => (
                 <div key={id} className="flex items-baseline justify-between">
-                  <span className="text-[12.5px] text-dim">{STRAT_META[id].friendly}</span>
+                  <span className="text-[12.5px] text-dim">{strategyPresentation(stratById(id)).friendly}</span>
                   <span className="font-mono text-[12px] tabular-nums text-ink">
                     {stratById(id)
                       .params.map((p) => paramsFor(id)[p.key])
@@ -1217,7 +1251,7 @@ function StepReview({
                 <div className="space-y-1">
                   {selected.map((id) => (
                     <div key={id} className="flex items-baseline justify-between text-[12.5px]">
-                      <span className="text-dim">{STRAT_META[id].friendly}</span>
+                      <span className="text-dim">{strategyPresentation(stratById(id)).friendly}</span>
                       <span className="font-mono tabular-nums text-ink">{weights[id] ?? 0}%</span>
                     </div>
                   ))}

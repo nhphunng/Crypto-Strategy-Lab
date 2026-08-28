@@ -29,6 +29,33 @@ docker compose -f docker-compose.yml up -d postgres
 
 Install the locked backend dependencies, apply migrations, and load deterministic normalized Candle fixtures using the repository commands established during implementation. Provider/network data must not be used for acceptance assertions.
 
+### Secure generated-strategy deployment
+
+Live generation uses the additive `docker-compose.generated.yml` profile. It requires file-backed
+Docker secrets for the provider credential and 256-bit source/artifact wrapping key, an explicit
+provider data-policy acknowledgement, a persistent encrypted-artifact volume, and the dedicated
+credentialless sandbox Docker Engine. The API MUST NOT mount the host Docker socket.
+
+The deterministic US5–US7 E2E profile adds `docker-compose.e2e.yml`, whose LLM fixture implements the
+same provider-neutral structured-output boundary without a live provider. Start all three Compose
+files, then run the opt-in E2E test:
+
+```bash
+docker compose \
+  -f docker-compose.yml \
+  -f docker-compose.generated.yml \
+  -f docker-compose.e2e.yml \
+  up --build -d
+
+CSL_RUN_GENERATED_E2E=1 pytest -q \
+  backend/tests/e2e/test_generated_strategy_user_stories.py -s
+```
+
+Expected: name generation yields one passing reviewable draft; natural-language content yields two
+independent drafts; exact confirmation activates the strategy; catalog discovery returns it before
+and after API restart; protected request bytes and stored artifact files contain no plaintext source
+or Python artifact.
+
 ## 2. Run Automated Quality Gates
 
 ```bash

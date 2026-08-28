@@ -1,6 +1,8 @@
 from datetime import UTC, datetime
 from uuid import UUID
 
+import pytest
+
 from crypto_lab.api.dependencies import Container
 from crypto_lab.application.strategies.discover_strategies import DiscoverStrategies
 from crypto_lab.domain.strategy.definition import StrategyDefinition, StrategyOrigin
@@ -132,3 +134,62 @@ async def test_activated_strategy_reloads_with_model_and_source_adapters_absent(
     result = await strategy.analyze(selected, context(["100", "101"]))
     assert len(result.signals) == 2
     assert all(signal.action.value == "HOLD" for signal in result.signals)
+
+
+async def test_reload_fails_closed_when_activated_provenance_is_dangling() -> None:
+    artifact = GeneratedStrategyArtifact.create(
+        id=UUID(int=4),
+        draft_id=UUID(int=3),
+        source_code="def analyze(payload):\n return {'signals': []}\n",
+        contract_version=SemanticVersion(1, 0, 0),
+        declared_imports=frozenset(),
+        capabilities=frozenset(),
+        created_at=NOW,
+    )
+    draft = GeneratedStrategyDraft(
+        UUID(int=3),
+        UUID(int=1),
+        UUID(int=2),
+        0,
+        "dangling-generated",
+        "Dangling Generated",
+        "Must not disappear silently",
+        {},
+        ParameterSchema(()),
+        (),
+        (),
+        DraftStatus.ACTIVATED,
+        artifact.id,
+        UUID(int=5),
+    )
+    provenance = StrategyGenerationProvenance(
+        UUID(int=6),
+        UUID(int=1),
+        UUID(int=2),
+        draft.id,
+        artifact.id,
+        UUID(int=5),
+        "dangling-generated",
+        "1.0.0",
+        "provider",
+        "model",
+        "1",
+        "prompt",
+        NOW,
+        NOW,
+        "analyst",
+        "activation-v1",
+    )
+    container = Container(
+        settings=None,
+        clock=None,
+        repository=None,
+        historical=None,
+        datasets=None,  # type: ignore[arg-type]
+        strategy_registry=StrategyRegistry(ContractVersionRange(1, 0, 0)),
+        strategy_generation_repository=Repository(provenance, None, None),  # type: ignore[arg-type]
+        generated_artifacts=Artifacts(artifact),  # type: ignore[arg-type]
+        generated_runtime=Runtime(),  # type: ignore[arg-type]
+    )
+    with pytest.raises(RuntimeError, match="missing durable references"):
+        await container.load_generated_strategies()

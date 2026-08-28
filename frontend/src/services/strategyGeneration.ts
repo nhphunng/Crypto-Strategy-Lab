@@ -1,4 +1,5 @@
 import type {
+  ActivatedStrategy,
   GeneratedDraft,
   GenerationRequest,
   GenerationSourceType,
@@ -44,7 +45,7 @@ export function getGenerationRequest(id: string) {
 
 export function activateGeneratedDraft(draft: GeneratedDraft) {
   if (!draft.validationReport) throw new Error('A passing validation report is required')
-  return api<{ strategyId: string; strategyVersion: string; provenanceId: string }>(
+  return api<ActivatedStrategy>(
     `/strategy-generation-drafts/${draft.id}/activate`,
     {
       method: 'POST',

@@ -16,7 +16,13 @@ def main() -> int:
         return 2
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
-    payload = json.loads(sys.stdin.buffer.read(1_048_577))
+    input_path = Path("/sandbox/input.json")
+    raw_payload = (
+        input_path.read_bytes() if input_path.exists() else sys.stdin.buffer.read(1_048_577)
+    )
+    if len(raw_payload) > 1_048_576:
+        return 4
+    payload = json.loads(raw_payload)
     if payload == {"mode": "self_test"}:
         result = (
             {"status": "ready"}

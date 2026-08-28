@@ -114,6 +114,49 @@ docker compose down
 
 `docker compose down` giữ lại dữ liệu PostgreSQL. Lệnh `docker compose down -v` xóa cả volume và toàn bộ dữ liệu local; chỉ dùng khi muốn tạo database mới hoàn toàn.
 
+### 5. Bật Generated Strategy an toàn
+
+Profile mặc định không nhận LLM secret và vì vậy fail closed. Để bật User Stories 5–7, tạo hai
+secret file local (thư mục này đã bị Git ignore):
+
+```bash
+mkdir -p .runtime-secrets
+openssl rand -out .runtime-secrets/llm_api_key -hex 32
+openssl rand -out .runtime-secrets/source_encryption_key -base64 32
+chmod 600 .runtime-secrets/*
+```
+
+Thay `llm_api_key` bằng credential thật của provider, rồi thêm cấu hình không bí mật vào `.env`:
+
+```dotenv
+CSL_LLM_ENDPOINT=https://provider.example/v1/strategy-generation
+CSL_LLM_PROVIDER=approved-provider
+CSL_LLM_MODEL_ID=approved-model
+CSL_LLM_MODEL_VERSION=provider-version
+CSL_LLM_DATA_POLICY_CONFIRMED=true
+CSL_LLM_API_KEY_HOST_FILE=.runtime-secrets/llm_api_key
+CSL_SOURCE_ENCRYPTION_KEY_HOST_FILE=.runtime-secrets/source_encryption_key
+CSL_SOURCE_ENCRYPTION_KEY_ID=deployment-key-v1
+```
+
+Chỉ đặt `CSL_LLM_DATA_POLICY_CONFIRMED=true` sau khi provider bảo đảm nội dung không được dùng để
+training và dùng retention tối thiểu theo security policy. Khởi động secure profile:
+
+```bash
+docker compose \
+  -f docker-compose.yml \
+  -f docker-compose.generated.yml \
+  up --build -d
+```
+
+Profile này dùng Docker secrets, volume artifact mã hóa mode `0700`, và một Docker daemon chuyên biệt
+không chứa application secrets. API không mount Docker socket của host. Sandbox invocation vẫn là
+ephemeral, non-root, networkless, read-only, capability-free và resource-bounded theo ADR-006.
+
+`CSL_LLM_ENDPOINT` phải triển khai provider-neutral structured-output contract được mô tả trong
+`backend/src/crypto_lab/infrastructure/llm/strategy_generation_adapter.py`; không trỏ trực tiếp tới
+provider có response shape khác nếu chưa có adapter tương ứng.
+
 ## Leaderboard và trực quan hóa giao dịch (feature 005)
 
 Leaderboard xếp hạng Top-K từ các `EvaluationResult` bất biến theo `ScoringPolicy` có version, rồi giải thích từng kết quả bằng Candle, Signal và Trade đã ghi nhận. Toàn bộ dữ liệu là mô phỏng lịch sử, không phải lời khuyên đầu tư.

@@ -44,6 +44,7 @@ markers = [
   "integration: requires PostgreSQL",
   "performance: opt-in performance gate",
   "security: generated-strategy security boundary tests",
+  "e2e: opt-in tests against the generated-strategy Compose deployment",
 ]
 
 [tool.ruff]
