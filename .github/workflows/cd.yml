@@ -4,8 +4,7 @@ on:
   push:
     branches:
       - main
-      - chore/cd-ghcr
-
+      - chore/cd-homeserver
 permissions:
   contents: read
   packages: write
@@ -50,3 +49,48 @@ jobs:
           tags: |
             ghcr.io/nhphunng/crypto-strategy-lab-frontend:latest
             ghcr.io/nhphunng/crypto-strategy-lab-frontend:${{ github.sha }}
+  deploy:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Connect to Tailscale
+        uses: tailscale/github-action@v4
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          tags: tag:ci
+          ping: ${{ secrets.DEPLOY_HOST }}
+
+      - name: Configure SSH
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+
+          printf '%s\n' "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+
+          ssh-keyscan -H "${{ secrets.DEPLOY_HOST }}" >> ~/.ssh/known_hosts
+
+      - name: Deploy to home server
+        run: |
+          ssh \
+            -i ~/.ssh/deploy_key \
+            "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}" \
+            "cd '${{ secrets.DEPLOY_PATH }}' && \
+             docker compose \
+               --env-file .env.production \
+               -f docker-compose.prod.yml \
+               pull && \
+             docker compose \
+               --env-file .env.production \
+               -f docker-compose.prod.yml \
+               up -d"
+
+      - name: Verify production
+        run: |
+          sleep 5
+          curl --fail \
+            --retry 10 \
+            --retry-delay 3 \
+            https://crypto-strategy-lab.nhphung.id.vn
