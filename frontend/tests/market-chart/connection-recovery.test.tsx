@@ -109,7 +109,12 @@ function candleEvent(
     version: "1",
     eventId,
     occurredAt: value.receivedAt,
-    payload: { selection, revision, candle: value },
+    payload: {
+      slotGenerations: { "slot-1": 1, "slot-2": 1, "slot-3": 1 },
+      selection,
+      revision,
+      candle: value,
+    },
   };
 }
 
@@ -125,13 +130,17 @@ function stateEvent(
   occurredAt: string;
   payload: SubscriptionStateChangedPayload;
 } {
+  const slotIds = extra.slotIds ?? ["slot-1"];
+  const slotGenerations =
+    extra.slotGenerations ?? Object.fromEntries(slotIds.map((slotId) => [slotId, 1]));
   return {
     eventType: "SUBSCRIPTION_STATE_CHANGED",
     version: "1",
     eventId,
     occurredAt: "2026-08-13T10:00:00Z",
     payload: {
-      slotIds: ["slot-1"],
+      slotIds,
+      slotGenerations,
       selection,
       state,
       attempt: 0,

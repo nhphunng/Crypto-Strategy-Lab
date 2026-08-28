@@ -36,13 +36,23 @@ CANDLE_COUNT = 5
 FULL_RANGE = TimeRange(START, START + timedelta(minutes=5 * CANDLE_COUNT))
 
 
-@pytest.fixture
-async def api() -> httpx.AsyncClient:
+def build_test_container(pair: str = "BTCUSDT") -> tuple[Container, FakeProvider]:
     clock = FixedClock(NOW)
     repository = InMemoryMarketDataRepository()
-    candles = tuple(make_candle(START + timedelta(minutes=5 * i)) for i in range(CANDLE_COUNT))
+    settings = Settings(_env_file=None)
+    selection = MarketSelection("BINANCE", pair, Timeframe.FIVE_MINUTES)
+    candles = tuple(
+        make_candle(START + timedelta(minutes=5 * i), selection=selection)
+        for i in range(CANDLE_COUNT)
+    )
     provider = FakeProvider(candles)
-    historical = HistoricalMarketDataService(repository, provider, clock)
+    historical = HistoricalMarketDataService(
+        repository,
+        provider,
+        clock,
+        supported_pairs=frozenset(settings.capabilities.pairs),
+        supported_timeframes=frozenset(settings.capabilities.timeframes),
+    )
     datasets = DatasetService(
         repository,
         historical,
@@ -50,18 +60,56 @@ async def api() -> httpx.AsyncClient:
         lease_duration=timedelta(seconds=60),
         max_dataset_candles=100,
     )
-    container = Container(
-        settings=Settings(_env_file=None),
-        clock=clock,
-        repository=repository,
-        historical=historical,
-        datasets=datasets,
+    return (
+        Container(
+            settings=settings,
+            clock=clock,
+            repository=repository,
+            historical=historical,
+            datasets=datasets,
+        ),
+        provider,
     )
+
+
+@pytest.fixture
+async def api() -> httpx.AsyncClient:
+    container, _ = build_test_container()
     app = create_app(container)
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="http://test"
     ) as client:
         yield client
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("pair", ("ETHUSDT", "SOLUSDT"))
+async def test_supported_altcoin_pair_fetches_matching_fake_provider_candles(pair: str) -> None:
+    container, provider = build_test_container(pair)
+    app = create_app(container)
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        response = await client.get(
+            "/api/v1/market-data/candles",
+            params={
+                "provider": "BINANCE",
+                "pair": pair,
+                "timeframe": "5m",
+                "startTime": "2024-01-01T00:00:00.000Z",
+                "endTime": "2024-01-01T00:25:00.000Z",
+                "limit": CANDLE_COUNT,
+                "schemaVersion": "1",
+            },
+        )
+
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["completeness"] == "COMPLETE"
+    assert data["selection"]["pair"] == pair
+    assert len(data["candles"]) == CANDLE_COUNT
+    assert {candle["pair"] for candle in data["candles"]} == {pair}
+    assert provider.calls == [FULL_RANGE]
 
 
 async def test_discover_preview_materialize_and_page_a_dataset(api: httpx.AsyncClient) -> None:

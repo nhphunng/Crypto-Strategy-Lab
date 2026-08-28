@@ -67,6 +67,11 @@ class IsolatedGeneratedStrategy:
             "context": {
                 "datasetId": context.dataset_id,
                 "datasetVersion": context.dataset_version,
+                "provider": context.provider,
+                "pair": context.pair,
+                "timeframe": context.timeframe.value,
+                "rangeStart": format_utc_millis(context.range_start),
+                "rangeEnd": format_utc_millis(context.range_end),
                 "decisionTimestamp": format_utc_millis(context.decision_timestamp),
                 "candles": [
                     {

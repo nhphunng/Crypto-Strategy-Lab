@@ -193,6 +193,7 @@ type MarketDataConnectionState = Literal["LOADING", "LIVE", "STALE", "RECONNECTI
 
 class SubscribeMarketDataPayload(ApiModel):
     slot_id: str = Field(alias="slotId", min_length=1, max_length=128)
+    generation: int = Field(ge=0)
     selection: MarketSelectionDto
 
 
@@ -236,6 +237,7 @@ type MarketDataCommandEnvelope = Annotated[
 
 class SubscriptionStateChangedPayload(ApiModel):
     slot_ids: tuple[str, ...] = Field(alias="slotIds", min_length=1, max_length=4)
+    slot_generations: dict[str, int] = Field(alias="slotGenerations", min_length=1, max_length=4)
     selection: MarketSelectionDto
     state: MarketDataConnectionState
     attempt: int = Field(ge=0, le=8)
@@ -245,6 +247,7 @@ class SubscriptionStateChangedPayload(ApiModel):
 
 
 class CandleUpdatedPayload(ApiModel):
+    slot_generations: dict[str, int] = Field(alias="slotGenerations", min_length=1, max_length=4)
     selection: MarketSelectionDto
     revision: int = Field(ge=0)
     candle: CandleDto
@@ -260,6 +263,7 @@ class CandleUpdatedPayload(ApiModel):
 
 class MarketDataErrorPayload(ApiModel):
     slot_id: str | None = Field(default=None, alias="slotId", min_length=1, max_length=128)
+    generation: int | None = Field(default=None, ge=0)
     code: UppercaseCode
     message: str = Field(min_length=1, max_length=500)
     retryable: bool

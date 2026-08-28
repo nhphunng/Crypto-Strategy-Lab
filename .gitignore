@@ -30,6 +30,7 @@ Thumbs.db
 .specify/feature.json
 .codegraph/
 .data/
+.hermes/
 .runtime-secrets/
 *.secret
-.ua/.env.production
+.ua/

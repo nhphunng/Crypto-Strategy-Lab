@@ -23,12 +23,18 @@ function createStableSlotId() {
 
 function ChartGridHarness({
   initialTimeframes,
+  pair = "BTCUSDT",
+  pairs,
+  onPairChange,
 }: {
   initialTimeframes: readonly Timeframe[];
+  pair?: string;
+  pairs?: readonly string[];
+  onPairChange?: (pair: string) => void;
 }) {
   const model = useChartSlots({
     provider: "BINANCE",
-    pair: "BTCUSDT",
+    pair,
     defaultTimeframe: "5m",
     initialTimeframes,
     createSlotId: createStableSlotId(),
@@ -37,6 +43,7 @@ function ChartGridHarness({
   return (
     <ChartGrid
       pair={model.pair}
+      pairs={pairs}
       slots={model.slots}
       timeframes={MARKET_DATA_TIMEFRAMES}
       limitMessage={model.limitMessage}
@@ -46,6 +53,7 @@ function ChartGridHarness({
       onRemove={model.removeSlot}
       onTimeframeChange={model.changeTimeframe}
       onRetry={model.retrySlot}
+      onPairChange={onPairChange}
     />
   );
 }
@@ -55,6 +63,23 @@ function chartRegions() {
 }
 
 describe("one-to-four stable chart slots", () => {
+  it("offers supported pair options and reports a selected pair", async () => {
+    const user = userEvent.setup();
+    const onPairChange = vi.fn();
+    render(
+      <ChartGridHarness
+        initialTimeframes={["5m"]}
+        pairs={["BTCUSDT", "ETHUSDT", "SOLUSDT"]}
+        onPairChange={onPairChange}
+      />,
+    );
+
+    const selector = screen.getByRole("combobox", { name: "Dashboard pair" });
+    expect(selector.querySelectorAll("option")).toHaveLength(3);
+    await user.selectOptions(selector, "ETHUSDT");
+    expect(onPairChange).toHaveBeenCalledWith("ETHUSDT");
+  });
+
   it.each([1, 2, 3, 4])("renders exactly %i labelled chart slot(s)", (count) => {
     render(
       <ChartGridHarness initialTimeframes={INITIAL_TIMEFRAMES.slice(0, count)} />,
@@ -290,5 +315,26 @@ describe("responsive grid and route composition", () => {
     expect(screen.getByTestId("market-content")).toHaveClass(
       "xl:grid-cols-[minmax(0,1fr)_15rem]",
     );
+  });
+
+  it("renders the selected non-BTC pair through the Market route", async () => {
+    const user = userEvent.setup();
+    const onPairChange = vi.fn();
+
+    render(
+      <MarketRoute
+        pair="SOLUSDT"
+        pairs={["BTCUSDT", "ETHUSDT", "SOLUSDT"]}
+        onPairChange={onPairChange}
+        initialTimeframes={["5m"]}
+        createSlotId={() => "slot-sol"}
+      />,
+    );
+
+    expect(document.getElementById("chart-solusdt-5m-slot-sol")).toBeVisible();
+    const selector = screen.getByRole("combobox", { name: "Dashboard pair" });
+    expect(selector).toHaveValue("SOLUSDT");
+    await user.selectOptions(selector, "ETHUSDT");
+    expect(onPairChange).toHaveBeenCalledWith("ETHUSDT");
   });
 });

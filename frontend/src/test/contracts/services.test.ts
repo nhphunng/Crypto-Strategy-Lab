@@ -11,7 +11,9 @@ describe('mock service contracts', () => {
 
   it('searches markets case-insensitively and preserves availability metadata', () => {
     expect(services.market.listMarkets('bitcoin').map((market) => market.pair)).toContain('BTCUSDT')
-    expect(services.market.getMarket('ETHUSDT')?.available).toBe(false)
+    expect(services.market.getMarket('ETHUSDT')?.available).toBe(true)
+    expect(services.market.getMarket('SOLUSDT')?.available).toBe(true)
+    expect(services.market.getMarket('BNBUSDT')?.available).toBe(false)
     expect(services.market.listMarkets('not-a-market')).toEqual([])
   })
 

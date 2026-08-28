@@ -41,6 +41,30 @@ export type ChartSlotState = {
   viewport?: unknown;
 };
 
+export function normalizeSlotsForPair(
+  slots: readonly ChartSlotState[],
+  pair: string,
+): ChartSlotState[] {
+  let changed = false;
+  const normalized = slots.map((slot) => {
+    if (slot.pair === pair) return slot;
+    changed = true;
+    return {
+      ...slot,
+      pair,
+      generation: slot.generation + 1,
+      candles: [],
+      connectionState: "LOADING" as const,
+      lastEventAt: undefined,
+      attempt: undefined,
+      retryAfterMs: undefined,
+      reasonCode: undefined,
+      error: undefined,
+    };
+  });
+  return changed ? normalized : [...slots];
+}
+
 export type UseChartSlotsOptions = {
   provider: Provider;
   pair: string;
@@ -102,6 +126,7 @@ export function useChartSlots(options: UseChartSlotsOptions) {
     } ready.`,
   );
   const activeLifecycles = useRef(new Map<string, ActiveSlotLifecycle>());
+  const previousPair = useRef(options.pair);
 
   const getSlots = useCallback(() => slotsRef.current, []);
   const setSlotsNow = useCallback(
@@ -130,6 +155,13 @@ export function useChartSlots(options: UseChartSlotsOptions) {
     isActive,
     setAnnouncement,
   });
+
+  useEffect(() => {
+    if (previousPair.current === options.pair) return;
+    previousPair.current = options.pair;
+    setSlotsNow((current) => normalizeSlotsForPair(current, options.pair));
+    setAnnouncement(`Market pair changed to ${options.pair}.`);
+  }, [options.pair, setSlotsNow]);
 
   const addSlot = useCallback(() => {
     const current = slotsRef.current;
@@ -244,7 +276,9 @@ export function useChartSlots(options: UseChartSlotsOptions) {
       releaseLifecycle(active);
     }
 
-    if (marketData === undefined) return;
+    if (marketData === undefined || slots.some((slot) => slot.pair !== options.pair)) {
+      return;
+    }
 
     for (const slot of slots) {
       if (!activeSlotIds.has(slot.slotId) || activeLifecycles.current.has(slot.slotId)) {
@@ -296,10 +330,12 @@ export function useChartSlots(options: UseChartSlotsOptions) {
     [],
   );
 
+  const renderedSlots = normalizeSlotsForPair(slots, options.pair);
+
   return {
     provider: options.provider,
     pair: options.pair,
-    slots,
+    slots: renderedSlots,
     limitMessage,
     announcement,
     addSlot,
