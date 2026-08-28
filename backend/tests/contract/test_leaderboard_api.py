@@ -234,7 +234,6 @@ async def test_no_trade_entry_remains_visible_with_explicit_zero_metrics(
         {"pageSize": 500},
         {"pair": "btc"},
         {"timeframe": "3m"},
-        {"scoringPolicyVersion": "999"},
     ],
 )
 async def test_invalid_query_returns_the_standard_validation_error(
@@ -252,6 +251,61 @@ async def test_invalid_query_returns_the_standard_validation_error(
     assert body["error"]["code"] == "LEADERBOARD_QUERY_INVALID"
     assert body["error"]["retryable"] is False
     assert body["requestId"]
+
+
+async def test_unpublished_scoring_policy_is_reported_as_missing_not_malformed(
+    leaderboard_client: AsyncClient,
+    seeded_leaderboard: LeaderboardFixture,
+) -> None:
+    """A deployment whose Evaluation feature published nothing answers this way."""
+
+    response = await leaderboard_client.get(
+        "/api/v1/leaderboards",
+        params=params(seeded_leaderboard, scoringPolicyId="not-published"),
+    )
+    body = response.json()
+
+    assert response.status_code == 404
+    assert body["error"]["code"] == "LEADERBOARD_POLICY_NOT_PUBLISHED"
+    assert body["error"]["details"]["scoringPolicyId"] == "not-published"
+
+
+async def test_policies_endpoint_lists_the_selectable_ranking_definitions(
+    leaderboard_client: AsyncClient,
+    seeded_leaderboard: LeaderboardFixture,
+) -> None:
+    response = await leaderboard_client.get("/api/v1/leaderboards/policies")
+    data = response.json()["data"]
+
+    assert response.status_code == 200
+    policy = next(
+        item
+        for item in data["policies"]
+        if item["scoringPolicyVersion"] == seeded_leaderboard.scoring_policy_version
+    )
+    assert policy["scoringPolicyId"] == seeded_leaderboard.scoring_policy_id
+    assert policy["defaultRankMetric"] == "OVERALL_SCORE"
+    assert policy["name"]
+    assert policy["evaluationCount"] == len(seeded_leaderboard.candidates)
+
+
+async def test_policies_endpoint_reports_a_published_policy_with_no_candidate_yet(
+    leaderboard_client: AsyncClient,
+) -> None:
+    """The clean-deployment case: a real policy, zero evaluations, and no error.
+
+    The platform publishes its own scoring policy at startup, whose version is
+    not the demo fixture's. A client that hardcoded the fixture identity is
+    exactly how the deployed leaderboard used to fail.
+    """
+
+    response = await leaderboard_client.get("/api/v1/leaderboards/policies")
+    policies = response.json()["data"]["policies"]
+
+    assert response.status_code == 200
+    assert policies, "the platform publishes at least one ranking definition"
+    assert all(item["evaluationCount"] == 0 for item in policies)
+    assert all(item["scoringPolicyVersion"] != "2" for item in policies)
 
 
 async def test_missing_required_projection_identity_is_rejected(

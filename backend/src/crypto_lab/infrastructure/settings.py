@@ -52,6 +52,13 @@ class Settings(BaseSettings):
     max_dataset_candles: int = Field(default=10_000, ge=1000, le=1_000_000)
     dataset_build_lease_seconds: int = Field(default=120, ge=10, le=3600)
     max_chart_slots_per_connection: int = Field(default=4, ge=1, le=4)
+    # Off by default so tests and local runs never reach the provider on
+    # startup; the shipped Compose deployment turns it on.
+    auto_evaluation_enabled: bool = False
+    auto_evaluation_pair: str = "BTCUSDT"
+    auto_evaluation_timeframe: str = "15m"
+    auto_evaluation_candles: int = Field(default=500, ge=50, le=5000)
+    auto_evaluation_interval_seconds: float = Field(default=3600, ge=60, le=86_400)
     cors_allowed_origins: tuple[str, ...] = (
         "http://localhost:5173",
         "http://127.0.0.1:5173",

@@ -2,12 +2,25 @@ import type {
   LeaderboardSnapshot,
   LeaderboardUpdatedEvent,
   RankedResultDetail,
+  ScoringPolicySummary,
   TradePage,
   VisualizationData,
 } from '../../src/features/leaderboard/types'
 
 const DISCLAIMER =
   'Simulated historical analysis only. Past simulated performance is not investment advice and does not guarantee future results.'
+
+export function policiesFixture(): ScoringPolicySummary[] {
+  return [
+    {
+      scoringPolicyId: 'balanced',
+      scoringPolicyVersion: '2',
+      name: 'Balanced',
+      defaultRankMetric: 'OVERALL_SCORE',
+      evaluationCount: 13,
+    },
+  ]
+}
 
 export function snapshotFixture(): LeaderboardSnapshot {
   return {

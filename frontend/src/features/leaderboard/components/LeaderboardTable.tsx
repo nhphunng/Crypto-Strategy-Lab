@@ -54,9 +54,19 @@ function describe(metadata: MetricDescriptor[], metric?: MetricName): MetricDesc
   return metric ? metadata.find((item) => item.metric === metric) : undefined
 }
 
+/**
+ * Round for reading only. The exact backend decimal stays in the `title`, so no
+ * displayed value silently replaces the recorded one.
+ */
+export function formatDecimal(value: string, fractionDigits = 2): string {
+  const parsed = Number(value)
+  if (!Number.isFinite(parsed)) return value
+  return parsed.toFixed(fractionDigits)
+}
+
 function formatMetric(value: string | null, descriptor?: MetricDescriptor): string {
   if (value === null) return 'n/a'
-  return `${value}${descriptor ? UNIT_SUFFIX[descriptor.unit] : ''}`
+  return `${formatDecimal(value)}${descriptor ? UNIT_SUFFIX[descriptor.unit] : ''}`
 }
 
 export function LeaderboardTable({
@@ -282,20 +292,31 @@ export function LeaderboardTable({
                         </span>
                       )}
                     </td>
-                    <td className="px-3 font-mono font-semibold tabular-nums text-ml">
-                      {entry.score}
+                    <td
+                      className="px-3 font-mono font-semibold tabular-nums text-ml"
+                      title={entry.score}
+                    >
+                      {formatDecimal(entry.score)}
                     </td>
                     <td className="px-3 font-mono tabular-nums text-ink">
-                      {formatMetric(entry.metrics.totalReturn, describe(metadata, 'TOTAL_RETURN'))}
+                      <span title={entry.metrics.totalReturn ?? 'n/a'}>
+                        {formatMetric(entry.metrics.totalReturn, describe(metadata, 'TOTAL_RETURN'))}
+                      </span>
                     </td>
                     <td className="px-3 font-mono tabular-nums text-dim">
-                      {formatMetric(entry.metrics.winRate, describe(metadata, 'WIN_RATE'))}
+                      <span title={entry.metrics.winRate ?? 'n/a'}>
+                        {formatMetric(entry.metrics.winRate, describe(metadata, 'WIN_RATE'))}
+                      </span>
                     </td>
                     <td className="px-3 font-mono tabular-nums text-neg">
-                      {formatMetric(entry.metrics.maxDrawdown, describe(metadata, 'MAX_DRAWDOWN'))}
+                      <span title={entry.metrics.maxDrawdown ?? 'n/a'}>
+                        {formatMetric(entry.metrics.maxDrawdown, describe(metadata, 'MAX_DRAWDOWN'))}
+                      </span>
                     </td>
                     <td className="px-3 font-mono tabular-nums text-ink">
-                      {formatMetric(entry.metrics.sharpeRatio, describe(metadata, 'SHARPE_RATIO'))}
+                      <span title={entry.metrics.sharpeRatio ?? 'n/a'}>
+                        {formatMetric(entry.metrics.sharpeRatio, describe(metadata, 'SHARPE_RATIO'))}
+                      </span>
                     </td>
                     <td className="px-3 text-[11px] text-faint">
                       <span className="font-mono">

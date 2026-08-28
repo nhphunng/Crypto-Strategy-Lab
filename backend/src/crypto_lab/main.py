@@ -31,7 +31,11 @@ def create_app(container: Container | None = None) -> FastAPI:
         await owned_container.initialize_backtest_evaluation()
         if owned_container.leaderboard is not None:
             owned_container.leaderboard.dispatcher_loop.start()
+        if owned_container.auto_evaluation is not None:
+            owned_container.auto_evaluation.start()
         yield
+        if owned_container.auto_evaluation is not None:
+            await owned_container.auto_evaluation.stop()
         if owned_container.leaderboard is not None:
             await owned_container.leaderboard.dispatcher_loop.stop()
         await owned_container.close()

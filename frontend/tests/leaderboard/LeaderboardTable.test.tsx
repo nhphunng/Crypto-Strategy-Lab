@@ -8,7 +8,7 @@ import type {
   LeaderboardSnapshot,
   LeaderboardViewState,
 } from '../../src/features/leaderboard/types'
-import { snapshotFixture } from './fixtures'
+import { policiesFixture, snapshotFixture } from './fixtures'
 
 const VIEW: LeaderboardViewState = { sortBy: 'RANK', sortDirection: 'ASC', page: 1, pageSize: 25 }
 
@@ -145,7 +145,13 @@ describe('LeaderboardRoute', () => {
   it('loads a snapshot and shows the non-investment-advice disclaimer', async () => {
     const loadSnapshot = vi.fn().mockResolvedValue(snapshotFixture())
 
-    render(<LeaderboardRoute loadSnapshot={loadSnapshot} liveUpdates={false} />)
+    render(
+      <LeaderboardRoute
+        loadPolicies={vi.fn().mockResolvedValue(policiesFixture())}
+        loadSnapshot={loadSnapshot}
+        liveUpdates={false}
+      />,
+    )
 
     expect(await screen.findByTestId('table-leaderboard')).toBeInTheDocument()
     const disclaimer = screen.getByTestId('disclaimer-leaderboard').textContent ?? ''
@@ -159,7 +165,13 @@ describe('LeaderboardRoute', () => {
 
   it('reloads a separate projection when K or the ranking metric changes', async () => {
     const loadSnapshot = vi.fn().mockResolvedValue(snapshotFixture())
-    render(<LeaderboardRoute loadSnapshot={loadSnapshot} liveUpdates={false} />)
+    render(
+      <LeaderboardRoute
+        loadPolicies={vi.fn().mockResolvedValue(policiesFixture())}
+        loadSnapshot={loadSnapshot}
+        liveUpdates={false}
+      />,
+    )
     await screen.findByTestId('table-leaderboard')
 
     await userEvent.selectOptions(screen.getByTestId('control-top-k'), '3')
@@ -173,12 +185,103 @@ describe('LeaderboardRoute', () => {
   it('surfaces a failed load without inventing rows', async () => {
     const loadSnapshot = vi.fn().mockRejectedValue(new Error('LEADERBOARD_DEPENDENCY_UNAVAILABLE'))
 
-    render(<LeaderboardRoute loadSnapshot={loadSnapshot} liveUpdates={false} />)
+    render(
+      <LeaderboardRoute
+        loadPolicies={vi.fn().mockResolvedValue(policiesFixture())}
+        loadSnapshot={loadSnapshot}
+        liveUpdates={false}
+      />,
+    )
 
     expect(await screen.findByTestId('state-leaderboard-error')).toHaveTextContent(
       'LEADERBOARD_DEPENDENCY_UNAVAILABLE',
     )
     expect(screen.queryByTestId('table-leaderboard')).toBeNull()
+  })
+})
+
+describe('LeaderboardRoute ranking-definition discovery', () => {
+  it('asks the backend which scoring policies exist instead of guessing one', async () => {
+    const loadPolicies = vi.fn().mockResolvedValue(policiesFixture())
+    const loadSnapshot = vi.fn().mockResolvedValue(snapshotFixture())
+
+    render(<LeaderboardRoute loadPolicies={loadPolicies} loadSnapshot={loadSnapshot} />)
+    await screen.findByTestId('table-leaderboard')
+
+    expect(loadPolicies).toHaveBeenCalled()
+    expect(loadSnapshot).toHaveBeenCalledWith(
+      expect.objectContaining({ scoringPolicyId: 'balanced', scoringPolicyVersion: '2' }),
+      expect.anything(),
+    )
+  })
+
+  it('explains that nothing is published yet rather than showing a failure', async () => {
+    const loadSnapshot = vi.fn()
+
+    render(
+      <LeaderboardRoute loadPolicies={vi.fn().mockResolvedValue([])} loadSnapshot={loadSnapshot} />,
+    )
+
+    const note = await screen.findByTestId('state-leaderboard-no-policy')
+    expect(note).toHaveTextContent('No ranking is published yet')
+    expect(note).toHaveTextContent('seed_leaderboard_demo.py')
+    expect(screen.queryByTestId('state-leaderboard-error')).toBeNull()
+    expect(loadSnapshot).not.toHaveBeenCalled()
+  })
+
+  it('prefers a published policy that already has evaluated candidates', async () => {
+    const empty = { ...policiesFixture()[0], scoringPolicyId: 'draft', evaluationCount: 0 }
+    const loadSnapshot = vi.fn().mockResolvedValue(snapshotFixture())
+
+    render(
+      <LeaderboardRoute
+        loadPolicies={vi.fn().mockResolvedValue([empty, ...policiesFixture()])}
+        loadSnapshot={loadSnapshot}
+      />,
+    )
+    await screen.findByTestId('table-leaderboard')
+
+    expect(loadSnapshot).toHaveBeenCalledWith(
+      expect.objectContaining({ scoringPolicyId: 'balanced' }),
+      expect.anything(),
+    )
+  })
+
+  it('lets an analyst switch between published policies', async () => {
+    const second = {
+      ...policiesFixture()[0],
+      scoringPolicyId: 'aggressive',
+      name: 'Aggressive',
+      evaluationCount: 4,
+    }
+    const loadSnapshot = vi.fn().mockResolvedValue(snapshotFixture())
+    render(
+      <LeaderboardRoute
+        loadPolicies={vi.fn().mockResolvedValue([...policiesFixture(), second])}
+        loadSnapshot={loadSnapshot}
+      />,
+    )
+    await screen.findByTestId('table-leaderboard')
+
+    await userEvent.selectOptions(screen.getByTestId('control-scoring-policy'), 'aggressive@2')
+
+    expect(loadSnapshot).toHaveBeenLastCalledWith(
+      expect.objectContaining({ scoringPolicyId: 'aggressive' }),
+      expect.anything(),
+    )
+  })
+
+  it('reports a failed policy lookup as an error state', async () => {
+    render(
+      <LeaderboardRoute
+        loadPolicies={vi.fn().mockRejectedValue(new Error('LEADERBOARD_DEPENDENCY_UNAVAILABLE'))}
+        loadSnapshot={vi.fn()}
+      />,
+    )
+
+    expect(await screen.findByTestId('state-leaderboard-error')).toHaveTextContent(
+      'LEADERBOARD_DEPENDENCY_UNAVAILABLE',
+    )
   })
 })
 

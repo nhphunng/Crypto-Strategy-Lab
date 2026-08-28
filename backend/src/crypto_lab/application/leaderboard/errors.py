@@ -7,6 +7,7 @@ from typing import Any
 from crypto_lab.application.market_data.errors import ErrorDescriptor
 
 LEADERBOARD_NOT_FOUND = "LEADERBOARD_NOT_FOUND"
+LEADERBOARD_POLICY_NOT_PUBLISHED = "LEADERBOARD_POLICY_NOT_PUBLISHED"
 LEADERBOARD_ENTRY_NOT_FOUND = "LEADERBOARD_ENTRY_NOT_FOUND"
 LEADERBOARD_QUERY_INVALID = "LEADERBOARD_QUERY_INVALID"
 LEADERBOARD_RANGE_INVALID = "LEADERBOARD_RANGE_INVALID"
@@ -37,6 +38,23 @@ def entry_not_found(**details: Any) -> LeaderboardError:
         ErrorDescriptor(
             LEADERBOARD_ENTRY_NOT_FOUND,
             "The requested leaderboard entry does not exist.",
+            details=details or None,
+        )
+    )
+
+
+def policy_not_published(**details: Any) -> LeaderboardError:
+    """The ranking definition does not exist yet.
+
+    This is a missing resource rather than a malformed request: an environment
+    where the upstream Evaluation feature has published nothing yet answers
+    every well-formed ranking query this way.
+    """
+
+    return LeaderboardError(
+        ErrorDescriptor(
+            LEADERBOARD_POLICY_NOT_PUBLISHED,
+            "No scoring policy is published for the requested ranking definition.",
             details=details or None,
         )
     )

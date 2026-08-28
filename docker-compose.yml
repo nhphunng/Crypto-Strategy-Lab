@@ -23,6 +23,13 @@ services:
       CSL_ENVIRONMENT: development
       CSL_DATABASE_URL: postgresql+asyncpg://crypto_lab:crypto_lab@postgres:5432/crypto_lab
       CSL_BINANCE_BASE_URL: https://api.binance.com
+      # Keep the Leaderboard populated on its own: dataset, backtest, evaluate,
+      # rank (REQUIREMENT.md sections 21-23).
+      CSL_AUTO_EVALUATION_ENABLED: "${CSL_AUTO_EVALUATION_ENABLED:-true}"
+      CSL_AUTO_EVALUATION_PAIR: "${CSL_AUTO_EVALUATION_PAIR:-BTCUSDT}"
+      CSL_AUTO_EVALUATION_TIMEFRAME: "${CSL_AUTO_EVALUATION_TIMEFRAME:-15m}"
+      CSL_AUTO_EVALUATION_CANDLES: "${CSL_AUTO_EVALUATION_CANDLES:-500}"
+      CSL_AUTO_EVALUATION_INTERVAL_SECONDS: "${CSL_AUTO_EVALUATION_INTERVAL_SECONDS:-3600}"
     ports:
       - "${CSL_API_PORT:-8000}:8000"
     depends_on:

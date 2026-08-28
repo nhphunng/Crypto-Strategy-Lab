@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Request, status
@@ -19,6 +20,8 @@ from crypto_lab.domain.evaluation.comparison import (
     IncompatibleComparisonError,
 )
 
+logger = logging.getLogger("crypto_lab.evaluations")
+
 router = APIRouter(prefix="/api/v1", tags=["evaluations"])
 
 
@@ -30,8 +33,9 @@ router = APIRouter(prefix="/api/v1", tags=["evaluations"])
 async def evaluate_backtest_result(
     request: Request, body: CreateEvaluationRequest
 ) -> SuccessEnvelope[EvaluationResultDto]:
+    container = request.app.state.container
     try:
-        value = await request.app.state.container.evaluate_backtest.execute(
+        value = await container.evaluate_backtest.execute(
             body.backtest_result_id,
             body.evaluation_policy_id,
             body.evaluation_policy_version,
@@ -50,6 +54,19 @@ async def evaluate_backtest_result(
                 "message": message,
             },
         ) from exc
+    # REQUIREMENT.md section 21: every completed backtest evaluation enters the
+    # Leaderboard. Ranking failures never fail the evaluation that already
+    # persisted; the next read or update reconciles the projection.
+    if container.leaderboard is not None:
+        try:
+            await container.leaderboard.ingestion.on_evaluation_completed(
+                value.id, request_id=request_id(request)
+            )
+        except Exception:
+            logger.warning(
+                "leaderboard_ingestion_failed",
+                extra={"fields": {"evaluation_result_id": str(value.id)}},
+            )
     return success_envelope(evaluation_to_dto(value), "Evaluation completed.", request_id(request))
 
 

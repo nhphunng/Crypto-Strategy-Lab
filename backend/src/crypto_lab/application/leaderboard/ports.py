@@ -94,6 +94,16 @@ class EntryView:
 
 
 @dataclass(frozen=True, slots=True)
+class ScoringPolicySummary:
+    """One published scoring policy a client may rank by."""
+
+    policy: ScoringPolicyRef
+    name: str
+    default_rank_metric: RankMetric
+    evaluation_count: int
+
+
+@dataclass(frozen=True, slots=True)
 class ProjectionSnapshot:
     """Authoritative current projection returned by REST reads."""
 
@@ -293,6 +303,8 @@ class LeaderboardRepository(Protocol):
 
     async def load_policy(self, ref: ScoringPolicyRef) -> ScoringPolicy | None: ...
 
+    async def list_policies(self) -> tuple[ScoringPolicySummary, ...]: ...
+
     async def mutate_projection(
         self,
         identity: LeaderboardIdentity,
@@ -444,6 +456,7 @@ __all__ = [
     "Recompute",
     "RecordingPublisher",
     "RunState",
+    "ScoringPolicySummary",
     "TradePage",
     "TradeView",
     "UnalignedMarker",

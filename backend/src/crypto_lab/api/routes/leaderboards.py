@@ -18,10 +18,12 @@ from crypto_lab.api.middleware import request_id
 from crypto_lab.api.schemas.leaderboards import (
     LeaderboardSnapshotDto,
     RankedResultDetailDto,
+    ScoringPolicyListDto,
     TradePageDto,
     VisualizationDataDto,
     detail_to_dto,
     page_to_dto,
+    policies_to_dto,
     trade_page_to_dto,
     visualization_to_dto,
 )
@@ -89,6 +91,21 @@ def _identity(
         )
     except ValueError as error:
         raise query_invalid(str(error), k=k) from error
+
+
+@router.get("/policies", response_model=SuccessEnvelope[ScoringPolicyListDto])
+async def list_scoring_policies(
+    request: Request,
+    container: LeaderboardContainer = Depends(leaderboard_container),
+) -> SuccessEnvelope[ScoringPolicyListDto]:
+    """Ranking definitions that exist, so a client never has to guess one."""
+
+    summaries = await container.queries.list_policies()
+    return success_envelope(
+        policies_to_dto(summaries),
+        "Scoring policies loaded.",
+        request_id(request),
+    )
 
 
 @router.get("", response_model=SuccessEnvelope[LeaderboardSnapshotDto])

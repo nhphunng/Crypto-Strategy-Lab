@@ -20,6 +20,7 @@ import {
   type Overlay,
   type PageMeta,
   type RankedResultDetail,
+  type ScoringPolicySummary,
   type Trade,
   type TradePage,
   type VisualizationData,
@@ -165,6 +166,28 @@ export function parseLeaderboardEntry(value: unknown, path = 'entry'): Leaderboa
     scoringPolicyVersion: str(raw.scoringPolicyVersion, `${path}.scoringPolicyVersion`),
     updatedAt: instant(raw.updatedAt, `${path}.updatedAt`),
   }
+}
+
+export function parseScoringPolicies(value: unknown): ScoringPolicySummary[] {
+  const path = 'policies'
+  const raw = record(value, path)
+  return list(raw.policies, `${path}.policies`).map((item, index) => {
+    const policy = record(item, `${path}.policies[${index}]`)
+    return {
+      scoringPolicyId: str(policy.scoringPolicyId, `${path}.policies[${index}].scoringPolicyId`),
+      scoringPolicyVersion: str(
+        policy.scoringPolicyVersion,
+        `${path}.policies[${index}].scoringPolicyVersion`,
+      ),
+      name: str(policy.name, `${path}.policies[${index}].name`),
+      defaultRankMetric: member(
+        policy.defaultRankMetric,
+        RANK_METRICS,
+        `${path}.policies[${index}].defaultRankMetric`,
+      ),
+      evaluationCount: int(policy.evaluationCount, `${path}.policies[${index}].evaluationCount`),
+    }
+  })
 }
 
 export function parseLeaderboardSnapshot(value: unknown): LeaderboardSnapshot {

@@ -95,6 +95,14 @@ export type PageMeta = {
   total: number
 }
 
+export type ScoringPolicySummary = {
+  scoringPolicyId: string
+  scoringPolicyVersion: string
+  name: string
+  defaultRankMetric: RankMetric
+  evaluationCount: number
+}
+
 export type LeaderboardSnapshot = {
   leaderboardId: string
   scopeKey: string

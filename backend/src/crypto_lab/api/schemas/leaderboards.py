@@ -5,6 +5,7 @@ JSON is camelCase, decimals are exact strings, and instants are UTC ISO-8601.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from datetime import datetime
 from decimal import Decimal
 from typing import Any, Literal
@@ -20,6 +21,7 @@ from crypto_lab.application.leaderboard.ports import (
     OverlayView,
     Provenance,
     RankedResultView,
+    ScoringPolicySummary,
     TradePage,
     VisualizationAvailability,
     VisualizationView,
@@ -85,6 +87,18 @@ class LeaderboardEntryDto(ApiModel):
     scoring_policy_id: str = Field(alias="scoringPolicyId")
     scoring_policy_version: str = Field(alias="scoringPolicyVersion")
     updated_at: str = Field(alias="updatedAt")
+
+
+class ScoringPolicySummaryDto(ApiModel):
+    scoring_policy_id: str = Field(alias="scoringPolicyId")
+    scoring_policy_version: str = Field(alias="scoringPolicyVersion")
+    name: str
+    default_rank_metric: str = Field(alias="defaultRankMetric")
+    evaluation_count: int = Field(alias="evaluationCount")
+
+
+class ScoringPolicyListDto(ApiModel):
+    policies: tuple[ScoringPolicySummaryDto, ...]
 
 
 class LeaderboardSnapshotDto(ApiModel):
@@ -341,6 +355,21 @@ def entry_to_dto(entry: EntryView) -> LeaderboardEntryDto:
         scoring_policy_id=candidate.policy.policy_id,
         scoring_policy_version=candidate.policy.version,
         updated_at=_instant(entry.updated_at),
+    )
+
+
+def policies_to_dto(summaries: Sequence[ScoringPolicySummary]) -> ScoringPolicyListDto:
+    return ScoringPolicyListDto(
+        policies=tuple(
+            ScoringPolicySummaryDto(
+                scoring_policy_id=item.policy.policy_id,
+                scoring_policy_version=item.policy.version,
+                name=item.name,
+                default_rank_metric=item.default_rank_metric.value,
+                evaluation_count=item.evaluation_count,
+            )
+            for item in summaries
+        )
     )
 
 

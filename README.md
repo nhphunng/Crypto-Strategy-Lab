@@ -183,6 +183,25 @@ Frontend gọi API trên cùng origin và dựa vào Vite dev proxy (hoặc ngin
 
 Định danh projection gồm phạm vi so sánh (pair, timeframe, runId), `scoringPolicyId`/version, `rankBy` và `k`. Đổi `k` hoặc `rankBy` là một projection khác.
 
+### Tự động chạy evaluation (REQUIREMENT.md §21–§23)
+
+Theo §21, mỗi backtest hoàn tất phải đi vào Leaderboard. Hệ thống làm việc đó theo hai đường:
+
+1. Gọi `POST /api/v1/evaluation-results` — sau khi lưu, evaluation được đưa thẳng vào Leaderboard.
+2. Vòng lặp nền (§23): materialize dataset → backtest từng Strategy đã đăng ký → evaluate → rank → Leaderboard, lặp lại theo chu kỳ.
+
+Vòng lặp bật sẵn trong `docker-compose.yml`, tắt mặc định ở môi trường test/local:
+
+| Biến | Mặc định | Ý nghĩa |
+|---|---|---|
+| `CSL_AUTO_EVALUATION_ENABLED` | `false` (compose: `true`) | Bật vòng lặp |
+| `CSL_AUTO_EVALUATION_PAIR` | `BTCUSDT` | Market Pair dùng để backtest |
+| `CSL_AUTO_EVALUATION_TIMEFRAME` | `15m` | Timeframe |
+| `CSL_AUTO_EVALUATION_CANDLES` | `500` | Số Candle đã đóng trong cửa sổ đánh giá |
+| `CSL_AUTO_EVALUATION_INTERVAL_SECONDS` | `3600` | Khoảng cách giữa hai chu kỳ |
+
+Mỗi bước đều idempotent: chạy lại một chu kỳ sẽ dùng lại đúng run/result/evaluation cũ theo định danh bất biến, nên Leaderboard không có dòng trùng và không phát sinh event thừa. Một Strategy lỗi chỉ bị bỏ qua và ghi log, không chặn các Strategy còn lại.
+
 ### Chạy demo
 
 ```powershell
