@@ -5,6 +5,9 @@ on:
     branches:
       - main
       - chore/cd-homeserver
+
+  workflow_dispatch:
+
 permissions:
   contents: read
   packages: write
@@ -49,8 +52,10 @@ jobs:
           tags: |
             ghcr.io/nhphunng/crypto-strategy-lab-frontend:latest
             ghcr.io/nhphunng/crypto-strategy-lab-frontend:${{ github.sha }}
-    deploy:
+
+  deploy:
     needs: build-and-push
+
     runs-on:
       - self-hosted
       - Linux
