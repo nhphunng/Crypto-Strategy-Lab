@@ -1,8 +1,12 @@
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+import asyncio
+from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from decimal import Decimal
+from email.utils import parsedate_to_datetime
+from math import ceil
 from typing import cast
 
 import httpx
@@ -17,6 +21,9 @@ from crypto_lab.domain.strategy.parameters import (
     ParameterValueType,
     RelationshipRule,
 )
+
+Sleep = Callable[[float], Awaitable[None]]
+Jitter = Callable[[], float]
 
 
 class _ParameterOutput(BaseModel):
@@ -79,13 +86,26 @@ class StructuredStrategyGenerationAdapter:
         model_id: str,
         model_version: str,
         api_key: str,
+        connect_timeout_seconds: float = 5,
+        read_timeout_seconds: float = 30,
+        max_attempts: int = 3,
+        max_retry_delay_seconds: float = 30,
+        sleep: Sleep = asyncio.sleep,
+        jitter: Jitter = lambda: 0.0,
     ) -> None:
+        if max_attempts < 1:
+            raise ValueError("max_attempts must be positive")
         self._client = client
         self._endpoint = endpoint
         self.provider = provider
         self.model_id = model_id
         self.model_version = model_version
         self._api_key = api_key
+        self._timeout = httpx.Timeout(read_timeout_seconds, connect=connect_timeout_seconds)
+        self._max_attempts = max_attempts
+        self._max_retry_delay = max_retry_delay_seconds
+        self._sleep = sleep
+        self._jitter = jitter
 
     async def generate(
         self, source_type: GenerationSourceType, inert_content: str, request_id: str
@@ -106,26 +126,89 @@ class StructuredStrategyGenerationAdapter:
                 {"role": "user", "content": f"SOURCE_TYPE={source_type.value}\n{inert_content}"},
             ],
         }
+        content = await self._request(payload, request_id)
         try:
-            response = await self._client.post(
-                self._endpoint,
-                json=payload,
-                headers={"Authorization": f"Bearer {self._api_key}", "X-Request-ID": request_id},
-                timeout=httpx.Timeout(30, connect=5),
-            )
-            response.raise_for_status()
-            raw = response.json()
-            content = raw["output"]
             parsed = _GenerationOutput.model_validate(content)
-        except (httpx.HTTPError, KeyError, TypeError, ValueError, ValidationError) as error:
+        except ValidationError as error:
             raise StrategyError(
                 ErrorCategory.GENERATION_FAILED,
-                "strategy generation provider failed or returned malformed structured output",
+                "strategy generation provider returned malformed structured output",
             ) from error
         return cast(
             Sequence[ModelCandidate],
             tuple(_candidate(item) for item in parsed.candidates),
         )
+
+    async def _request(self, payload: Mapping[str, object], request_id: str) -> object:
+        """POST with bounded retry on network errors, 429s, and 5xxs.
+
+        4xx (other than 429) and malformed bodies fail immediately since a retry
+        cannot change a client-error or schema-mismatch outcome.
+        """
+        headers = {"Authorization": f"Bearer {self._api_key}", "X-Request-ID": request_id}
+        last_error: Exception | None = None
+        for attempt in range(self._max_attempts):
+            try:
+                response = await self._client.post(
+                    self._endpoint, json=payload, headers=headers, timeout=self._timeout
+                )
+            except httpx.HTTPError as error:
+                last_error = error
+                if attempt + 1 >= self._max_attempts:
+                    break
+                await self._sleep(self._backoff(attempt))
+                continue
+            if response.status_code == 429:
+                if attempt + 1 >= self._max_attempts:
+                    raise StrategyError(
+                        ErrorCategory.GENERATION_FAILED,
+                        "strategy generation provider is rate limited",
+                    )
+                await self._sleep(float(self._retry_after(response) or self._backoff(attempt)))
+                continue
+            if response.status_code >= 500:
+                if attempt + 1 >= self._max_attempts:
+                    raise StrategyError(
+                        ErrorCategory.GENERATION_FAILED,
+                        "strategy generation provider failed",
+                    )
+                await self._sleep(self._backoff(attempt))
+                continue
+            if response.status_code >= 400:
+                raise StrategyError(
+                    ErrorCategory.GENERATION_FAILED,
+                    "strategy generation provider rejected the request",
+                )
+            try:
+                raw = response.json()
+                return raw["output"]
+            except (ValueError, KeyError, TypeError) as error:
+                raise StrategyError(
+                    ErrorCategory.GENERATION_FAILED,
+                    "strategy generation provider returned malformed structured output",
+                ) from error
+        raise StrategyError(
+            ErrorCategory.GENERATION_FAILED,
+            "strategy generation provider is unreachable",
+        ) from last_error
+
+    def _backoff(self, attempt: int) -> float:
+        jitter = float(self._jitter())
+        return min(float(self._max_retry_delay), float(2**attempt) + max(0.0, jitter))
+
+    def _retry_after(self, response: httpx.Response) -> int | None:
+        raw = response.headers.get("Retry-After")
+        if raw is None:
+            return None
+        try:
+            seconds = int(raw)
+        except ValueError:
+            try:
+                retry_at = parsedate_to_datetime(raw).astimezone(UTC)
+            except (TypeError, ValueError, OverflowError):
+                return None
+            seconds = max(1, ceil((retry_at - datetime.now(UTC)).total_seconds()))
+        return max(1, min(seconds, int(self._max_retry_delay)))
 
 
 def _candidate(value: _CandidateOutput) -> StructuredModelCandidate:

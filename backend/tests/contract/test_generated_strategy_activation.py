@@ -31,6 +31,7 @@ class Repository:
     def __init__(self, draft, artifact, report):
         self.draft, self.artifact, self.report = draft, artifact, report
         self.activations = []
+        self.definitions = []
         self.existing = None
 
     async def get_draft(self, identity):
@@ -42,8 +43,9 @@ class Repository:
     async def get_report(self, identity):
         return self.report if identity == self.report.id else None
 
-    async def activate(self, draft, provenance):
+    async def activate(self, draft, provenance, definition=None):
         self.activations.append(provenance)
+        self.definitions.append(definition)
         self.draft = replace(draft, status=DraftStatus.ACTIVATED)
 
     async def find_activated_by_content(self, strategy_id, artifact_fingerprint):
@@ -184,7 +186,7 @@ async def test_activation_persists_a_default_generated_strategy_definition() -> 
             draft.id, draft.draft_fingerprint, artifact.content_fingerprint, report.id, True
         )
     )
-    definition = definitions.values[0]
+    definition = repository.definitions[-1]
     assert definition.strategy_id == provenance.strategy_id
     assert definition.generation_provenance_id == provenance.id
     assert definition.generated_artifact_id == artifact.id
@@ -213,7 +215,7 @@ async def test_activation_uses_database_identity_when_content_store_reuses_sourc
     )
 
     assert provenance.artifact_id == artifact.id
-    assert definitions.values[0].generated_artifact_id == artifact.id
+    assert repository.definitions[-1].generated_artifact_id == artifact.id
 
 
 async def test_duplicate_content_activation_links_the_new_draft_to_existing_version() -> None:

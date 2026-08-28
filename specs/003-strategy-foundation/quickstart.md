@@ -78,10 +78,25 @@ pytest \
   tests/contract/test_generated_strategy_sandbox.py \
   tests/contract/test_strategy_source_access.py \
   tests/integration/test_strategy_source_retention.py \
-  tests/contract/test_generated_strategy_activation.py
+  tests/contract/test_generated_strategy_activation.py \
+  tests/contract/test_structured_strategy_generation_adapter.py \
+  tests/unit/strategy/test_isolated_generated_strategy.py \
+  tests/integration/test_generated_strategy_activation_atomicity.py \
+  tests/integration/test_generated_strategy_lifecycle_e2e.py
 cd ../frontend
 npm test -- --run src/test/unit/generated-strategy-review.test.tsx
 ```
+
+`test_generated_strategy_sandbox.py` requires the pinned image; build it once with:
+
+```bash
+docker compose -f infra/compose.yaml --profile strategy-sandbox-build-only build strategy-sandbox
+```
+
+`test_generated_strategy_lifecycle_e2e.py` and the Docker-backed sandbox cases self-skip when
+Docker or the pinned image is unavailable; they need no live LLM or market-data provider (a
+deterministic fixture model and an in-process candle provider stand in for both), so they run by
+default in `pytest -m 'not performance'` rather than requiring the opt-in Compose E2E in section 1.
 
 Expected: all tests pass, repeated fixtures are identical, and no test accesses a live provider.
 

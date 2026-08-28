@@ -383,6 +383,10 @@ def build_container(settings: Settings | None = None) -> Container:
             model_id=settings.llm_model_id,
             model_version=settings.llm_model_version,
             api_key=llm_api_key.get_secret_value(),
+            connect_timeout_seconds=settings.llm_connect_timeout_seconds,
+            read_timeout_seconds=settings.llm_read_timeout_seconds,
+            max_attempts=settings.llm_max_attempts,
+            max_retry_delay_seconds=settings.llm_max_retry_delay_seconds,
         )
         source_reader = SafeWebSourceAdapter(client)
         strategy_generation = GenerateStrategies(

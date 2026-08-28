@@ -140,7 +140,7 @@ class ActivateGeneratedStrategy:
             runtime=self._runtime,
             generation_provenance_id=provenance.id,
         )
-        default_parameters = None
+        definition = None
         if self._definitions is not None:
             try:
                 default_parameters = draft.parameter_schema.validate({})
@@ -148,22 +148,23 @@ class ActivateGeneratedStrategy:
                 raise _not_allowed(
                     "generated strategy requires a complete default parameter set"
                 ) from error
-        await self._repository.activate(draft, provenance)
-        if self._definitions is not None and default_parameters is not None:
-            await self._definitions.create_or_resolve(
-                StrategyDefinition(
-                    id=uuid5(provenance.id, "default-definition"),
-                    strategy_id=draft.normalized_name,
-                    strategy_type="GENERATED",
-                    strategy_version=version,
-                    contract_version=artifact.contract_version,
-                    parameters=default_parameters,
-                    created_at=now,
-                    origin=StrategyOrigin.LLM_GENERATED,
-                    generated_artifact_id=artifact.id,
-                    generation_provenance_id=provenance.id,
-                )
+            definition = StrategyDefinition(
+                id=uuid5(provenance.id, "default-definition"),
+                strategy_id=draft.normalized_name,
+                strategy_type="GENERATED",
+                strategy_version=version,
+                contract_version=artifact.contract_version,
+                parameters=default_parameters,
+                created_at=now,
+                origin=StrategyOrigin.LLM_GENERATED,
+                generated_artifact_id=artifact.id,
+                generation_provenance_id=provenance.id,
             )
+        # Provenance, draft-status, and the definition are written by the repository in
+        # one transaction: activation can never leave the strategy ACTIVATED without a
+        # definition, or a definition without an activated provenance record. The
+        # in-memory registry is updated only after that commit succeeds.
+        await self._repository.activate(draft, provenance, definition)
         self._registry.register(strategy)
         return provenance
 

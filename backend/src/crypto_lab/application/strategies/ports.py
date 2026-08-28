@@ -105,7 +105,10 @@ class StrategyGenerationRepository(Protocol):
     ) -> StrategyValidationReport | None: ...
 
     async def activate(
-        self, draft: GeneratedStrategyDraft, provenance: StrategyGenerationProvenance
+        self,
+        draft: GeneratedStrategyDraft,
+        provenance: StrategyGenerationProvenance,
+        definition: StrategyDefinition | None = None,
     ) -> None: ...
 
     async def list_activated(self) -> tuple[StrategyGenerationProvenance, ...]: ...
