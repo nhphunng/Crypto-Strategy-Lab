@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - main
-      - chore/cd-homeserver
 
   workflow_dispatch:
 
