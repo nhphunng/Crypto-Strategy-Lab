@@ -257,6 +257,17 @@ $env:TEST_DATABASE_URL = "postgresql+asyncpg://crypto_lab:crypto_lab@localhost:5
 pytest backend/tests/integration -q
 ```
 
+### Integration (frontend + backend)
+
+Kiểm tra toàn bộ stack thật — PostgreSQL, migration, API và frontend chạy bằng Docker Compose, dữ liệu leaderboard demo được seed, rồi chạy Playwright qua reverse proxy thật — bằng một lệnh duy nhất tại thư mục gốc:
+
+```powershell
+npm ci
+npm run test:integration
+```
+
+Lệnh này tự động hoá đúng chuỗi bước thủ công ở mục "Chạy demo" phía trên: `docker compose up -d postgres` → chờ healthy → `docker compose run --rm migrate` → `python backend/scripts/seed_leaderboard_demo.py` → `docker compose up -d --build api frontend` → chờ `/health/ready` và frontend sẵn sàng → `playwright test --config=playwright.compose.config.ts`. Stack luôn được tắt bằng `docker compose down` sau khi chạy xong, kể cả khi có lỗi; đặt `KEEP_STACK=1` nếu muốn giữ lại để debug local. Yêu cầu Python `3.12.x` với `backend[dev]` đã cài (xem mục Backend phía trên) và Google Chrome cài trên máy (Playwright dùng `channel: "chrome"`).
+
 ## Cấu trúc chính
 
 ```text
@@ -266,6 +277,7 @@ Crypto-Strategy-Lab/
 ├── docs/                # Requirement, SRS, Architecture và ADR
 ├── specs/               # Spec Kit artifacts theo từng feature
 ├── tests/               # Playwright E2E và k6 realtime load/soak tests
+├── scripts/integration/ # Script chạy full-stack Compose + Playwright bằng một lệnh
 ├── docker-compose.yml
 ├── Dockerfile
 └── .env.example
