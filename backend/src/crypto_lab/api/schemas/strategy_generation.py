@@ -121,11 +121,17 @@ def draft_summary(value: GeneratedStrategyDraft) -> DraftSummaryDto:
 def request_dto(
     request: StrategyGenerationRequest, drafts: tuple[GeneratedStrategyDraft, ...]
 ) -> GenerationRequestDto:
+    failure = (
+        {"code": request.failure_category, "message": request.failure_message}
+        if request.failure_category is not None
+        else None
+    )
     return GenerationRequestDto(
         id=request.id,
         source_type=request.source_type.value,
         status=request.status.value,
         requested_at=format_utc_millis(request.requested_at),
+        failure=failure,
         drafts=tuple(draft_summary(item) for item in drafts),
     )
 

@@ -75,6 +75,8 @@ class SqlAlchemyStrategyGenerationRepository:
             "status": request.status.value,
             "requested_at": request.requested_at,
             "updated_at": request.updated_at,
+            "failure_category": request.failure_category,
+            "failure_message": request.failure_message,
         }
         async with self._sessions() as session, session.begin():
             await session.execute(
@@ -86,6 +88,8 @@ class SqlAlchemyStrategyGenerationRepository:
                         "source_snapshot_id": request.source_snapshot_id,
                         "status": request.status.value,
                         "updated_at": request.updated_at,
+                        "failure_category": request.failure_category,
+                        "failure_message": request.failure_message,
                     },
                 )
             )
@@ -218,6 +222,8 @@ class SqlAlchemyStrategyGenerationRepository:
             row.requested_at,
             row.updated_at,
             row.source_snapshot_id,
+            row.failure_category,
+            row.failure_message,
         )
 
     async def get_draft(self, draft_id: UUID) -> GeneratedStrategyDraft | None:
