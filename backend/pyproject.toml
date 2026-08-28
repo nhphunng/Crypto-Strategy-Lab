@@ -42,6 +42,7 @@ markers = [
   "feature004: deterministic backtest and evaluation coverage",
   "contract: cross-boundary contract tests",
   "integration: requires PostgreSQL",
+  "functional: end-to-end user journeys across multiple endpoints",
   "performance: opt-in performance gate",
   "security: generated-strategy security boundary tests",
   "e2e: opt-in tests against the generated-strategy Compose deployment",
