@@ -71,6 +71,10 @@ class Settings(BaseSettings):
     llm_api_key: SecretStr | None = None
     llm_api_key_file: str | None = None
     llm_data_policy_confirmed: bool = False
+    llm_connect_timeout_seconds: float = Field(default=5, gt=0, le=30)
+    llm_read_timeout_seconds: float = Field(default=30, gt=0, le=120)
+    llm_max_attempts: int = Field(default=3, ge=1, le=5)
+    llm_max_retry_delay_seconds: float = Field(default=30, gt=0, le=120)
     source_encryption_key_base64: SecretStr | None = None
     source_encryption_key_file: str | None = None
     source_encryption_key_id: str = "local-source-key-v1"

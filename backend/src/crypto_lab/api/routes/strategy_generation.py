@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from uuid import UUID
 
 from fastapi import APIRouter, BackgroundTasks, Path, Request
@@ -17,10 +18,32 @@ from crypto_lab.api.schemas.strategy_generation import (
 from crypto_lab.application.strategies.activate_generated_strategy import (
     ActivateGeneratedStrategyCommand,
 )
-from crypto_lab.application.strategies.generate_strategies import GenerateStrategiesCommand
+from crypto_lab.application.strategies.generate_strategies import (
+    GenerateStrategies,
+    GenerateStrategiesCommand,
+)
 from crypto_lab.domain.strategy.errors import ErrorCategory, StrategyError
+from crypto_lab.domain.strategy.generation import StrategyGenerationRequest
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1", tags=["strategy-generation"])
+
+
+async def _process_in_background(
+    use_case: GenerateStrategies, generated: StrategyGenerationRequest
+) -> None:
+    # process() already persists FAILED status plus the failure reason before it
+    # re-raises; this task has no caller left to hand the exception to (the 202
+    # response is long gone), so it is logged here rather than left for Starlette's
+    # background-task handling, which cannot attach it to an already-sent response.
+    try:
+        await use_case.process(generated)
+    except Exception:
+        logger.exception(
+            "strategy_generation_background_task_failed",
+            extra={"fields": {"request_id": str(generated.id)}},
+        )
 
 
 @router.post(
@@ -42,7 +65,7 @@ async def create_generation_request(
     generated = await use_case.submit(
         GenerateStrategiesCommand(body.source_type, body.submitted_value)
     )
-    background_tasks.add_task(use_case.process, generated)
+    background_tasks.add_task(_process_in_background, use_case, generated)
     return success_envelope(
         request_dto(generated, ()),
         "Strategy generation accepted; poll the request for reviewable drafts.",

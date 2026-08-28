@@ -19,7 +19,9 @@ export function StrategyGenerationForm({ onDrafts }: { onDrafts: (drafts: Genera
         await new Promise((resolve) => window.setTimeout(resolve, 1000))
         completed = await getGenerationRequest(request.id)
       }
-      if (completed.status === 'FAILED') throw new Error('Generation failed; no strategy was activated')
+      if (completed.status === 'FAILED') {
+        throw new Error(completed.failure?.message ?? 'Generation failed; no strategy was activated')
+      }
       if (completed.status !== 'COMPLETED') throw new Error('Generation is still running; reopen the request later')
       onDrafts(await Promise.all(completed.drafts.map((draft) => getGeneratedDraft(draft.id))))
     } catch (caught) {

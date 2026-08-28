@@ -189,6 +189,10 @@ async def test_name_mode_rejects_an_unresolved_zero_candidate_result() -> None:
             GenerateStrategiesCommand(GenerationSourceType.STRATEGY_NAME, "unknown", UUID(int=3))
         )
     assert caught.value.category is ErrorCategory.STRATEGY_INTENT_UNRESOLVED
+    persisted = await repository.get_request(UUID(int=3))
+    assert persisted is not None
+    assert persisted.failure_category == "STRATEGY_INTENT_UNRESOLVED"
+    assert persisted.failure_message == str(caught.value)
 
 
 async def test_completed_request_retry_reuses_the_same_drafts_without_model_reentry() -> None:

@@ -9,6 +9,8 @@ from sqlalchemy import select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from crypto_lab.domain.market_data.candle import canonical_decimal
+from crypto_lab.domain.strategy.definition import StrategyDefinition
 from crypto_lab.domain.strategy.errors import ErrorIssue
 from crypto_lab.domain.strategy.generation import (
     DraftStatus,
@@ -42,6 +44,7 @@ from crypto_lab.infrastructure.persistence.strategy_generation_models import (
     StrategySourceSnapshotRow,
     StrategyValidationReportRow,
 )
+from crypto_lab.infrastructure.persistence.strategy_models import StrategyDefinitionRow
 from crypto_lab.infrastructure.security.source_content_protector import (
     ProtectedSourceContent,
     SourceContentProtector,
@@ -72,6 +75,8 @@ class SqlAlchemyStrategyGenerationRepository:
             "status": request.status.value,
             "requested_at": request.requested_at,
             "updated_at": request.updated_at,
+            "failure_category": request.failure_category,
+            "failure_message": request.failure_message,
         }
         async with self._sessions() as session, session.begin():
             await session.execute(
@@ -83,6 +88,8 @@ class SqlAlchemyStrategyGenerationRepository:
                         "source_snapshot_id": request.source_snapshot_id,
                         "status": request.status.value,
                         "updated_at": request.updated_at,
+                        "failure_category": request.failure_category,
+                        "failure_message": request.failure_message,
                     },
                 )
             )
@@ -215,6 +222,8 @@ class SqlAlchemyStrategyGenerationRepository:
             row.requested_at,
             row.updated_at,
             row.source_snapshot_id,
+            row.failure_category,
+            row.failure_message,
         )
 
     async def get_draft(self, draft_id: UUID) -> GeneratedStrategyDraft | None:
@@ -342,7 +351,10 @@ class SqlAlchemyStrategyGenerationRepository:
         )
 
     async def activate(
-        self, draft: GeneratedStrategyDraft, provenance: StrategyGenerationProvenance
+        self,
+        draft: GeneratedStrategyDraft,
+        provenance: StrategyGenerationProvenance,
+        definition: StrategyDefinition | None = None,
     ) -> None:
         async with self._sessions() as session, session.begin():
             row = await session.scalar(
@@ -373,6 +385,32 @@ class SqlAlchemyStrategyGenerationRepository:
                 )
             )
             row.status = DraftStatus.ACTIVATED.value
+            if definition is not None:
+                # Inserted in the same transaction as the provenance row above so a
+                # generated strategy can never be left ACTIVATED without its definition,
+                # or vice versa: either both commit or the whole activation rolls back.
+                values = {
+                    key: value if isinstance(value, int) else canonical_decimal(value)
+                    for key, value in definition.parameters.values.items()
+                }
+                await session.execute(
+                    insert(StrategyDefinitionRow)
+                    .values(
+                        id=definition.id,
+                        strategy_id=definition.strategy_id,
+                        strategy_type=definition.strategy_type,
+                        strategy_version=str(definition.strategy_version),
+                        contract_version=str(definition.contract_version),
+                        parameters=values,
+                        parameter_schema_fingerprint=definition.parameters.schema_fingerprint,
+                        content_fingerprint=definition.content_fingerprint,
+                        created_at=definition.created_at,
+                        origin=definition.origin.value,
+                        generated_artifact_id=definition.generated_artifact_id,
+                        generation_provenance_id=definition.generation_provenance_id,
+                    )
+                    .on_conflict_do_nothing(index_elements=["content_fingerprint"])
+                )
 
     async def list_activated(self) -> tuple[StrategyGenerationProvenance, ...]:
         async with self._sessions() as session:

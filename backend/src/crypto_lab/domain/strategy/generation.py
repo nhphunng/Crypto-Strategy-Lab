@@ -54,6 +54,8 @@ class StrategyGenerationRequest:
     requested_at: datetime
     updated_at: datetime
     source_snapshot_id: UUID | None = None
+    failure_category: str | None = None
+    failure_message: str | None = None
 
     def __post_init__(self) -> None:
         if not self.submitted_value.strip():

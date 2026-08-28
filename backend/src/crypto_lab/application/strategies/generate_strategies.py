@@ -197,9 +197,18 @@ class GenerateStrategies:
             )
             await self._repository.save_request(request)
             return request, tuple(drafts)
-        except Exception:
+        except Exception as error:
+            category, message = (
+                (error.category.value, str(error))
+                if isinstance(error, StrategyError)
+                else ("GENERATION_FAILED", "an unexpected internal error occurred")
+            )
             request = replace(
-                request, status=GenerationRequestStatus.FAILED, updated_at=self._clock.now()
+                request,
+                status=GenerationRequestStatus.FAILED,
+                updated_at=self._clock.now(),
+                failure_category=category,
+                failure_message=message,
             )
             await self._repository.save_request(request)
             raise

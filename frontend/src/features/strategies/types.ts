@@ -14,6 +14,7 @@ export interface GenerationRequest {
   sourceType: GenerationSourceType
   status: string
   requestedAt: string
+  failure: { code: string; message: string } | null
   drafts: GeneratedDraftSummary[]
 }
 

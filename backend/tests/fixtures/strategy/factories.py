@@ -8,8 +8,7 @@ from crypto_lab.domain.market_data.candle import Candle
 from crypto_lab.domain.market_data.timeframe import Timeframe
 from crypto_lab.domain.strategy.context import ContextCompleteness, StrategyContext
 from crypto_lab.domain.strategy.definition import StrategyDefinition
-from crypto_lab.domain.strategy.implementations.moving_average import MovingAverageStrategy
-from crypto_lab.domain.strategy.implementations.rsi import RsiStrategy
+from crypto_lab.domain.strategy.protocol import Strategy
 
 
 def candles(closes: list[str], *, start: datetime | None = None) -> tuple[Candle, ...]:
@@ -55,9 +54,7 @@ def context(closes: list[str]) -> StrategyContext:
     )
 
 
-def definition(
-    strategy: MovingAverageStrategy | RsiStrategy, raw: dict[str, object]
-) -> StrategyDefinition:
+def definition(strategy: Strategy, raw: dict[str, object]) -> StrategyDefinition:
     return StrategyDefinition(
         id=UUID("00000000-0000-0000-0000-000000000001"),
         strategy_id=strategy.metadata.strategy_id,

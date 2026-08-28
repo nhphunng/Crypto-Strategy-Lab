@@ -33,7 +33,7 @@ def test_strategy_discovery_p95_is_below_three_hundred_milliseconds() -> None:
     samples = []
     for _ in range(100):
         started = perf_counter()
-        assert len(registry.discover()) == 2
+        assert len(registry.discover()) == 4
         samples.append(perf_counter() - started)
     assert quantiles(samples, n=100)[94] < 0.3
 
