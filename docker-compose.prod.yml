@@ -1,0 +1,119 @@
+name: crypto-strategy-lab
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+
+    volumes:
+      - crypto_lab_postgres:/var/lib/postgresql/data
+
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+    networks:
+      - crypto_lab_network
+
+
+  migrate:
+    image: ghcr.io/nhphunng/crypto-strategy-lab-api:${IMAGE_TAG:-latest}
+
+    command:
+      - alembic
+      - -c
+      - backend/alembic.ini
+      - upgrade
+      - head
+
+    environment:
+      CSL_DATABASE_URL: ${CSL_DATABASE_URL}
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+    restart: "no"
+
+    read_only: true
+
+    cap_drop:
+      - ALL
+
+    security_opt:
+      - no-new-privileges:true
+
+    tmpfs:
+      - /tmp
+
+    networks:
+      - crypto_lab_network
+
+
+  api:
+    image: ghcr.io/nhphunng/crypto-strategy-lab-api:${IMAGE_TAG:-latest}
+
+    restart: unless-stopped
+
+    environment:
+      CSL_DATABASE_URL: ${CSL_DATABASE_URL}
+      CSL_BINANCE_BASE_URL: ${CSL_BINANCE_BASE_URL:-https://api.binance.com}
+      CSL_ENVIRONMENT: production
+
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+
+    ports:
+      - "127.0.0.1:8000:8000"
+
+    read_only: true
+
+    cap_drop:
+      - ALL
+
+    security_opt:
+      - no-new-privileges:true
+
+    tmpfs:
+      - /tmp
+
+    networks:
+      - crypto_lab_network
+
+
+  frontend:
+    image: ghcr.io/nhphunng/crypto-strategy-lab-frontend:${IMAGE_TAG:-latest}
+
+    restart: unless-stopped
+
+    depends_on:
+      api:
+        condition: service_started
+
+    ports:
+      - "127.0.0.1:5173:8080"
+
+    networks:
+      - crypto_lab_network
+
+
+networks:
+  crypto_lab_network:
+    driver: bridge
+
+
+volumes:
+  crypto_lab_postgres:
+    name: crypto-strategy-lab_crypto_lab_postgres

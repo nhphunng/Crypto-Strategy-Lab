@@ -32,4 +32,4 @@ Thumbs.db
 .data/
 .runtime-secrets/
 *.secret
-.ua/
+.ua/.env.production
