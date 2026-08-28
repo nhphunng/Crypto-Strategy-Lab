@@ -5,6 +5,7 @@ from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
+from typing import Any
 from uuid import NAMESPACE_URL, UUID, uuid5
 
 import httpx
@@ -17,6 +18,11 @@ from crypto_lab.application.backtests.create_run import CreateBacktestRun
 from crypto_lab.application.backtests.execute_run import ExecuteBacktestRun
 from crypto_lab.application.backtests.get_result import GetBacktestResult
 from crypto_lab.application.backtests.ports import BacktestDataset
+from crypto_lab.application.evaluations.auto_evaluate import (
+    AutoEvaluationLoop,
+    AutoEvaluationPipeline,
+    AutoEvaluationSettings,
+)
 from crypto_lab.application.evaluations.compare_results import CompareEvaluationResults
 from crypto_lab.application.evaluations.evaluate_result import EvaluateBacktestResult
 from crypto_lab.application.market_data.dataset_service import DatasetService
@@ -43,6 +49,7 @@ from crypto_lab.domain.evaluation.policy import (
     MetricWeight,
     ScoringPolicy,
 )
+from crypto_lab.domain.market_data.timeframe import Timeframe
 from crypto_lab.domain.strategy.errors import StrategyError
 from crypto_lab.domain.strategy.registry import StrategyRegistry
 from crypto_lab.domain.strategy.signal import StrategyAnalysisResult
@@ -266,6 +273,7 @@ class Container:
             )
 
     leaderboard: LeaderboardContainer | None = None
+    auto_evaluation: AutoEvaluationLoop | None = None
 
     async def close(self) -> None:
         if self.realtime_hub is not None:
@@ -404,6 +412,20 @@ def build_container(settings: Settings | None = None) -> Container:
         stale_after_seconds=settings.provider_stale_after_seconds,
     )
     realtime_hub = RealtimeSelectionHub(realtime_provider)
+    leaderboard = build_leaderboard_container(database)
+    auto_evaluation = _build_auto_evaluation(
+        settings,
+        clock,
+        datasets=datasets,
+        dataset_reader=backtest_datasets,
+        discovery=strategy_discovery,
+        definitions=strategy_definitions,
+        analyzer=backtest_strategy_analyzer,
+        create_backtest=create_backtest,
+        execute_backtest=execute_backtest,
+        evaluate_backtest=evaluate_backtest,
+        ingestion=leaderboard.ingestion,
+    )
     return Container(
         settings=settings,
         clock=clock,
@@ -432,5 +454,34 @@ def build_container(settings: Settings | None = None) -> Container:
         evaluation_repository=evaluation_repository,
         evaluate_backtest=evaluate_backtest,
         compare_evaluations=compare_evaluations,
-        leaderboard=build_leaderboard_container(database),
+        leaderboard=leaderboard,
+        auto_evaluation=auto_evaluation,
+    )
+
+
+def _build_auto_evaluation(
+    settings: Settings,
+    clock: Clock,
+    **collaborators: Any,
+) -> AutoEvaluationLoop | None:
+    """Wire the pipeline only when the deployment asks for it."""
+
+    if not settings.auto_evaluation_enabled:
+        return None
+    pipeline = AutoEvaluationPipeline(
+        settings=AutoEvaluationSettings(
+            pair=settings.auto_evaluation_pair,
+            timeframe=Timeframe(settings.auto_evaluation_timeframe),
+            candles=settings.auto_evaluation_candles,
+            interval_seconds=settings.auto_evaluation_interval_seconds,
+        ),
+        clock=clock,
+        execution_policy=EXECUTION_POLICY,
+        evaluation_policy=EVALUATION_POLICY,
+        scoring_policy=BALANCED_SCORING_POLICY,
+        **collaborators,
+    )
+    return AutoEvaluationLoop(
+        pipeline,
+        interval_seconds=settings.auto_evaluation_interval_seconds,
     )

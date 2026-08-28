@@ -211,7 +211,8 @@ describe('LeaderboardRoute live integration', () => {
     await waitFor(() =>
       expect(screen.getByTestId('status-projection-version')).toHaveTextContent('projection v42'),
     )
-    expect(screen.getByText('97.5')).toBeInTheDocument()
+    // Scores render rounded for reading; the exact decimal stays in the title.
+    expect(screen.getByTitle('97.5')).toHaveTextContent('97.50')
     expect(loadSnapshot).toHaveBeenCalledTimes(2)
   })
 

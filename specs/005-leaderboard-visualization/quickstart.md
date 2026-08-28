@@ -30,6 +30,11 @@ The frontend calls the API on its own origin and relies on the Vite dev proxy
 (and the nginx container in Compose) to forward `/api` and `/ws`. Set
 `VITE_API_BASE_URL` only when the API is reached directly on another origin.
 
+With `CSL_AUTO_EVALUATION_ENABLED=true` (the default in `docker-compose.yml`) the
+API populates the leaderboard by itself: it materializes the configured dataset,
+backtests every registered Strategy, evaluates each result, and ranks it. The
+seed script below stays useful for the deterministic acceptance fixture.
+
 The seed script writes only immutable upstream records. The leaderboard projection is always derived by the feature itself; it is never seeded directly.
 
 ## 2. Run Automated Quality Gates
