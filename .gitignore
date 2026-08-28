@@ -31,3 +31,4 @@ Thumbs.db
 .data/
 .runtime-secrets/
 *.secret
+.ua/
