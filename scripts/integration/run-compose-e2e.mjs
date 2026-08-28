@@ -1,0 +1,108 @@
+#!/usr/bin/env node
+/**
+ * Orchestrates the full-stack regression check: bring up the real Docker
+ * Compose stack (PostgreSQL, migrate, API, frontend), seed the deterministic
+ * leaderboard demo data, wait for both services to answer, then run the
+ * Playwright specs in `tests/e2e/` against the real reverse proxy.
+ *
+ * This automates the manual sequence documented in the README's "Chạy demo"
+ * section so it can run unattended in CI or with a single command locally:
+ *
+ *   node scripts/integration/run-compose-e2e.mjs
+ *
+ * The stack is always torn down afterwards (`docker compose down`), even if
+ * a step fails, unless KEEP_STACK=1 is set for local debugging.
+ */
+
+import { spawn, spawnSync } from "node:child_process";
+import process from "node:process";
+
+const ROOT = new URL("../..", import.meta.url).pathname.replace(/^\/([A-Za-z]):/, "$1:");
+const PYTHON = process.env.PYTHON ?? "python";
+const KEEP_STACK = process.env.KEEP_STACK === "1";
+
+function run(command, args, options = {}) {
+  console.log(`\n> ${command} ${args.join(" ")}`);
+  const result = spawnSync(command, args, { cwd: ROOT, stdio: "inherit", shell: false, ...options });
+  if (result.error) throw result.error;
+  if (result.status !== 0) {
+    throw new Error(`${command} ${args.join(" ")} exited with code ${result.status}`);
+  }
+}
+
+function runAsync(command, args, options = {}) {
+  console.log(`\n> ${command} ${args.join(" ")}`);
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, args, { cwd: ROOT, stdio: "inherit", shell: false, ...options });
+    child.on("error", reject);
+    child.on("exit", (code) => resolve(code ?? 1));
+  });
+}
+
+async function waitFor(label, check, { retries = 60, delayMs = 2000 } = {}) {
+  for (let attempt = 1; attempt <= retries; attempt += 1) {
+    if (await check()) {
+      console.log(`${label}: ready (attempt ${attempt}/${retries})`);
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, delayMs));
+  }
+  throw new Error(`${label}: not ready after ${retries} attempts`);
+}
+
+async function httpOk(url) {
+  try {
+    const response = await fetch(url, { signal: AbortSignal.timeout(3000) });
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
+function postgresReady() {
+  const result = spawnSync(
+    "docker",
+    ["compose", "exec", "-T", "postgres", "pg_isready", "-U", "crypto_lab", "-d", "crypto_lab"],
+    { cwd: ROOT },
+  );
+  return result.status === 0;
+}
+
+async function main() {
+  run("docker", ["compose", "up", "-d", "postgres"]);
+  await waitFor("postgres", async () => postgresReady());
+
+  run("docker", ["compose", "run", "--rm", "migrate"]);
+
+  run(PYTHON, ["backend/scripts/seed_leaderboard_demo.py"]);
+
+  run("docker", ["compose", "up", "-d", "--build", "api", "frontend"]);
+  await waitFor("api", () => httpOk("http://127.0.0.1:8000/health/ready"));
+  await waitFor("frontend", () => httpOk("http://127.0.0.1:5173/"));
+
+  const exitCode = await runAsync(
+    "npx",
+    ["playwright", "test", "--config=playwright.compose.config.ts"],
+    { env: { ...process.env, COMPOSE_E2E: "1" }, shell: process.platform === "win32" },
+  );
+  if (exitCode !== 0) {
+    throw new Error(`playwright test exited with code ${exitCode}`);
+  }
+}
+
+main()
+  .then(() => {
+    console.log("\nIntegration regression check passed.");
+  })
+  .catch((error) => {
+    console.error(`\nIntegration regression check failed: ${error.message}`);
+    process.exitCode = 1;
+  })
+  .finally(() => {
+    if (KEEP_STACK) {
+      console.log("KEEP_STACK=1 set — leaving the Compose stack running.");
+      return;
+    }
+    console.log("\n> docker compose down");
+    spawnSync("docker", ["compose", "down"], { cwd: ROOT, stdio: "inherit" });
+  });
