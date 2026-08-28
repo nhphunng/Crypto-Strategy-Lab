@@ -4,7 +4,8 @@
   "scripts": {
     "test:e2e": "playwright test",
     "test:e2e:realtime": "playwright test tests/e2e/realtime-multi-chart.spec.ts",
-    "test:e2e:leaderboard": "playwright test tests/e2e/leaderboard-visualization.spec.ts"
+    "test:e2e:leaderboard": "playwright test tests/e2e/leaderboard-visualization.spec.ts",
+    "test:integration": "node scripts/integration/run-compose-e2e.mjs"
   },
   "devDependencies": {
     "@playwright/test": "1.55.0"
