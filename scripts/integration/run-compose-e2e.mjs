@@ -12,6 +12,16 @@
  *
  * The stack is always torn down afterwards (`docker compose down`), even if
  * a step fails, unless KEEP_STACK=1 is set for local debugging.
+ *
+ * `realtime-multi-chart-compose.spec.ts` is deliberately excluded from this
+ * automated run: it drives the API's real Binance WebSocket/REST connection
+ * end to end, and several hosted CI networks (GitHub-hosted runners
+ * included) cannot reliably reach Binance's public endpoints, which makes it
+ * flaky as a hard regression gate. It stays runnable manually — with a
+ * network known to reach Binance — via:
+ *
+ *   COMPOSE_E2E=1 npx playwright test --config=playwright.compose.config.ts \
+ *     tests/e2e/realtime-multi-chart-compose.spec.ts
  */
 
 import { spawn, spawnSync } from "node:child_process";
@@ -20,6 +30,10 @@ import process from "node:process";
 const ROOT = new URL("../..", import.meta.url).pathname.replace(/^\/([A-Za-z]):/, "$1:");
 const PYTHON = process.env.PYTHON ?? "python";
 const KEEP_STACK = process.env.KEEP_STACK === "1";
+const DETERMINISTIC_SPECS = [
+  "tests/e2e/leaderboard-visualization.spec.ts",
+  "tests/e2e/realtime-multi-chart.spec.ts",
+];
 
 function run(command, args, options = {}) {
   console.log(`\n> ${command} ${args.join(" ")}`);
@@ -82,7 +96,7 @@ async function main() {
 
   const exitCode = await runAsync(
     "npx",
-    ["playwright", "test", "--config=playwright.compose.config.ts"],
+    ["playwright", "test", "--config=playwright.compose.config.ts", ...DETERMINISTIC_SPECS],
     { env: { ...process.env, COMPOSE_E2E: "1" }, shell: process.platform === "win32" },
   );
   if (exitCode !== 0) {

@@ -266,7 +266,14 @@ npm ci
 npm run test:integration
 ```
 
-Lệnh này tự động hoá đúng chuỗi bước thủ công ở mục "Chạy demo" phía trên: `docker compose up -d postgres` → chờ healthy → `docker compose run --rm migrate` → `python backend/scripts/seed_leaderboard_demo.py` → `docker compose up -d --build api frontend` → chờ `/health/ready` và frontend sẵn sàng → `playwright test --config=playwright.compose.config.ts`. Stack luôn được tắt bằng `docker compose down` sau khi chạy xong, kể cả khi có lỗi; đặt `KEEP_STACK=1` nếu muốn giữ lại để debug local. Yêu cầu Python `3.12.x` với `backend[dev]` đã cài (xem mục Backend phía trên) và Google Chrome cài trên máy (Playwright dùng `channel: "chrome"`).
+Lệnh này tự động hoá đúng chuỗi bước thủ công ở mục "Chạy demo" phía trên: `docker compose up -d postgres` → chờ healthy → `docker compose run --rm migrate` → `python backend/scripts/seed_leaderboard_demo.py` → `docker compose up -d --build api frontend` → chờ `/health/ready` và frontend sẵn sàng → `playwright test --config=playwright.compose.config.ts` (chạy `leaderboard-visualization.spec.ts` và `realtime-multi-chart.spec.ts`). Stack luôn được tắt bằng `docker compose down` sau khi chạy xong, kể cả khi có lỗi; đặt `KEEP_STACK=1` nếu muốn giữ lại để debug local. Yêu cầu Python `3.12.x` với `backend[dev]` đã cài (xem mục Backend phía trên) và Google Chrome cài trên máy (Playwright dùng `channel: "chrome"`).
+
+`realtime-multi-chart-compose.spec.ts` không nằm trong lệnh trên: test này đi qua kết nối WebSocket/REST thật của API tới Binance, và nhiều mạng CI (bao gồm GitHub-hosted runner) không kết nối ổn định tới endpoint công khai của Binance, nên không phù hợp làm cổng regression bắt buộc. Chạy thủ công khi có mạng kết nối được tới Binance:
+
+```powershell
+$env:COMPOSE_E2E = "1"
+npx playwright test --config=playwright.compose.config.ts tests/e2e/realtime-multi-chart-compose.spec.ts
+```
 
 ## Cấu trúc chính
 
