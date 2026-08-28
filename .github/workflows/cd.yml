@@ -4,7 +4,8 @@ on:
   push:
     branches:
       - main
-      - chore/cd-ghcr
+
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -50,3 +51,67 @@ jobs:
           tags: |
             ghcr.io/nhphunng/crypto-strategy-lab-frontend:latest
             ghcr.io/nhphunng/crypto-strategy-lab-frontend:${{ github.sha }}
+
+  deploy:
+    needs: build-and-push
+
+    runs-on:
+      - self-hosted
+      - Linux
+      - production
+
+    steps:
+      - name: Deploy production
+        run: |
+          cd /home/trahoang/app/Crypto-Strategy-Lab
+
+          git fetch origin main
+          git reset --hard origin/main
+
+          docker compose \
+            --env-file .env.production \
+            -f docker-compose.prod.yml \
+            pull
+
+          docker compose \
+            --env-file .env.production \
+            -f docker-compose.prod.yml \
+            up -d --wait --wait-timeout 60
+
+      - name: Verify API
+        run: |
+          for i in {1..20}; do
+            if curl --fail --silent \
+              http://127.0.0.1:8000/health/ready; then
+              echo
+              echo "API is ready."
+              exit 0
+            fi
+
+            echo "Waiting for API... ($i/20)"
+            sleep 3
+          done
+
+          echo "API health check failed."
+
+          cd /home/trahoang/app/Crypto-Strategy-Lab
+
+          docker compose \
+            --env-file .env.production \
+            -f docker-compose.prod.yml \
+            ps
+
+          docker compose \
+            --env-file .env.production \
+            -f docker-compose.prod.yml \
+            logs --tail=100 api
+
+          exit 1
+
+      - name: Verify production domain
+        run: |
+          curl --fail \
+            --retry 10 \
+            --retry-delay 3 \
+            --retry-all-errors \
+            https://crypto-strategy-lab.nhphung.id.vn
