@@ -1,4 +1,5 @@
 node_modules/
+.npm-cache/
 .pnpm-store/
 test-results/
 playwright-report/

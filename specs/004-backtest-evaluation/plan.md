@@ -20,7 +20,7 @@ Build a framework-independent Backtest and Evaluation domain that consumes Featu
 
 **Target Platform**: Linux containers and local Docker Compose development
 
-**Project Type**: Backend module in the modular-monolith web application; no frontend, broker, or worker implementation in this feature
+**Project Type**: Modular-monolith backend plus a bounded React Single Backtest integration; no broker or worker implementation in this feature
 
 **Performance Goals**: A deterministic 10,000-Candle single-strategy benchmark completes simulation and evaluation within 5 seconds on the documented reference environment; p95 bounded result/trade/equity reads complete within 300 ms under demo load
 
@@ -148,7 +148,11 @@ backend/
     └── performance/
 ```
 
-**Structure Decision**: Extend the existing backend modular-monolith layout. Pure simulation/evaluation rules live in `domain`; application services coordinate TV1/TV3 and repositories; persistence implements append-only storage; API routes expose direct run/evaluation workflows. No frontend or worker path is added.
+**Structure Decision**: Extend the existing backend modular-monolith layout. Pure simulation/evaluation rules live in `domain`; application services coordinate TV1/TV3 and repositories; persistence implements append-only storage; API routes expose direct run/evaluation workflows. A feature-scoped TypeScript API/parser boundary drives only the Single Backtest UI; no worker path is added.
+
+## Frontend Integration Amendment (2026-08-24)
+
+The team requested the previously deferred Single Backtest integration after the backend slice became runnable. The browser obtains, rather than invents, every immutable identity: Feature 001 materializes the exact Dataset, Feature 003 creates or resolves a built-in Strategy Definition from an exact registered version and validated parameters, and Feature 004 exposes its bootstrapped policy bundle. The UI then creates and starts the Backtest Run, evaluates its immutable result, and retrieves paginated Candles, Trades, and Equity Points. Runtime parsers fail closed on contract drift; mock calculations remain limited to screens outside this bounded integration.
 
 ## Test Strategy
 

@@ -49,6 +49,31 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+  /strategy-definitions:
+    post:
+      operationId: createOrResolveStrategyDefinition
+      summary: Validate and create or resolve an exact immutable built-in Strategy Definition
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [strategyId, strategyVersion, parameters]
+              properties:
+                strategyId: { type: string }
+                strategyVersion: { type: string }
+                parameters:
+                  type: object
+                  additionalProperties:
+                    oneOf: [{ type: integer }, { type: string }]
+      responses:
+        '201':
+          description: Immutable definition created or resolved idempotently by content
+        '404':
+          description: Exact registered Strategy version is unavailable
+        '422':
+          description: Parameters are invalid
   /strategy-analyses:
     post:
       operationId: analyzeStrategy

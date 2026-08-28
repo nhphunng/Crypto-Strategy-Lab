@@ -1,8 +1,17 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { ChevronDown, Fingerprint, Play, Square } from 'lucide-react'
 import { useStore } from '../lib/store'
 import type { RunRow, Trade } from '../domain'
+import type { Candle, Marker } from '../lib/mock'
 import { BACKTEST_DEFAULTS } from '../config'
+import {
+  BacktestApiError,
+  createBacktestApi,
+  type BacktestStrategy,
+  type ParameterValue,
+  type PolicyBundle,
+  type SingleBacktestOutput,
+} from '../features/backtests'
 import { useServices } from '../services/registry'
 import { PageHeader } from '../components/Shell'
 import { CandleChart } from '../components/CandleChart'
@@ -95,7 +104,7 @@ export function TradeTable({
 // TAB A — Single Backtest
 // ---------------------------------------------------------------------------
 
-function SingleBacktest() {
+function LegacySingleBacktest() {
   const { activeStrategy, showExplain, market } = useStore()
   const services = useServices()
   const [ran, setRan] = useState(true)
@@ -323,6 +332,345 @@ function SingleBacktest() {
         </DrawerSection>
       </Drawer>
     </div>
+  )
+}
+
+const backtestApi = createBacktestApi()
+
+function SingleBacktest() {
+  const { showExplain, market, timeframe, setTimeframe, setActiveStrategy, toast } = useStore()
+  const [strategies, setStrategies] = useState<BacktestStrategy[]>([])
+  const [policies, setPolicies] = useState<PolicyBundle | null>(null)
+  const [strategyId, setStrategyId] = useState('')
+  const [parameters, setParameters] = useState<Record<string, ParameterValue>>({})
+  const [startDate, setStartDate] = useState('2026-08-01')
+  const [endDate, setEndDate] = useState('2026-08-08')
+  const [capital, setCapital] = useState(String(BACKTEST_DEFAULTS.capital))
+  const [feeRate, setFeeRate] = useState(String(BACKTEST_DEFAULTS.feeRate))
+  const [slippageRate, setSlippageRate] = useState(String(BACKTEST_DEFAULTS.slippageRate))
+  const [catalogLoading, setCatalogLoading] = useState(true)
+  const [running, setRunning] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [output, setOutput] = useState<SingleBacktestOutput | null>(null)
+  const [provenance, setProvenance] = useState(false)
+  const [subView, setSubView] = useState<'equity' | 'drawdown'>('equity')
+  const [selectedTrade, setSelectedTrade] = useState<number | null>(null)
+  const [showAdvanced, setShowAdvanced] = useState(false)
+  const activeRequest = useRef<AbortController | null>(null)
+
+  useEffect(() => {
+    const controller = new AbortController()
+    backtestApi.loadCatalog(controller.signal).then((catalog) => {
+      setStrategies(catalog.strategies)
+      setPolicies(catalog.policies)
+      const first = catalog.strategies[0]
+      if (first) {
+        setStrategyId(first.strategyId)
+        setActiveStrategy(first.displayName)
+        setParameters(defaultParameters(first))
+      }
+    }).catch((reason: unknown) => {
+      if (!controller.signal.aborted) setError(backtestErrorMessage(reason))
+    }).finally(() => {
+      if (!controller.signal.aborted) setCatalogLoading(false)
+    })
+    return () => controller.abort()
+  }, [setActiveStrategy])
+
+  useEffect(() => () => activeRequest.current?.abort(), [])
+
+  const selectedStrategy = strategies.find((item) => item.strategyId === strategyId) ?? null
+  const candles = useMemo<Candle[]>(() => (output?.candles ?? []).map((item) => ({
+    t: Date.parse(item.openTime),
+    o: Number(item.open),
+    h: Number(item.high),
+    l: Number(item.low),
+    c: Number(item.close),
+    v: Number(item.volume),
+  })), [output])
+  const candleIndex = useMemo(
+    () => new Map(candles.map((item, index) => [item.t, index])),
+    [candles],
+  )
+  const trades = useMemo<Trade[]>(() => (output?.trades ?? []).map((item) => ({
+    n: item.sequence + 1,
+    entryTime: shortBacktestTime(item.entryTime),
+    side: 'BUY',
+    entryPrice: Number(item.entryPrice),
+    exitTime: shortBacktestTime(item.exitTime),
+    exitPrice: Number(item.exitPrice),
+    pl: Number(item.returnPercent),
+    result: Number(item.profitLoss) >= 0 ? 'WIN' : 'LOSS',
+    entryIndex: candleIndex.get(Date.parse(item.entryTime)) ?? 0,
+    exitIndex: candleIndex.get(Date.parse(item.exitTime)) ?? Math.max(0, candles.length - 1),
+  })), [candleIndex, candles.length, output])
+  const markers = useMemo<Marker[]>(
+    () => trades.flatMap((trade) => [
+      { index: trade.entryIndex, kind: 'entry' as const },
+      { index: trade.exitIndex, kind: 'exit' as const },
+    ]),
+    [trades],
+  )
+  const selected = trades.find((trade) => trade.n === selectedTrade)
+  const equity = useMemo(() => {
+    const points = (output?.equity ?? []).map((item) => Number(item.equity))
+    return points.length === 1 ? [points[0], points[0]] : points
+  }, [output])
+  const metrics = output?.evaluation.metrics
+
+  const execute = async () => {
+    if (!selectedStrategy || !policies) return
+    if (startDate >= endDate) {
+      setError('Start date must be before end date.')
+      return
+    }
+    activeRequest.current?.abort()
+    const controller = new AbortController()
+    activeRequest.current = controller
+    setRunning(true)
+    setError(null)
+    try {
+      const result = await backtestApi.runSingleBacktest({
+        strategy: selectedStrategy,
+        parameters,
+        policies,
+        selection: { provider: 'BINANCE', pair: market.pair, timeframe },
+        range: {
+          startTime: `${startDate}T00:00:00.000Z`,
+          endTime: `${endDate}T00:00:00.000Z`,
+        },
+        initialCapital: capital,
+        feeRate,
+        slippageRate,
+        randomSeed: BACKTEST_DEFAULTS.seed,
+        jobId: crypto.randomUUID(),
+        signal: controller.signal,
+      })
+      setOutput(result)
+      setSelectedTrade(null)
+      toast(`Backtest completed · score ${displayBacktestNumber(result.evaluation.score)}`, 'positive')
+    } catch (reason) {
+      if (!controller.signal.aborted) {
+        const message = backtestErrorMessage(reason)
+        setError(message)
+        toast(message, 'warning')
+      }
+    } finally {
+      setRunning(false)
+      if (activeRequest.current === controller) activeRequest.current = null
+    }
+  }
+
+  return (
+    <div className="flex h-full flex-col overflow-y-auto">
+      {showExplain && (
+        <div className="shrink-0 border-b border-subtle bg-surface px-4 py-3">
+          <InfoNote>
+            The browser requests an immutable Dataset and Strategy Definition, then the backend calculates
+            all Signals, simulated Trades, Equity Points, metrics and score. No real trades are placed.
+          </InfoNote>
+        </div>
+      )}
+
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-2 border-b border-subtle bg-surface px-4 py-2.5 text-[12px]">
+        <label className="flex flex-col">
+          <span className="text-[10px] uppercase tracking-wide text-faint">Strategy</span>
+          <select
+            id="select-strategy-backtest"
+            value={strategyId}
+            disabled={catalogLoading || running}
+            onChange={(event) => {
+              const next = strategies.find((item) => item.strategyId === event.target.value)
+              if (!next) return
+              setStrategyId(next.strategyId)
+              setActiveStrategy(next.displayName)
+              setParameters(defaultParameters(next))
+              setOutput(null)
+            }}
+            className="border-0 bg-transparent font-mono text-[12px] text-accent outline-none"
+          >
+            {strategies.map((item) => (
+              <option key={`${item.strategyId}@${item.strategyVersion}`} value={item.strategyId}>
+                {item.displayName} · {item.strategyVersion}
+              </option>
+            ))}
+          </select>
+        </label>
+        <Field label="Pair" value={market.pair} />
+        <label className="flex flex-col">
+          <span className="text-[10px] uppercase tracking-wide text-faint">Timeframe</span>
+          <select
+            value={timeframe}
+            disabled={running}
+            onChange={(event) => {
+              setTimeframe(event.target.value as typeof timeframe)
+              setOutput(null)
+            }}
+            className="border-0 bg-transparent font-mono text-[12px] text-ink outline-none"
+          >
+            {['1m', '5m', '15m', '30m', '1h', '2h', '4h', '1d'].map((value) => (
+              <option key={value}>{value}</option>
+            ))}
+          </select>
+        </label>
+        <DateInput label="Start" value={startDate} onChange={(value) => { setStartDate(value); setOutput(null) }} disabled={running} />
+        <DateInput label="End (exclusive)" value={endDate} onChange={(value) => { setEndDate(value); setOutput(null) }} disabled={running} />
+        <div className="ml-auto flex items-center gap-2">
+          {output && <IconBtn onClick={() => setProvenance(true)} title="Provenance"><Fingerprint size={15} /></IconBtn>}
+          <Button
+            id="btn-run-backtest"
+            variant="primary"
+            onClick={() => void execute()}
+            disabled={running || catalogLoading || !selectedStrategy || !policies}
+          >
+            <Play size={14} /> {catalogLoading ? 'Loading contract…' : running ? 'Running…' : 'Run Backtest'}
+          </Button>
+        </div>
+      </div>
+
+      <div className="shrink-0 border-b border-subtle bg-surface px-4 py-2">
+        <button onClick={() => setShowAdvanced((value) => !value)} className="inline-flex items-center gap-1.5 text-[12px] font-medium text-dim hover:text-ink">
+          <ChevronDown size={13} className={cn('transition-transform', showAdvanced && 'rotate-180')} />
+          Exact execution settings
+        </button>
+        {showAdvanced && (
+          <div className="mt-2.5 flex flex-wrap items-start gap-x-6 gap-y-2">
+            <ExactInput label="Capital" value={capital} onChange={setCapital} disabled={running} />
+            <ExactInput label="Fee rate" value={feeRate} onChange={setFeeRate} disabled={running} />
+            <ExactInput label="Slippage rate" value={slippageRate} onChange={setSlippageRate} disabled={running} />
+            <Field label="Position size" value="100% available cash" />
+            <Field label="Seed" value={String(BACKTEST_DEFAULTS.seed)} />
+            {selectedStrategy?.parameters.map((parameter) => (
+              <ExactInput
+                key={parameter.name}
+                label={parameter.name}
+                value={String(parameters[parameter.name] ?? '')}
+                disabled={running}
+                onChange={(value) => setParameters((current) => ({
+                  ...current,
+                  [parameter.name]: parameter.valueType === 'INTEGER' ? Number(value) : value,
+                }))}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+
+      {error && (
+        <div id="message-error" role="alert" className="border-b border-neg/30 bg-neg/10 px-4 py-2 text-[12px] text-neg">
+          {error}
+        </div>
+      )}
+
+      {!output ? (
+        <EmptyState
+          title={running ? 'Backtest workflow is running' : 'No backend result loaded'}
+          hint={running ? 'Materializing Dataset, executing the exact Strategy and evaluating the immutable result.' : 'Choose an exact strategy and range, then run the first real backend Backtest.'}
+          action={!running ? <Button variant="primary" onClick={() => void execute()} disabled={catalogLoading || !selectedStrategy || !policies}><Play size={14} /> Run Backtest</Button> : undefined}
+        />
+      ) : (
+        <>
+          <MetricStrip>
+            <Metric label="Return" value={signedBacktestPercent(metrics?.totalReturn ?? '0')} tone={Number(metrics?.totalReturn ?? 0) >= 0 ? 'pos' : 'neg'} sub={`score ${displayBacktestNumber(output.evaluation.score)}`} info="Backend-calculated Total Return after fees and slippage." />
+            <Metric label="Win Rate" value={`${displayBacktestNumber(metrics?.winRate ?? '0')}%`} sub={`${metrics?.numberOfTrades ?? 0} closed trades`} info="Backend-calculated winning Trade percentage." />
+            <Metric label="Max Drawdown" value={`-${displayBacktestNumber(metrics?.maxDrawdown ?? '0')}%`} tone="neg" sub="peak-to-trough" info="Backend-calculated maximum peak-to-trough decline." />
+            <Metric label="Trades" value={String(metrics?.numberOfTrades ?? 0)} sub="simulated" info="Closed simulated Trades persisted by Feature 004." />
+            <Metric label="Sharpe" value={metrics?.sharpeRatio === null ? 'N/A' : displayBacktestNumber(metrics?.sharpeRatio ?? '0')} sub="annualized" info="Null when the immutable result has insufficient or zero-variance returns." />
+            <Metric label="Profit Factor" value={metrics?.profitFactor === null ? 'N/A' : displayBacktestNumber(metrics?.profitFactor ?? '0')} info="Null when the result has no gross loss." />
+          </MetricStrip>
+
+          <div className="grid min-h-0 flex-1 grid-cols-[1.6fr_1fr] gap-px bg-subtle">
+            <div className="flex min-h-0 flex-col bg-surface">
+              <div className="flex h-8 items-center gap-2 border-b border-subtle px-3 text-[12px]">
+                <span className="font-medium text-ink">Persisted Dataset and Trade markers</span>
+                <span className="font-mono text-[11px] text-faint">{output.dataset.selection.pair} · {output.dataset.selection.timeframe}</span>
+                <div className="ml-auto flex items-center gap-2 text-[10px] text-faint"><span className="font-mono">E / X persisted fills</span></div>
+              </div>
+              <div className="min-h-0 flex-1">
+                {candles.length > 0 && <CandleChart candles={candles} overlays={{}} markers={markers} height={300} selectedInterval={selected ? [selected.entryIndex, selected.exitIndex] : null} />}
+              </div>
+              <div className="border-t border-subtle">
+                <div className="flex h-8 items-center gap-2 px-3">
+                  <Segmented ariaLabel="Result chart" options={[{ value: 'equity', label: 'Equity Curve' }, { value: 'drawdown', label: 'Drawdown' }]} value={subView} onChange={(value) => setSubView(value as typeof subView)} />
+                </div>
+                {equity.length > 0 && <Sparkline points={equity} mode={subView} />}
+              </div>
+            </div>
+            <div className="flex min-h-0 flex-col bg-surface">
+              <div className="flex h-8 items-center justify-between border-b border-subtle px-3 text-[12px]"><span className="font-medium text-ink">Simulated trades</span><span className="font-mono text-[11px] text-faint">{trades.length} trades</span></div>
+              <div className="min-h-0 flex-1"><TradeTable trades={trades} selected={selectedTrade} onSelect={setSelectedTrade} /></div>
+            </div>
+          </div>
+        </>
+      )}
+
+      <Drawer open={provenance && !!output} onClose={() => setProvenance(false)} title="Provenance" subtitle={`${output?.run.id ?? ''} · immutable record`}>
+        <DrawerSection title="Strategy">
+          <KV k="Definition" v={output?.definition.definitionId ?? '—'} />
+          <KV k="Version" v={output ? `${output.definition.strategyId}@${output.definition.strategyVersion}` : '—'} />
+          <KV k="Parameters" v={output ? JSON.stringify(output.definition.parameters) : '—'} />
+        </DrawerSection>
+        <DrawerSection title="Dataset">
+          <KV k="Dataset" v={output?.dataset.datasetId ?? '—'} />
+          <KV k="Candles" v={output?.dataset.candleCount ?? '—'} />
+          <KV k="Checksum" v={output?.dataset.checksum ?? '—'} />
+        </DrawerSection>
+        <DrawerSection title="Execution and Evaluation">
+          <KV k="Run" v={output?.run.id ?? '—'} />
+          <KV k="Result checksum" v={output?.result.resultChecksum ?? '—'} />
+          <KV k="Execution policy" v={output ? `${output.run.executionPolicyId}@${output.run.executionPolicyVersion}` : '—'} />
+          <KV k="Evaluation policy" v={output ? `${output.evaluation.evaluationPolicyId}@${output.evaluation.evaluationPolicyVersion}` : '—'} />
+          <KV k="Scoring policy" v={output ? `${output.evaluation.scoringPolicyId}@${output.evaluation.scoringPolicyVersion}` : '—'} />
+        </DrawerSection>
+        <DrawerSection title="Analysis boundary"><p className="text-[11px] text-dim">{output?.result.disclaimer}</p></DrawerSection>
+      </Drawer>
+    </div>
+  )
+}
+
+function defaultParameters(strategy: BacktestStrategy): Record<string, ParameterValue> {
+  return Object.fromEntries(
+    strategy.parameters
+      .filter((parameter) => parameter.defaultValue !== null)
+      .map((parameter) => [parameter.name, parameter.defaultValue as ParameterValue]),
+  )
+}
+
+function backtestErrorMessage(reason: unknown): string {
+  if (reason instanceof BacktestApiError) return `${reason.code}: ${reason.message}`
+  return reason instanceof Error ? reason.message : 'The Backtest could not be completed.'
+}
+
+function shortBacktestTime(value: string): string {
+  return value.replace('T', ' ').slice(0, 16)
+}
+
+function displayBacktestNumber(value: string): string {
+  const number = Number(value)
+  return Number.isFinite(number)
+    ? number.toLocaleString('en-US', { maximumFractionDigits: 4 })
+    : 'N/A'
+}
+
+function signedBacktestPercent(value: string): string {
+  return `${Number(value) >= 0 ? '+' : ''}${displayBacktestNumber(value)}%`
+}
+
+function ExactInput({ label, value, onChange, disabled }: { label: string; value: string; onChange: (value: string) => void; disabled?: boolean }) {
+  return (
+    <label className="flex flex-col">
+      <span className="text-[10px] uppercase tracking-wide text-faint">{label}</span>
+      <input value={value} disabled={disabled} onChange={(event) => onChange(event.target.value)} className="w-28 border-b border-subtle bg-transparent font-mono text-[12px] text-ink outline-none focus:border-accent" />
+    </label>
+  )
+}
+
+function DateInput({ label, value, onChange, disabled }: { label: string; value: string; onChange: (value: string) => void; disabled?: boolean }) {
+  return (
+    <label className="flex flex-col">
+      <span className="text-[10px] uppercase tracking-wide text-faint">{label}</span>
+      <input type="date" value={value} disabled={disabled} onChange={(event) => onChange(event.target.value)} className="bg-transparent font-mono text-[12px] text-ink" />
+    </label>
   )
 }
 
