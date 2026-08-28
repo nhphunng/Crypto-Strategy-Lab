@@ -6,6 +6,7 @@ from uuid import UUID
 from crypto_lab.domain.market_data.candle import canonical_decimal, format_utc_millis
 from crypto_lab.domain.strategy.context import StrategyContext
 from crypto_lab.domain.strategy.definition import StrategyDefinition, StrategyOrigin
+from crypto_lab.domain.strategy.errors import ErrorCategory, ErrorIssue, StrategyError
 from crypto_lab.domain.strategy.generation import GeneratedStrategyArtifact
 from crypto_lab.domain.strategy.parameters import ParameterSchema, ValidatedParameterSet
 from crypto_lab.domain.strategy.protocol import StrategyCapability, StrategyMetadata
@@ -56,6 +57,7 @@ class IsolatedGeneratedStrategy:
     async def analyze(
         self, definition: StrategyDefinition, context: StrategyContext
     ) -> StrategyAnalysisResult:
+        self._validate_definition(definition)
         payload: dict[str, object] = {
             "contractVersion": str(definition.contract_version),
             "parameters": {
@@ -130,3 +132,35 @@ class IsolatedGeneratedStrategy:
             state,
             tuple(signals),
         )
+
+    def _validate_definition(self, definition: StrategyDefinition) -> None:
+        expected = self.metadata
+        mismatches = (
+            ("strategyId", definition.strategy_id, expected.strategy_id),
+            ("strategyType", definition.strategy_type, expected.strategy_type),
+            ("strategyVersion", definition.strategy_version, expected.strategy_version),
+            ("contractVersion", definition.contract_version, expected.contract_version),
+            ("origin", definition.origin, StrategyOrigin.LLM_GENERATED),
+            (
+                "generationProvenanceId",
+                definition.generation_provenance_id,
+                expected.generation_provenance_id,
+            ),
+            ("generatedArtifactId", definition.generated_artifact_id, self._artifact.id),
+            (
+                "parameterSchemaFingerprint",
+                definition.parameters.schema_fingerprint,
+                expected.parameter_schema.fingerprint,
+            ),
+        )
+        issues = tuple(
+            ErrorIssue(field, "MISMATCH", f"expected {wanted}, received {actual}")
+            for field, actual, wanted in mismatches
+            if actual != wanted
+        )
+        if issues:
+            raise StrategyError(
+                ErrorCategory.INVALID_STRATEGY_METADATA,
+                "generated strategy definition does not match the activated artifact",
+                issues,
+            )
