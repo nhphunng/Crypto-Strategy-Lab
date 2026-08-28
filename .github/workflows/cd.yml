@@ -114,4 +114,4 @@ jobs:
             --retry 10 \
             --retry-delay 3 \
             --retry-all-errors \
-            https://crypto-strategy-lab.nhphung.id.vn
+            https://csl.nhphung.id.vn
