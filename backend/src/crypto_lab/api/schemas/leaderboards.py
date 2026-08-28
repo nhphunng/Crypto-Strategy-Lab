@@ -362,11 +362,11 @@ def policies_to_dto(summaries: Sequence[ScoringPolicySummary]) -> ScoringPolicyL
     return ScoringPolicyListDto(
         policies=tuple(
             ScoringPolicySummaryDto(
-                scoringPolicyId=item.policy.policy_id,
-                scoringPolicyVersion=item.policy.version,
+                scoring_policy_id=item.policy.policy_id,
+                scoring_policy_version=item.policy.version,
                 name=item.name,
-                defaultRankMetric=item.default_rank_metric.value,
-                evaluationCount=item.evaluation_count,
+                default_rank_metric=item.default_rank_metric.value,
+                evaluation_count=item.evaluation_count,
             )
             for item in summaries
         )
