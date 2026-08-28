@@ -49,47 +49,40 @@ jobs:
           tags: |
             ghcr.io/nhphunng/crypto-strategy-lab-frontend:latest
             ghcr.io/nhphunng/crypto-strategy-lab-frontend:${{ github.sha }}
-  deploy:
+    deploy:
     needs: build-and-push
-    runs-on: ubuntu-latest
+    runs-on:
+      - self-hosted
+      - Linux
+      - production
 
     steps:
-      - name: Connect to Tailscale
-        uses: tailscale/github-action@v4
-        with:
-          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
-          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
-          tags: tag:ci
-          ping: ${{ secrets.DEPLOY_HOST }}
-
-      - name: Configure SSH
+      - name: Deploy production
         run: |
-          mkdir -p ~/.ssh
-          chmod 700 ~/.ssh
+          cd /home/trahoang/app/Crypto-Strategy-Lab
 
-          printf '%s\n' "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
-          chmod 600 ~/.ssh/deploy_key
+          git fetch origin main
+          git reset --hard origin/main
 
-          ssh-keyscan -H "${{ secrets.DEPLOY_HOST }}" >> ~/.ssh/known_hosts
+          docker compose \
+            --env-file .env.production \
+            -f docker-compose.prod.yml \
+            pull
 
-      - name: Deploy to home server
+          docker compose \
+            --env-file .env.production \
+            -f docker-compose.prod.yml \
+            up -d
+
+      - name: Verify API
         run: |
-          ssh \
-            -i ~/.ssh/deploy_key \
-            "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}" \
-            "cd '${{ secrets.DEPLOY_PATH }}' && \
-             docker compose \
-               --env-file .env.production \
-               -f docker-compose.prod.yml \
-               pull && \
-             docker compose \
-               --env-file .env.production \
-               -f docker-compose.prod.yml \
-               up -d"
+          curl --fail \
+            --retry 10 \
+            --retry-delay 3 \
+            http://127.0.0.1:8000/health/ready
 
-      - name: Verify production
+      - name: Verify production domain
         run: |
-          sleep 5
           curl --fail \
             --retry 10 \
             --retry-delay 3 \
