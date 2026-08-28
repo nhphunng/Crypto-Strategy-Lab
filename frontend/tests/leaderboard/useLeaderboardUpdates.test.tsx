@@ -6,7 +6,7 @@ import {
 } from '../../src/features/leaderboard/hooks/useLeaderboardUpdates'
 import { LeaderboardRoute } from '../../src/app/routes/leaderboard'
 import type { LeaderboardIdentity } from '../../src/features/leaderboard/types'
-import { eventFixture, snapshotFixture } from './fixtures'
+import { eventFixture, policiesFixture, snapshotFixture } from './fixtures'
 
 const IDENTITY: LeaderboardIdentity = {
   scoringPolicyId: 'balanced',
@@ -193,7 +193,13 @@ describe('LeaderboardRoute live integration', () => {
     second.entries[0].score = '97.5'
     const loadSnapshot = vi.fn().mockResolvedValueOnce(first).mockResolvedValue(second)
 
-    render(<LeaderboardRoute loadSnapshot={loadSnapshot} socketFactory={() => new FakeSocket()} />)
+    render(
+      <LeaderboardRoute
+        loadPolicies={vi.fn().mockResolvedValue(policiesFixture())}
+        loadSnapshot={loadSnapshot}
+        socketFactory={() => new FakeSocket()}
+      />,
+    )
     await screen.findByTestId('table-leaderboard')
     FakeSocket.instances[0].open()
 
@@ -213,7 +219,13 @@ describe('LeaderboardRoute live integration', () => {
     FakeSocket.instances = []
     const loadSnapshot = vi.fn().mockResolvedValue(snapshotFixture())
 
-    render(<LeaderboardRoute loadSnapshot={loadSnapshot} socketFactory={() => new FakeSocket()} />)
+    render(
+      <LeaderboardRoute
+        loadPolicies={vi.fn().mockResolvedValue(policiesFixture())}
+        loadSnapshot={loadSnapshot}
+        socketFactory={() => new FakeSocket()}
+      />,
+    )
     await screen.findByTestId('table-leaderboard')
     FakeSocket.instances[0].open()
     FakeSocket.instances[0].drop()

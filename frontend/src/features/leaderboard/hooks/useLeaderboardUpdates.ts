@@ -23,7 +23,8 @@ export type SocketLike = {
 export type SocketFactory = (url: string) => SocketLike
 
 export type UseLeaderboardUpdatesOptions = {
-  identity: LeaderboardIdentity
+  /** Null while the ranking definition is still being resolved. */
+  identity: LeaderboardIdentity | null
   projectionVersion: number | null
   onRefetch: () => void
   socketFactory?: SocketFactory
@@ -94,15 +95,17 @@ export function useLeaderboardUpdates({
 
   const identityKey = useMemo(
     () =>
-      [
-        identity.scoringPolicyId,
-        identity.scoringPolicyVersion,
-        identity.rankBy,
-        identity.k,
-        identity.pair ?? '*',
-        identity.timeframe ?? '*',
-        identity.runId ?? '*',
-      ].join('|'),
+      identity === null
+        ? null
+        : [
+            identity.scoringPolicyId,
+            identity.scoringPolicyVersion,
+            identity.rankBy,
+            identity.k,
+            identity.pair ?? '*',
+            identity.timeframe ?? '*',
+            identity.runId ?? '*',
+          ].join('|'),
     [identity],
   )
 
@@ -137,7 +140,7 @@ export function useLeaderboardUpdates({
   }, [])
 
   useEffect(() => {
-    if (!enabled) return
+    if (!enabled || identity === null) return
     const factory = socketFactory ?? ((url: string) => new WebSocket(url) as unknown as SocketLike)
     let closedByEffect = false
     let attempt = 0

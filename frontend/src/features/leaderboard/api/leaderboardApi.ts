@@ -3,6 +3,7 @@
 import {
   ContractError,
   parseLeaderboardSnapshot,
+  parseScoringPolicies,
   parseRankedResultDetail,
   parseTradePage,
   parseVisualization,
@@ -13,6 +14,7 @@ import type {
   LeaderboardSnapshot,
   LeaderboardViewState,
   RankedResultDetail,
+  ScoringPolicySummary,
   TradePage,
   VisualizationData,
 } from '../types'
@@ -103,6 +105,13 @@ async function request<T>(
     }
     throw error
   }
+}
+
+/** Ranking definitions the backend actually publishes. */
+export function fetchScoringPolicies(
+  options: { fetchImpl?: FetchLike; signal?: AbortSignal } = {},
+): Promise<ScoringPolicySummary[]> {
+  return request('/api/v1/leaderboards/policies', parseScoringPolicies, options)
 }
 
 export function fetchLeaderboardSnapshot(

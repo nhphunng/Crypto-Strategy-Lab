@@ -9,7 +9,7 @@ from __future__ import annotations
 from time import perf_counter
 from uuid import UUID
 
-from crypto_lab.application.leaderboard.errors import query_invalid
+from crypto_lab.application.leaderboard.errors import policy_not_published
 from crypto_lab.application.leaderboard.ports import (
     Clock,
     LeaderboardRepository,
@@ -87,8 +87,7 @@ class UpdateLeaderboard:
     async def _load_policy(self, identity: LeaderboardIdentity) -> ScoringPolicy:
         policy = await self._repository.load_policy(identity.policy)
         if policy is None:
-            raise query_invalid(
-                "The requested scoring policy version is unknown.",
+            raise policy_not_published(
                 scoringPolicyId=identity.policy.policy_id,
                 scoringPolicyVersion=identity.policy.version,
             )

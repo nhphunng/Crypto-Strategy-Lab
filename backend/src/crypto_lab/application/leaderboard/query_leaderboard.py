@@ -12,12 +12,13 @@ from datetime import datetime
 from decimal import Decimal
 from uuid import UUID
 
-from crypto_lab.application.leaderboard.errors import query_invalid
+from crypto_lab.application.leaderboard.errors import policy_not_published, query_invalid
 from crypto_lab.application.leaderboard.ports import (
     EntryView,
     LeaderboardRepository,
     ProjectionSnapshot,
     RunState,
+    ScoringPolicySummary,
 )
 from crypto_lab.application.leaderboard.update_leaderboard import UpdateLeaderboard
 from crypto_lab.domain.leaderboard.policy import (
@@ -110,11 +111,15 @@ class QueryLeaderboard:
         self._repository = repository
         self._updater = updater
 
+    async def list_policies(self) -> tuple[ScoringPolicySummary, ...]:
+        """Ranking definitions that exist, so a client never guesses one."""
+
+        return await self._repository.list_policies()
+
     async def execute(self, query: LeaderboardQuery) -> LeaderboardPage:
         policy = await self._repository.load_policy(query.identity.policy)
         if policy is None:
-            raise query_invalid(
-                "The requested scoring policy version is unknown.",
+            raise policy_not_published(
                 scoringPolicyId=query.identity.policy.policy_id,
                 scoringPolicyVersion=query.identity.policy.version,
             )

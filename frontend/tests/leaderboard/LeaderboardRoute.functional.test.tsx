@@ -3,7 +3,8 @@
  *
  * Unlike the component-level tests in this directory, these exercise
  * `LeaderboardRoute` as a whole — the same tree a user loads in the browser —
- * through its network seams (`loadSnapshot`, `socketFactory`) only. They cover
+ * through its network seams (`loadPolicies`, `loadSnapshot`, `socketFactory`)
+ * only. They cover
  * the user journeys that span more than one sub-component: selecting a row to
  * open the detail pane, changing the ranking controls, and recovering from a
  * failed load.
@@ -13,7 +14,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { LeaderboardRoute } from '../../src/app/routes/leaderboard'
 import type { SocketLike } from '../../src/features/leaderboard/hooks/useLeaderboardUpdates'
-import { snapshotFixture } from './fixtures'
+import { policiesFixture, snapshotFixture } from './fixtures'
 
 class FakeSocket implements SocketLike {
   onopen: ((event: unknown) => void) | null = null
@@ -34,6 +35,7 @@ describe('LeaderboardRoute functional journeys', () => {
 
     render(
       <LeaderboardRoute
+        loadPolicies={vi.fn().mockResolvedValue(policiesFixture())}
         loadSnapshot={loadSnapshot}
         socketFactory={() => new FakeSocket()}
         renderDetail={renderDetail}
@@ -55,7 +57,13 @@ describe('LeaderboardRoute functional journeys', () => {
   it('reloads the snapshot with the new ranking definition and resets to page one', async () => {
     const loadSnapshot = vi.fn().mockResolvedValue(snapshotFixture())
 
-    render(<LeaderboardRoute loadSnapshot={loadSnapshot} socketFactory={() => new FakeSocket()} />)
+    render(
+      <LeaderboardRoute
+        loadPolicies={vi.fn().mockResolvedValue(policiesFixture())}
+        loadSnapshot={loadSnapshot}
+        socketFactory={() => new FakeSocket()}
+      />,
+    )
 
     await screen.findByTestId('table-leaderboard')
     expect(loadSnapshot).toHaveBeenCalledTimes(1)
@@ -81,7 +89,13 @@ describe('LeaderboardRoute functional journeys', () => {
       .mockRejectedValueOnce(new Error('leaderboard service unavailable'))
       .mockResolvedValue(snapshotFixture())
 
-    render(<LeaderboardRoute loadSnapshot={loadSnapshot} socketFactory={() => new FakeSocket()} />)
+    render(
+      <LeaderboardRoute
+        loadPolicies={vi.fn().mockResolvedValue(policiesFixture())}
+        loadSnapshot={loadSnapshot}
+        socketFactory={() => new FakeSocket()}
+      />,
+    )
 
     const error = await screen.findByTestId('state-leaderboard-error')
     expect(error).toHaveTextContent('leaderboard service unavailable')

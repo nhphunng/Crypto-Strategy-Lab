@@ -27,6 +27,7 @@ from crypto_lab.application.leaderboard.ports import (
     RankedResultView,
     Recompute,
     RunState,
+    ScoringPolicySummary,
     TradePage,
     TradeView,
     UnalignedMarker,
@@ -184,6 +185,46 @@ class SqlAlchemyLeaderboardRepository:
                 default_rank_metric=row.default_rank_metric,
                 rules=dict(row.rules or {}),
             )
+
+    async def list_policies(self) -> tuple[ScoringPolicySummary, ...]:
+        """Published scoring policies, most recently created first.
+
+        The count of evaluations per policy lets a client tell an unpublished
+        ranking definition apart from one that simply has no candidate yet.
+        """
+
+        async with self._sessions() as session:
+            rows = (
+                await session.execute(
+                    select(
+                        ScoringPolicyRow,
+                        func.count(EvaluationResultRow.id),
+                    )
+                    .join(
+                        EvaluationResultRow,
+                        (EvaluationResultRow.scoring_policy_id == ScoringPolicyRow.id)
+                        & (EvaluationResultRow.scoring_policy_version == ScoringPolicyRow.version),
+                        isouter=True,
+                    )
+                    .group_by(ScoringPolicyRow.id)
+                    .order_by(ScoringPolicyRow.created_at.desc())
+                )
+            ).all()
+            summaries: list[ScoringPolicySummary] = []
+            for row, evaluation_count in rows:
+                try:
+                    metric = RankMetric(row.default_rank_metric)
+                except ValueError:
+                    metric = RankMetric.OVERALL_SCORE
+                summaries.append(
+                    ScoringPolicySummary(
+                        policy=ScoringPolicyRef(row.policy_id, row.version),
+                        name=row.name,
+                        default_rank_metric=metric,
+                        evaluation_count=int(evaluation_count or 0),
+                    )
+                )
+            return tuple(summaries)
 
     async def mutate_projection(
         self,
