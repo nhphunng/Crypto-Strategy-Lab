@@ -337,3 +337,22 @@ async def test_gemini_provider_empty_candidates_fails_without_retry() -> None:
 
     assert excinfo.value.category is ErrorCategory.GENERATION_FAILED
     assert calls == 1
+
+
+@pytest.mark.asyncio
+async def test_schema_valid_but_domain_invalid_relationship_operator_fails_cleanly() -> None:
+    # A model can satisfy the JSON schema (three strings) while using an operator token
+    # RelationshipRule doesn't accept (e.g. "<" instead of "lt"). That must surface as a
+    # normal GENERATION_FAILED, not an unhandled crash out of the candidate conversion step.
+    bad_candidate = dict(VALID_OUTPUT["candidates"][0])
+    bad_candidate["relationships"] = [["period", "<", "threshold"]]
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"output": {"candidates": [bad_candidate]}})
+
+    adapter, client = _adapter(transport=httpx.MockTransport(handler))
+    async with client:
+        with pytest.raises(StrategyError) as excinfo:
+            await adapter.generate(GenerationSourceType.STRATEGY_NAME, "text", "req-1")
+
+    assert excinfo.value.category is ErrorCategory.GENERATION_FAILED

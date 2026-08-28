@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -24,8 +25,17 @@ from crypto_lab.domain.strategy.parameters import (
     RelationshipRule,
 )
 
+logger = logging.getLogger(__name__)
+
 Sleep = Callable[[float], Awaitable[None]]
 Jitter = Callable[[], float]
+
+_BODY_LOG_LIMIT = 500
+
+
+def _body_excerpt(response: httpx.Response) -> str:
+    text = response.text
+    return text if len(text) <= _BODY_LOG_LIMIT else text[:_BODY_LOG_LIMIT] + "...(truncated)"
 
 
 class _ProviderKind(StrEnum):
@@ -65,12 +75,34 @@ _CANDIDATE_JSON_INSTRUCTIONS = (
     'string, "description": string, "structuredRules": object, "parameters": [{"name": '
     'string, "description": string, "valueType": "INTEGER" | "DECIMAL", "defaultValue": '
     'number | string | null, "minimum": number | string | null, "maximum": number | '
-    'string | null}], "relationships": [[string, string, string]], "assumptions": '
-    '[string], "evidence": [{"ruleId": string, "sourceExcerpt": string, "sourceLocation": '
-    'string | null, "inferred": boolean}], "sourceCode": string}]}'
+    'string | null}], "relationships": [[leftParameterName, operator, rightParameterName]] '
+    '(operator MUST be exactly one of "lt", "lte", "gt", "gte" -- never a symbol like "<" or '
+    'a word like "less_than"), "assumptions": [string], "evidence": [{"ruleId": string, '
+    '"sourceExcerpt": string, "sourceLocation": string | null, "inferred": boolean}], '
+    '"sourceCode": string}]}'
 )
 
-_STRUCTURED_SYSTEM_PROMPT = f"{_SYSTEM_PROMPT} {_CANDIDATE_JSON_INSTRUCTIONS}"
+# Spelled out explicitly because a syntactically-valid JSON envelope with a broken or
+# unsafe "sourceCode" body is the single most common way real providers fail sandbox
+# validation: the JSON schema says nothing about what must be inside that string.
+_SOURCE_CODE_CONTRACT = (
+    'The "sourceCode" value must be the complete text of a single Python module defining '
+    "exactly one function: def analyze(payload). `payload` is a dict with payload['parameters'] "
+    "(a dict of the declared parameter values) and payload['context']['candles'] (a "
+    "chronologically ordered list of dicts, each with string fields 'timestamp', 'open', "
+    "'high', 'low', 'close', 'volume'). It must return {'signals': [...]} with exactly one "
+    "signal object per candle, in the same order, each {'action': 'BUY' | 'SELL' | 'HOLD', "
+    "'phase': 'WARMUP' | 'EVALUATED', 'reason': string}. The signal for candle i must depend "
+    "only on candles[0..i], never on later candles, and analyze must be a pure, deterministic "
+    "function of its input: no randomness, clocks, files, network, or other I/O. Only these "
+    "imports are allowed: math, decimal, statistics. Never call eval, exec, compile, open, "
+    "__import__, or input. Emit raw Python source only inside the JSON string value -- do not "
+    "wrap it in markdown fences."
+)
+
+_STRUCTURED_SYSTEM_PROMPT = (
+    f"{_SYSTEM_PROMPT} {_CANDIDATE_JSON_INSTRUCTIONS} {_SOURCE_CODE_CONTRACT}"
+)
 
 
 def _strip_code_fence(text: str) -> str:
@@ -176,15 +208,23 @@ class StructuredStrategyGenerationAdapter:
         try:
             content = _extract_candidates_payload(kind, raw)
             parsed = _GenerationOutput.model_validate(content)
+            candidates = tuple(_candidate(item) for item in parsed.candidates)
         except (KeyError, IndexError, TypeError, ValueError, ValidationError) as error:
+            logger.warning(
+                "strategy_generation_output_shape_mismatch",
+                extra={
+                    "fields": {
+                        "provider": self.provider,
+                        "kind": kind.value,
+                        "error": str(error)[:_BODY_LOG_LIMIT],
+                    }
+                },
+            )
             raise StrategyError(
                 ErrorCategory.GENERATION_FAILED,
                 "strategy generation provider returned malformed structured output",
             ) from error
-        return cast(
-            Sequence[ModelCandidate],
-            tuple(_candidate(item) for item in parsed.candidates),
-        )
+        return cast(Sequence[ModelCandidate], candidates)
 
     def _build_request(
         self, kind: _ProviderKind, user_content: str, request_id: str
@@ -236,11 +276,19 @@ class StructuredStrategyGenerationAdapter:
                 )
             except httpx.HTTPError as error:
                 last_error = error
+                logger.warning(
+                    "strategy_generation_request_error",
+                    extra={"fields": {"provider": self.provider, "error": str(error)}},
+                )
                 if attempt + 1 >= self._max_attempts:
                     break
                 await self._sleep(self._backoff(attempt))
                 continue
             if response.status_code == 429:
+                logger.warning(
+                    "strategy_generation_rate_limited",
+                    extra={"fields": {"provider": self.provider, "attempt": attempt + 1}},
+                )
                 if attempt + 1 >= self._max_attempts:
                     raise StrategyError(
                         ErrorCategory.GENERATION_FAILED,
@@ -249,6 +297,16 @@ class StructuredStrategyGenerationAdapter:
                 await self._sleep(float(self._retry_after(response) or self._backoff(attempt)))
                 continue
             if response.status_code >= 500:
+                logger.warning(
+                    "strategy_generation_provider_failure",
+                    extra={
+                        "fields": {
+                            "provider": self.provider,
+                            "status_code": response.status_code,
+                            "body": _body_excerpt(response),
+                        }
+                    },
+                )
                 if attempt + 1 >= self._max_attempts:
                     raise StrategyError(
                         ErrorCategory.GENERATION_FAILED,
@@ -257,6 +315,16 @@ class StructuredStrategyGenerationAdapter:
                 await self._sleep(self._backoff(attempt))
                 continue
             if response.status_code >= 400:
+                logger.warning(
+                    "strategy_generation_request_rejected",
+                    extra={
+                        "fields": {
+                            "provider": self.provider,
+                            "status_code": response.status_code,
+                            "body": _body_excerpt(response),
+                        }
+                    },
+                )
                 raise StrategyError(
                     ErrorCategory.GENERATION_FAILED,
                     "strategy generation provider rejected the request",
@@ -264,6 +332,16 @@ class StructuredStrategyGenerationAdapter:
             try:
                 return response.json()
             except ValueError as error:
+                logger.warning(
+                    "strategy_generation_response_not_json",
+                    extra={
+                        "fields": {
+                            "provider": self.provider,
+                            "status_code": response.status_code,
+                            "body": _body_excerpt(response),
+                        }
+                    },
+                )
                 raise StrategyError(
                     ErrorCategory.GENERATION_FAILED,
                     "strategy generation provider returned malformed structured output",
