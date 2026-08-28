@@ -153,9 +153,12 @@ Profile này dùng Docker secrets, volume artifact mã hóa mode `0700`, và m�
 không chứa application secrets. API không mount Docker socket của host. Sandbox invocation vẫn là
 ephemeral, non-root, networkless, read-only, capability-free và resource-bounded theo ADR-006.
 
-`CSL_LLM_ENDPOINT` phải triển khai provider-neutral structured-output contract được mô tả trong
-`backend/src/crypto_lab/infrastructure/llm/strategy_generation_adapter.py`; không trỏ trực tiếp tới
-provider có response shape khác nếu chưa có adapter tương ứng.
+`CSL_LLM_PROVIDER` chọn dialect: chứa `openai`/`gpt` sẽ nói contract OpenAI Chat Completions,
+chứa `gemini`/`google` sẽ nói contract Gemini `generateContent`, giá trị khác dùng contract
+provider-neutral gốc (dành cho fixture xác định hoặc provider có proxy tương thích). Cả ba đường
+đều được implement trực tiếp trong
+`backend/src/crypto_lab/infrastructure/llm/strategy_generation_adapter.py`; `CSL_LLM_ENDPOINT` trỏ
+thẳng vào API thật của OpenAI/Gemini, không cần proxy.
 
 ## Leaderboard và trực quan hóa giao dịch (feature 005)
 
