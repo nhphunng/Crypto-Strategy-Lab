@@ -90,7 +90,7 @@ describe("market chart WebSocket contract schemas", () => {
         version: "1",
         requestId: "req-01",
         occurredAt: "2026-08-13T10:00:00Z",
-        payload: { slotId: "slot-1", selection },
+        payload: { slotId: "slot-1", generation: 1, selection },
       }).eventType,
     ).toBe("SUBSCRIBE_MARKET_DATA");
 
@@ -111,7 +111,7 @@ describe("market chart WebSocket contract schemas", () => {
       version: "1",
       eventId: "evt-201",
       occurredAt: "2026-08-13T10:00:01Z",
-      payload: { selection, revision: 7, candle },
+      payload: { slotGenerations: { "slot-1": 1 }, selection, revision: 7, candle },
     });
 
     expect(update.eventType).toBe("CANDLE_UPDATED");
@@ -122,7 +122,13 @@ describe("market chart WebSocket contract schemas", () => {
         version: "1",
         eventId: "evt-202",
         occurredAt: "2026-08-13T10:00:02Z",
-        payload: { slotIds: ["slot-1"], selection, state: "RELEASED", attempt: 0 },
+        payload: {
+          slotIds: ["slot-1"],
+          slotGenerations: { "slot-1": 1 },
+          selection,
+          state: "RELEASED",
+          attempt: 0,
+        },
       }),
     ).toThrow("$.payload.state");
   });
@@ -134,7 +140,12 @@ describe("market chart WebSocket contract schemas", () => {
         version: "1",
         eventId: "evt-state-missing-attempt",
         occurredAt: "2026-08-13T10:00:02Z",
-        payload: { slotIds: ["slot-1"], selection, state: "LIVE" },
+        payload: {
+          slotIds: ["slot-1"],
+          slotGenerations: { "slot-1": 1 },
+          selection,
+          state: "LIVE",
+        },
       }),
     ).toThrow("$.payload.attempt");
 

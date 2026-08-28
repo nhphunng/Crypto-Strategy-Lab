@@ -2,11 +2,13 @@ import { queryOptions } from "@tanstack/react-query";
 
 import {
   candleRangeEnvelopeSchema,
+  marketDimensionsEnvelopeSchema,
   marketDataRestErrorEnvelopeSchema,
 } from "../schemas";
 import {
   MARKET_DATA_SCHEMA_VERSION,
   type CandleRange,
+  type MarketDimensions,
   type MarketDataRestErrorCode,
   type MarketSelection,
   type TimeRange,
@@ -25,6 +27,10 @@ export type MarketHistoryQueryInput = {
   limit: number;
   generation: number;
 };
+
+export function marketDimensionsQueryKey() {
+  return ["market-data", "dimensions", MARKET_DATA_SCHEMA_VERSION] as const;
+}
 
 export function marketHistoryQueryKey(input: MarketHistoryQueryInput) {
   return [
@@ -74,6 +80,21 @@ export class MarketDataApi {
     this.fetcher = options.fetcher ?? globalThis.fetch.bind(globalThis);
   }
 
+  async getDimensions(signal?: AbortSignal): Promise<MarketDimensions> {
+    const url = new URL("/api/v1/market-data/dimensions", this.baseUrl);
+    const response = await this.fetcher(url, {
+      method: "GET",
+      headers: { Accept: "application/json" },
+      signal,
+    });
+    const payload = (await response.json()) as unknown;
+    if (response.ok) {
+      return marketDimensionsEnvelopeSchema.parse(payload).data;
+    }
+
+    throwMarketDataApiError(payload);
+  }
+
   async getCandles(request: HistoricalCandleRequest): Promise<CandleRange> {
     const limit = request.limit ?? 500;
     if (!Number.isInteger(limit) || limit < 1 || limit > 1_000) {
@@ -100,16 +121,7 @@ export class MarketDataApi {
       return candleRangeEnvelopeSchema.parse(payload).data;
     }
 
-    const error = marketDataRestErrorEnvelopeSchema.parse(payload);
-    throw new MarketDataApiError({
-      code: error.error.code,
-      message: error.message,
-      retryable: error.error.retryable ?? false,
-      requestId: error.requestId,
-      ...(error.error.details === undefined || error.error.details === null
-        ? {}
-        : { details: error.error.details }),
-    });
+    throwMarketDataApiError(payload);
   }
 }
 
@@ -132,8 +144,30 @@ export function createMarketHistoryQueryOptions(
   });
 }
 
+export function createMarketDimensionsQueryOptions(
+  api: Pick<MarketDataApi, "getDimensions">,
+) {
+  return queryOptions({
+    queryKey: marketDimensionsQueryKey(),
+    queryFn: ({ signal }) => api.getDimensions(signal),
+  });
+}
+
 export function createMarketDataApi(
   options: CreateMarketDataApiOptions = {},
 ): MarketDataApi {
   return new MarketDataApi(options);
+}
+
+function throwMarketDataApiError(payload: unknown): never {
+  const error = marketDataRestErrorEnvelopeSchema.parse(payload);
+  throw new MarketDataApiError({
+    code: error.error.code,
+    message: error.message,
+    retryable: error.error.retryable ?? false,
+    requestId: error.requestId,
+    ...(error.error.details === undefined || error.error.details === null
+      ? {}
+      : { details: error.error.details }),
+  });
 }

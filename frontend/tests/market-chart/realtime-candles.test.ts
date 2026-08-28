@@ -49,13 +49,18 @@ function candleEvent(
   selection: MarketSelection,
   revision: number,
   value: Candle,
+  slotGenerations: Record<string, number> = {
+    "slot-1": 1,
+    "slot-2": 1,
+    "slot-3": 1,
+  },
 ): CandleUpdatedEvent {
   return {
     eventType: "CANDLE_UPDATED",
     version: "1",
     eventId,
     occurredAt: value.receivedAt,
-    payload: { selection, revision, candle: value },
+    payload: { selection, revision, candle: value, slotGenerations },
   };
 }
 
@@ -208,6 +213,56 @@ describe("realtime market-data boundary", () => {
     expect(connection.getSlotSnapshot("slot-2")?.candles).toHaveLength(1);
     expect(connection.getSlotSnapshot("slot-3")?.candles).toEqual([]);
   });
+
+  it("rejects a late same-selection event from an older subscription generation", () => {
+    const { connection, socket } = setup();
+    const onSnapshot = vi.fn();
+    const first = connection.subscribe({
+      slotId: "slot-1",
+      generation: 1,
+      selection: FIVE_MINUTES,
+      onSnapshot,
+    });
+    first.acceptHistory([]);
+    const current = connection.subscribe({
+      slotId: "slot-1",
+      generation: 3,
+      selection: FIVE_MINUTES,
+      onSnapshot,
+    });
+    current.acceptHistory([]);
+    socket.open();
+
+    socket.receive(
+      candleEvent(
+        "evt-old-generation",
+        FIVE_MINUTES,
+        1,
+        candle(
+          FIVE_MINUTES,
+          "2026-08-13T10:00:00Z",
+          "2026-08-13T10:04:59.999Z",
+        ),
+        { "slot-1": 1 },
+      ),
+    );
+    expect(connection.getSlotSnapshot("slot-1")?.candles).toEqual([]);
+
+    socket.receive(
+      candleEvent(
+        "evt-current-generation",
+        FIVE_MINUTES,
+        1,
+        candle(
+          FIVE_MINUTES,
+          "2026-08-13T10:05:00Z",
+          "2026-08-13T10:09:59.999Z",
+        ),
+        { "slot-1": 3 },
+      ),
+    );
+    expect(connection.getSlotSnapshot("slot-1")?.candles).toHaveLength(1);
+  });
 });
 
 describe("bounded realtime Candle merge", () => {
@@ -228,7 +283,9 @@ describe("bounded realtime Candle merge", () => {
       "2026-08-13T10:09:59.999Z",
       { close: "101.00" },
     );
-    socket.receive(candleEvent("evt-open", FIVE_MINUTES, 1, currentOpen));
+    socket.receive(
+      candleEvent("evt-open", FIVE_MINUTES, 1, currentOpen, { "slot-1": 4 }),
+    );
     expect(connection.getSlotSnapshot("slot-1")?.candles).toEqual([]);
 
     const historical = candle(
@@ -243,7 +300,9 @@ describe("bounded realtime Candle merge", () => {
     ).toEqual([historical.openTime, currentOpen.openTime]);
 
     const callsAfterBootstrap = onSnapshot.mock.calls.length;
-    socket.receive(candleEvent("evt-open", FIVE_MINUTES, 1, currentOpen));
+    socket.receive(
+      candleEvent("evt-open", FIVE_MINUTES, 1, currentOpen, { "slot-1": 4 }),
+    );
     expect(onSnapshot).toHaveBeenCalledTimes(callsAfterBootstrap);
 
     const closed = {
@@ -252,7 +311,9 @@ describe("bounded realtime Candle merge", () => {
       closed: true,
       receivedAt: "2026-08-13T10:10:00Z",
     } satisfies Candle;
-    socket.receive(candleEvent("evt-closed", FIVE_MINUTES, 2, closed));
+    socket.receive(
+      candleEvent("evt-closed", FIVE_MINUTES, 2, closed, { "slot-1": 4 }),
+    );
 
     const snapshot = connection.getSlotSnapshot("slot-1");
     expect(snapshot?.candles).toHaveLength(2);
@@ -268,7 +329,7 @@ describe("bounded realtime Candle merge", () => {
         close: "99.50",
         closed: false,
         receivedAt: "2026-08-13T10:10:01Z",
-      }),
+      }, { "slot-1": 4 }),
     );
     expect(connection.getSlotSnapshot("slot-1")?.candles.at(-1)).toEqual(closed);
   });
@@ -357,7 +418,9 @@ describe("slot generation safety", () => {
       "2026-08-13T10:00:00Z",
       "2026-08-13T10:59:59.999Z",
     );
-    socket.receive(candleEvent("evt-current-generation", ONE_HOUR, 1, current));
+    socket.receive(
+      candleEvent("evt-current-generation", ONE_HOUR, 1, current, { "slot-1": 2 }),
+    );
     expect(connection.getSlotSnapshot("slot-1")?.candles).toEqual([current]);
     expect(currentSnapshots).toHaveBeenCalled();
   });

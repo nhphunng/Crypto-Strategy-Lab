@@ -137,9 +137,8 @@ export const MARKET = {
   volume24h: '1.42B',
 }
 
-// Selectable markets. Only BTC/USDT has real prototype candle data; the others
-// demonstrate that the architecture supports market selection without pretending
-// they are operational.
+// Selectable markets. BTC/USDT, ETH/USDT, and SOL/USDT are the supported
+// prototype market contexts; other entries remain visible but unavailable.
 export type MarketInfo = {
   pair: string // 'BTCUSDT'
   display: string // 'BTC / USDT'
@@ -176,7 +175,7 @@ export const MARKETS: MarketInfo[] = [
     change24h: 2.14,
     symbol: 'Ξ',
     color: '#627eea',
-    available: false,
+    available: true,
   },
   {
     pair: 'SOLUSDT',
@@ -188,7 +187,7 @@ export const MARKETS: MarketInfo[] = [
     change24h: -0.61,
     symbol: '◎',
     color: '#14f195',
-    available: false,
+    available: true,
   },
   {
     pair: 'BNBUSDT',

@@ -39,6 +39,7 @@ from crypto_lab.application.market_data.ports import (
 from crypto_lab.application.market_data.recover_stream import RecoveryPolicy
 from crypto_lab.domain.market_data.candle import format_utc_millis
 from crypto_lab.domain.market_data.selection import ConnectionState, MarketSelection
+from crypto_lab.domain.market_data.timeframe import Timeframe
 from crypto_lab.infrastructure.observability.metrics import MarketDataMetrics
 
 logger = logging.getLogger(__name__)
@@ -73,11 +74,17 @@ class MarketDataChannel:
         recovery_policy: RecoveryPolicy | None = None,
         connection_id: str | None = None,
         metrics: MarketDataMetrics | None = None,
+        supported_providers: frozenset[str] = frozenset({"BINANCE"}),
+        supported_pairs: frozenset[str] = frozenset({"BTCUSDT", "ETHUSDT", "SOLUSDT"}),
+        supported_timeframes: frozenset[Timeframe] = frozenset(Timeframe),
     ) -> None:
         self._clock = clock
         self._event_id_factory = event_id_factory
         self._connection_id = connection_id or str(uuid4())
         self._metrics = metrics or DEFAULT_METRICS
+        self._supported_providers = supported_providers
+        self._supported_pairs = supported_pairs
+        self._supported_timeframes = supported_timeframes
         self._registry = SubscriptionRegistry(max_slots=max_slots)
         self._streams = StreamCandles(
             provider,
@@ -88,6 +95,7 @@ class MarketDataChannel:
         )
         self._stream_tasks: dict[MarketSelection, asyncio.Task[None]] = {}
         self._selection_states: dict[MarketSelection, ConnectionState] = {}
+        self._slot_generations: dict[str, int] = {}
         self._handled_request_ids: set[str] = set()
         self._send_lock = asyncio.Lock()
         self._opened_at: datetime | None = None
@@ -141,6 +149,39 @@ class MarketDataChannel:
         command: SubscribeMarketDataCommand,
     ) -> None:
         payload = command.payload
+        if payload.selection.provider not in self._supported_providers:
+            await self._send_error(
+                websocket,
+                slot_id=payload.slot_id,
+                request_id=command.request_id,
+                code="MARKET_PROVIDER_UNSUPPORTED",
+                message="The requested market provider is not supported.",
+                retryable=False,
+                generation=payload.generation,
+            )
+            return
+        if payload.selection.pair not in self._supported_pairs:
+            await self._send_error(
+                websocket,
+                slot_id=payload.slot_id,
+                request_id=command.request_id,
+                code="MARKET_PAIR_UNSUPPORTED",
+                message="The requested market pair is not supported.",
+                retryable=False,
+                generation=payload.generation,
+            )
+            return
+        if payload.selection.timeframe not in self._supported_timeframes:
+            await self._send_error(
+                websocket,
+                slot_id=payload.slot_id,
+                request_id=command.request_id,
+                code="MARKET_TIMEFRAME_UNSUPPORTED",
+                message="The requested market timeframe is not supported.",
+                retryable=False,
+                generation=payload.generation,
+            )
+            return
         try:
             selection = MarketSelection(
                 payload.selection.provider,
@@ -156,6 +197,7 @@ class MarketDataChannel:
                 code=error.code,
                 message="A dashboard can use at most four chart slots.",
                 retryable=False,
+                generation=payload.generation,
             )
             return
         except ValueError:
@@ -166,11 +208,13 @@ class MarketDataChannel:
                 code="MARKET_PAIR_UNSUPPORTED",
                 message="The requested market selection is not supported.",
                 retryable=False,
+                generation=payload.generation,
             )
             return
 
         if change.released_selection is not None:
             await self._release_selection(change.released_selection)
+        self._slot_generations[payload.slot_id] = payload.generation
 
         self._record_gauges()
         acquired = change.acquired_selection is not None
@@ -206,6 +250,7 @@ class MarketDataChannel:
             change = self._registry.unbind(slot_id)
         except ValueError:
             return
+        self._slot_generations.pop(slot_id, None)
         self._record_gauges()
         if change.released_selection is not None:
             self._log(
@@ -307,6 +352,11 @@ class MarketDataChannel:
                 "eventId": self._event_id_factory(),
                 "occurredAt": format_utc_millis(delivery.occurred_at),
                 "payload": {
+                    "slotGenerations": {
+                        slot_id: self._slot_generations[slot_id]
+                        for slot_id in self._registry.slots_for(delivery.selection)
+                        if slot_id in self._slot_generations
+                    },
                     "selection": self._selection_payload(delivery.selection),
                     "revision": revision,
                     "candle": candle_to_dto(candle).model_dump(
@@ -338,6 +388,11 @@ class MarketDataChannel:
             "occurredAt": format_utc_millis(timestamp),
             "payload": {
                 "slotIds": list(self._registry.slots_for(selection)),
+                "slotGenerations": {
+                    slot_id: self._slot_generations[slot_id]
+                    for slot_id in self._registry.slots_for(selection)
+                    if slot_id in self._slot_generations
+                },
                 "selection": self._selection_payload(selection),
                 "state": state.value,
                 "attempt": attempt,
@@ -392,7 +447,10 @@ class MarketDataChannel:
         code: str,
         message: str,
         retryable: bool,
+        generation: int | None = None,
     ) -> None:
+        if generation is None and slot_id is not None:
+            generation = self._slot_generations.get(slot_id)
         event: dict[str, object] = {
             "eventType": "MARKET_DATA_ERROR",
             "version": "1",
@@ -400,6 +458,7 @@ class MarketDataChannel:
             "occurredAt": format_utc_millis(self._clock.now()),
             "payload": {
                 **({"slotId": slot_id} if slot_id else {}),
+                **({"generation": generation} if generation is not None else {}),
                 "code": code,
                 "message": message,
                 "retryable": retryable,
@@ -436,6 +495,7 @@ class MarketDataChannel:
         if self._stream_tasks:
             await asyncio.gather(*self._stream_tasks.values(), return_exceptions=True)
         self._stream_tasks.clear()
+        self._slot_generations.clear()
         for selection in selections:
             await self._streams.release(selection)
         self._selection_states.clear()
@@ -515,5 +575,8 @@ async def market_data_websocket(websocket: WebSocket) -> None:
         ),
         max_slots=container.settings.max_chart_slots_per_connection,
         max_candles=container.settings.max_range_candles,
+        supported_providers=frozenset(container.settings.capabilities.providers),
+        supported_pairs=frozenset(container.settings.capabilities.pairs),
+        supported_timeframes=frozenset(container.settings.capabilities.timeframes),
     )
     await channel.run(websocket)

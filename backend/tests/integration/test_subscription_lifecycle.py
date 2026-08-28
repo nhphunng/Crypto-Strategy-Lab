@@ -21,6 +21,8 @@ from tests.integration.fakes.fake_realtime_market_provider import (
 NOW = datetime(2026, 8, 13, 10, tzinfo=UTC)
 FIVE_MINUTES = MarketSelection("BINANCE", "BTCUSDT", Timeframe.FIVE_MINUTES)
 ONE_HOUR = MarketSelection("BINANCE", "BTCUSDT", Timeframe.ONE_HOUR)
+SUPPORTED_PAIRS = frozenset({"BTCUSDT", "ETHUSDT", "SOLUSDT"})
+SUPPORTED_PROVIDERS = frozenset({"BINANCE"})
 _DISCONNECT = object()
 
 
@@ -113,6 +115,7 @@ def _subscribe(
         "occurredAt": format_utc_millis(NOW),
         "payload": {
             "slotId": slot_id,
+            "generation": 1,
             "selection": _selection_payload(selection),
         },
     }
@@ -171,11 +174,18 @@ def _payload(message: dict[str, object]) -> dict[str, object]:
 
 async def _start_channel(
     provider: FakeRealtimeMarketProvider,
+    *,
+    supported_providers: frozenset[str] = SUPPORTED_PROVIDERS,
+    supported_pairs: frozenset[str] = SUPPORTED_PAIRS,
+    supported_timeframes: frozenset[Timeframe] = frozenset(Timeframe),
 ) -> tuple[_FakeWebSocket, asyncio.Task[None]]:
     channel = MarketDataChannel(
         provider=provider,
         clock=FixedClock(NOW),
         event_id_factory=_EventIds(),
+        supported_providers=supported_providers,
+        supported_pairs=supported_pairs,
+        supported_timeframes=supported_timeframes,
     )
     websocket = _FakeWebSocket()
     task = asyncio.create_task(channel.run(websocket))
@@ -193,6 +203,63 @@ async def _stop_channel(websocket: _FakeWebSocket, task: asyncio.Task[None]) -> 
             task.cancel()
             with suppress(asyncio.CancelledError):
                 await task
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "selection",
+    [
+        MarketSelection("BINANCE", "ETHUSDT", Timeframe.FIVE_MINUTES),
+        MarketSelection("BINANCE", "SOLUSDT", Timeframe.ONE_HOUR),
+    ],
+)
+async def test_supported_capability_pairs_are_accepted(selection: MarketSelection) -> None:
+    provider = FakeRealtimeMarketProvider()
+    websocket, channel_task = await _start_channel(provider)
+
+    try:
+        await websocket.feed_json(_subscribe("slot-1", selection, "req-supported"))
+        await provider.wait_until_streaming(selection)
+        state = await websocket.wait_for_message(_state_for("req-supported"))
+        assert _payload(state)["selection"] == _selection_payload(selection)
+        assert provider.active_selections == frozenset({selection})
+    finally:
+        await _stop_channel(websocket, channel_task)
+
+
+@pytest.mark.asyncio
+async def test_unsupported_pair_is_rejected_before_provider_stream() -> None:
+    provider = FakeRealtimeMarketProvider()
+    websocket, channel_task = await _start_channel(provider)
+    unsupported = MarketSelection("BINANCE", "BNBUSDT", Timeframe.FIVE_MINUTES)
+
+    try:
+        await websocket.feed_json(_subscribe("slot-1", unsupported, "req-unsupported"))
+        error = await websocket.wait_for_message(_error_for("req-unsupported"))
+        assert _payload(error)["code"] == "MARKET_PAIR_UNSUPPORTED"
+        assert provider.stream_calls == []
+        assert provider.active_selections == frozenset()
+    finally:
+        await _stop_channel(websocket, channel_task)
+
+
+@pytest.mark.asyncio
+async def test_unsupported_provider_is_rejected_before_provider_stream() -> None:
+    provider = FakeRealtimeMarketProvider()
+    websocket, channel_task = await _start_channel(provider)
+    command = _subscribe("slot-1", FIVE_MINUTES, "req-provider")
+    payload = cast(dict[str, object], command["payload"])
+    selection = cast(dict[str, str], payload["selection"])
+    selection["provider"] = "KRAKEN"
+
+    try:
+        await websocket.feed_json(command)
+        error = await websocket.wait_for_message(_error_for("req-provider"))
+        assert _payload(error)["code"] == "MARKET_PROVIDER_UNSUPPORTED"
+        assert provider.stream_calls == []
+        assert provider.active_selections == frozenset()
+    finally:
+        await _stop_channel(websocket, channel_task)
 
 
 @pytest.mark.asyncio

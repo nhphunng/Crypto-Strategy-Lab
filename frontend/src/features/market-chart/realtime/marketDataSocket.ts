@@ -208,7 +208,11 @@ export class MarketDataSocket {
       version: MARKET_DATA_SCHEMA_VERSION,
       requestId: this.createRequestId(),
       occurredAt: this.now(),
-      payload: { slotId: options.slotId, selection: options.selection },
+      payload: {
+        slotId: options.slotId,
+        generation: options.generation,
+        selection: options.selection,
+      },
     });
 
     const token = {
@@ -266,6 +270,12 @@ export class MarketDataSocket {
     if (event.eventType === "CANDLE_UPDATED") {
       for (const runtime of this.slots.values()) {
         if (!sameSelection(runtime.snapshot.selection, event.payload.selection)) continue;
+        if (
+          event.payload.slotGenerations[runtime.snapshot.slotId] !==
+          runtime.snapshot.generation
+        ) {
+          continue;
+        }
         if (runtime.bootstrapping) {
           runtime.bufferedEvents.push(event);
         } else {
@@ -279,7 +289,8 @@ export class MarketDataSocket {
         const runtime = this.slots.get(slotId);
         if (
           runtime !== undefined &&
-          sameSelection(runtime.snapshot.selection, event.payload.selection)
+          sameSelection(runtime.snapshot.selection, event.payload.selection) &&
+          event.payload.slotGenerations[slotId] === runtime.snapshot.generation
         ) {
           runtime.snapshot = {
             ...runtime.snapshot,
@@ -307,7 +318,11 @@ export class MarketDataSocket {
     const slotId = event.payload.slotId;
     if (slotId === undefined) return;
     const runtime = this.slots.get(slotId);
-    if (runtime !== undefined) {
+    if (
+      runtime !== undefined &&
+      (event.payload.generation === undefined ||
+        event.payload.generation === runtime.snapshot.generation)
+    ) {
       runtime.snapshot = {
         ...runtime.snapshot,
         connectionState: "ERROR",

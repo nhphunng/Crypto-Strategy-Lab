@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 import { render, screen } from "@testing-library/react";
+import { QueryClient } from "@tanstack/react-query";
 import { describe, expect, it, vi } from "vitest";
 
 import { AppProviders } from "../../src/app/providers/AppProviders";
@@ -132,6 +133,54 @@ describe("TanStack Query history seam", () => {
       limit: 500,
       signal,
     });
+  });
+
+  it("deduplicates concurrent equal requests but isolates pair and generation changes", async () => {
+    const { createMarketHistoryQueryOptions } = expectedHistoryQueryExports();
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    let release!: () => void;
+    const pending = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const getCandles = vi.fn(async (request: HistoryQueryInput) => {
+      await pending;
+      return { ...emptyRange, selection: request.selection };
+    });
+    const equalInput = { api: { getCandles }, ...historyInput };
+    const first = queryClient.fetchQuery(createMarketHistoryQueryOptions(equalInput));
+    const second = queryClient.fetchQuery(
+      createMarketHistoryQueryOptions({
+        ...equalInput,
+        selection: { ...selection },
+        range: { ...range },
+      }),
+    );
+
+    expect(getCandles).toHaveBeenCalledOnce();
+    release();
+    await Promise.all([first, second]);
+
+    await queryClient.fetchQuery(
+      createMarketHistoryQueryOptions({
+        ...historyInput,
+        selection: { ...selection, pair: "ETHUSDT" },
+        api: { getCandles },
+      }),
+    );
+    await queryClient.fetchQuery(
+      createMarketHistoryQueryOptions({
+        ...historyInput,
+        generation: historyInput.generation + 1,
+        api: { getCandles },
+      }),
+    );
+
+    expect(getCandles).toHaveBeenCalledTimes(3);
+    expect(getCandles.mock.calls.map(([request]) => request.selection.pair)).toEqual([
+      "BTCUSDT",
+      "ETHUSDT",
+      "BTCUSDT",
+    ]);
   });
 });
 

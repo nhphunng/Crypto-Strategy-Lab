@@ -166,7 +166,7 @@ type ClientCommandEnvelope<TType extends MarketDataCommandType, TPayload> = {
 
 export type SubscribeMarketDataCommand = ClientCommandEnvelope<
   "SUBSCRIBE_MARKET_DATA",
-  { slotId: string; selection: MarketSelection }
+  { slotId: string; generation: number; selection: MarketSelection }
 >;
 
 export type UnsubscribeMarketDataCommand = ClientCommandEnvelope<
@@ -195,6 +195,7 @@ type ServerEventEnvelope<TType extends MarketDataEventType, TPayload> = {
 
 export type SubscriptionStateChangedPayload = {
   slotIds: string[];
+  slotGenerations: Record<string, number>;
   selection: MarketSelection;
   state: MarketDataWireState;
   attempt: number;
@@ -209,6 +210,7 @@ export type SubscriptionStateChangedEvent = ServerEventEnvelope<
 >;
 
 export type CandleUpdatedPayload = {
+  slotGenerations: Record<string, number>;
   selection: MarketSelection;
   revision: number;
   candle: Candle;
@@ -221,6 +223,7 @@ export type CandleUpdatedEvent = ServerEventEnvelope<
 
 export type MarketDataErrorPayload = {
   slotId?: string;
+  generation?: number;
   code: MarketDataRealtimeErrorCode;
   message: string;
   retryable: boolean;

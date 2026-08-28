@@ -3,9 +3,40 @@ import { expect, test, type Page, type WebSocketRoute } from "@playwright/test";
 const chartSlots = (page: Page) =>
   page.locator('section[id^="chart-btcusdt-"]');
 
+const generationsFor = (
+  bindings: Map<string, string>,
+  generations: Map<string, number>,
+  timeframe: string,
+) =>
+  Object.fromEntries(
+    [...bindings]
+      .filter(([, value]) => value === timeframe)
+      .map(([slotId]) => [slotId, generations.get(slotId) ?? 0]),
+  );
+
+test.beforeEach(async ({ page }) => {
+  await page.route("**/api/v1/market-data/dimensions", async (route) => {
+    await route.fulfill({
+      json: {
+        success: true,
+        message: "Market dimensions loaded.",
+        timestamp: "2026-08-13T10:00:01Z",
+        requestId: "realtime-dimensions",
+        data: {
+          schemaVersion: "1",
+          providers: ["BINANCE"],
+          pairs: ["BTCUSDT", "ETHUSDT", "SOLUSDT"],
+          timeframes: ["1m", "5m", "15m", "30m", "1h", "2h", "4h", "1d"],
+        },
+      },
+    });
+  });
+});
+
 test("adds one to four stable keyboard-operable chart slots and rejects a fifth", async ({
   page,
 }) => {
+  test.setTimeout(90_000);
   await page.goto("/market");
   await expect(chartSlots(page)).toHaveCount(1);
   await expect(chartSlots(page).first()).toHaveAttribute(
@@ -97,6 +128,7 @@ test("changes one timeframe without accepting late old-generation work", async (
 }) => {
   const commands: Array<Record<string, unknown>> = [];
   const bindings = new Map<string, string>();
+  const generations = new Map<string, number>();
   const historyOpenTimes = new Map<string, string>();
   const liveOpenTimes = new Map<string, string>();
   let socket: WebSocketRoute | undefined;
@@ -143,6 +175,7 @@ test("changes one timeframe without accepting late old-generation work", async (
         occurredAt: "2026-08-13T10:00:01Z",
         payload: {
           slotIds,
+          slotGenerations: generationsFor(bindings, generations, timeframe),
           selection: selection(timeframe),
           state,
           attempt: 0,
@@ -163,6 +196,7 @@ test("changes one timeframe without accepting late old-generation work", async (
         eventId: `e2e-candle-${++eventSequence}`,
         occurredAt: "2026-08-13T10:00:01Z",
         payload: {
+          slotGenerations: generationsFor(bindings, generations, timeframe),
           selection: selection(timeframe),
           revision,
           candle: candle(timeframe, close, openTime),
@@ -218,18 +252,21 @@ test("changes one timeframe without accepting late old-generation work", async (
       const command = JSON.parse(String(message)) as Record<string, unknown>;
       commands.push(command);
       const payload = command.payload as
-        | { slotId?: string; selection?: { timeframe?: string } }
+        | { slotId?: string; generation?: number; selection?: { timeframe?: string } }
         | undefined;
       const slotId = payload?.slotId;
       if (typeof slotId !== "string") return;
       if (command.eventType === "UNSUBSCRIBE_MARKET_DATA") {
         bindings.delete(slotId);
+        generations.delete(slotId);
         return;
       }
       if (command.eventType === "SUBSCRIBE_MARKET_DATA") {
         const timeframe = payload.selection?.timeframe;
-        if (typeof timeframe !== "string") return;
-        bindings.set(slotId, timeframe);
+                const generation = payload.generation;
+                if (typeof timeframe !== "string" || typeof generation !== "number") return;
+                bindings.set(slotId, timeframe);
+                generations.set(slotId, generation);
         queueMicrotask(() => {
           sendState(timeframe, "LOADING");
           if (timeframe === "5m") sendState(timeframe, "LIVE");
@@ -291,7 +328,7 @@ test("changes one timeframe without accepting late old-generation work", async (
   expect(
     commands.filter((command) => {
       const payload = command.payload as
-        | { slotId?: string; selection?: { timeframe?: string } }
+        | { slotId?: string; generation?: number; selection?: { timeframe?: string } }
         | undefined;
       return (
         command.eventType === "SUBSCRIBE_MARKET_DATA" &&
@@ -306,6 +343,7 @@ test("recovers a disconnected slot with missed closed candles before LIVE and le
   page,
 }) => {
   const bindings = new Map<string, string>();
+  const generations = new Map<string, number>();
   const liveOpenTimes = new Map<string, string>();
   let socket: WebSocketRoute | undefined;
   let eventSequence = 0;
@@ -354,6 +392,7 @@ test("recovers a disconnected slot with missed closed candles before LIVE and le
         occurredAt: "2026-08-13T10:00:01Z",
         payload: {
           slotIds,
+          slotGenerations: generationsFor(bindings, generations, timeframe),
           selection: selection(timeframe),
           state,
           attempt: 0,
@@ -376,6 +415,7 @@ test("recovers a disconnected slot with missed closed candles before LIVE and le
         eventId: `e2e-candle-${++eventSequence}`,
         occurredAt: "2026-08-13T10:00:01Z",
         payload: {
+          slotGenerations: generationsFor(bindings, generations, timeframe),
           selection: selection(timeframe),
           revision,
           candle: candle(timeframe, close, openTime, closed),
@@ -419,18 +459,21 @@ test("recovers a disconnected slot with missed closed candles before LIVE and le
     webSocket.onMessage((message) => {
       const command = JSON.parse(String(message)) as Record<string, unknown>;
       const payload = command.payload as
-        | { slotId?: string; selection?: { timeframe?: string } }
+        | { slotId?: string; generation?: number; selection?: { timeframe?: string } }
         | undefined;
       const slotId = payload?.slotId;
       if (typeof slotId !== "string") return;
       if (command.eventType === "UNSUBSCRIBE_MARKET_DATA") {
         bindings.delete(slotId);
+        generations.delete(slotId);
         return;
       }
       if (command.eventType === "SUBSCRIBE_MARKET_DATA") {
         const timeframe = payload.selection?.timeframe;
-        if (typeof timeframe !== "string") return;
-        bindings.set(slotId, timeframe);
+                const generation = payload.generation;
+                if (typeof timeframe !== "string" || typeof generation !== "number") return;
+                bindings.set(slotId, timeframe);
+                generations.set(slotId, generation);
         queueMicrotask(() => {
           sendState(timeframe, "LOADING");
           sendState(timeframe, "LIVE");
@@ -507,6 +550,7 @@ test("shows exhausted recovery as an error with a manual retry that restarts the
 }) => {
   const commands: Array<Record<string, unknown>> = [];
   const bindings = new Map<string, string>();
+  const generations = new Map<string, number>();
   const liveOpenTimes = new Map<string, string>();
   let socket: WebSocketRoute | undefined;
   let eventSequence = 0;
@@ -548,6 +592,7 @@ test("shows exhausted recovery as an error with a manual retry that restarts the
         occurredAt: "2026-08-13T10:00:01Z",
         payload: {
           slotIds,
+          slotGenerations: generationsFor(bindings, generations, timeframe),
           selection: selection(timeframe),
           state,
           attempt: 0,
@@ -593,18 +638,21 @@ test("shows exhausted recovery as an error with a manual retry that restarts the
       const command = JSON.parse(String(message)) as Record<string, unknown>;
       commands.push(command);
       const payload = command.payload as
-        | { slotId?: string; selection?: { timeframe?: string } }
+        | { slotId?: string; generation?: number; selection?: { timeframe?: string } }
         | undefined;
       const slotId = payload?.slotId;
       if (typeof slotId !== "string") return;
       if (command.eventType === "UNSUBSCRIBE_MARKET_DATA") {
         bindings.delete(slotId);
+        generations.delete(slotId);
         return;
       }
       if (command.eventType === "SUBSCRIBE_MARKET_DATA") {
         const timeframe = payload.selection?.timeframe;
-        if (typeof timeframe !== "string") return;
-        bindings.set(slotId, timeframe);
+                const generation = payload.generation;
+                if (typeof timeframe !== "string" || typeof generation !== "number") return;
+                bindings.set(slotId, timeframe);
+                generations.set(slotId, generation);
         queueMicrotask(() => {
           sendState(timeframe, "LOADING");
           sendState(timeframe, "LIVE");

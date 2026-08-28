@@ -154,7 +154,7 @@ def _subscribe(
         "version": "1",
         "requestId": request_id,
         "occurredAt": format_utc_millis(NOW),
-        "payload": {"slotId": slot_id, "selection": _selection_payload(selection)},
+        "payload": {"slotId": slot_id, "generation": 1, "selection": _selection_payload(selection)},
     }
 
 

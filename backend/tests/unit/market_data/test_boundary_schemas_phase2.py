@@ -61,7 +61,7 @@ def test_command_envelope_is_discriminated_versioned_and_utc() -> None:
     adapter = TypeAdapter(MarketDataCommandEnvelope)
     subscribe = command(
         "SUBSCRIBE_MARKET_DATA",
-        {"slotId": "slot-1", "selection": SELECTION},
+        {"slotId": "slot-1", "generation": 1, "selection": SELECTION},
     )
 
     parsed = adapter.validate_python(subscribe)
@@ -106,6 +106,7 @@ def test_state_and_candle_events_validate_typed_payloads() -> None:
     adapter = TypeAdapter(MarketDataEventEnvelope)
     state_payload = {
         "slotIds": ["slot-1", "slot-3"],
+        "slotGenerations": {"slot-1": 1, "slot-3": 2},
         "selection": SELECTION,
         "state": "RECONNECTING",
         "attempt": 2,
@@ -113,7 +114,12 @@ def test_state_and_candle_events_validate_typed_payloads() -> None:
         "lastEventAt": "2026-08-13T09:59:30Z",
         "reasonCode": "PROVIDER_DISCONNECTED",
     }
-    candle_payload = {"selection": SELECTION, "revision": 7, "candle": CANDLE}
+    candle_payload = {
+        "slotGenerations": {"slot-1": 1},
+        "selection": SELECTION,
+        "revision": 7,
+        "candle": CANDLE,
+    }
 
     state = adapter.validate_python(event("SUBSCRIPTION_STATE_CHANGED", state_payload))
     candle = adapter.validate_python(event("CANDLE_UPDATED", candle_payload))

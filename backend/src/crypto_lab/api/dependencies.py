@@ -305,7 +305,13 @@ def build_container(settings: Settings | None = None) -> Container:
         max_attempts=settings.provider_max_attempts,
         max_retry_delay_seconds=settings.provider_max_retry_delay_seconds,
     )
-    historical = HistoricalMarketDataService(repository, provider, clock)
+    historical = HistoricalMarketDataService(
+        repository,
+        provider,
+        clock,
+        supported_pairs=frozenset(settings.capabilities.pairs),
+        supported_timeframes=frozenset(settings.capabilities.timeframes),
+    )
     datasets = DatasetService(
         repository,
         historical,

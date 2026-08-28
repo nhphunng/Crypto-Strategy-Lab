@@ -555,7 +555,7 @@ export function parseMarketDataCommand(value: unknown): MarketDataCommand {
   const payload = readObject(object.payload, `${path}.payload`);
 
   if (eventType === "SUBSCRIBE_MARKET_DATA") {
-    assertExactKeys(payload, ["slotId", "selection"], `${path}.payload`);
+    assertExactKeys(payload, ["slotId", "generation", "selection"], `${path}.payload`);
     return {
       eventType,
       version: MARKET_DATA_SCHEMA_VERSION,
@@ -563,6 +563,7 @@ export function parseMarketDataCommand(value: unknown): MarketDataCommand {
       occurredAt,
       payload: {
         slotId: readNonEmptyString(payload.slotId, `${path}.payload.slotId`),
+        generation: readInteger(payload.generation, `${path}.payload.generation`, 0),
         selection: parseSelectionAt(payload.selection, `${path}.payload.selection`),
       },
     };
@@ -646,6 +647,31 @@ function parseUppercaseReasonAt(value: unknown, path: string): UppercaseReasonCo
   return parsed;
 }
 
+function parseSlotGenerationsAt(
+  value: unknown,
+  path: string,
+  expectedSlotIds?: readonly string[],
+): Record<string, number> {
+  const object = readObject(value, path);
+  const slotIds = Object.keys(object);
+  if (slotIds.length === 0 || slotIds.length > 4) {
+    fail(path, "must contain between one and four slot generations");
+  }
+  if (
+    expectedSlotIds !== undefined &&
+    (slotIds.length !== expectedSlotIds.length ||
+      expectedSlotIds.some((slotId) => !hasOwn(object, slotId)))
+  ) {
+    fail(path, "must contain exactly one generation for every slot ID");
+  }
+  return Object.fromEntries(
+    slotIds.map((slotId) => [
+      slotId,
+      readInteger(object[slotId], `${path}.${slotId}`, 0),
+    ]),
+  );
+}
+
 function parseSubscriptionStateChanged(
   base: ReturnType<typeof parseEventBase>,
 ): SubscriptionStateChangedEvent {
@@ -661,6 +687,11 @@ function parseSubscriptionStateChanged(
   if (new Set(slotIds).size !== slotIds.length) {
     fail(`${path}.slotIds`, "must not contain duplicates");
   }
+  const slotGenerations = parseSlotGenerationsAt(
+    payload.slotGenerations,
+    `${path}.slotGenerations`,
+    slotIds,
+  );
 
   const attempt = readInteger(payload.attempt, `${path}.attempt`, 0, 8);
   const retryAfterMs = hasOwn(payload, "retryAfterMs")
@@ -677,6 +708,7 @@ function parseSubscriptionStateChanged(
     eventType: "SUBSCRIPTION_STATE_CHANGED",
     payload: {
       slotIds,
+      slotGenerations,
       selection: parseSelectionAt(payload.selection, `${path}.selection`),
       state: parseWireStateAt(payload.state, `${path}.state`),
       attempt,
@@ -689,6 +721,10 @@ function parseSubscriptionStateChanged(
 
 function parseCandleUpdated(base: ReturnType<typeof parseEventBase>): MarketDataEvent {
   const path = "$.payload";
+  const slotGenerations = parseSlotGenerationsAt(
+    base.payload.slotGenerations,
+    `${path}.slotGenerations`,
+  );
   const selection = parseSelectionAt(base.payload.selection, `${path}.selection`);
   const candle = parseCandleAt(base.payload.candle, `${path}.candle`);
   if (!sameSelection(selection, candle)) {
@@ -697,6 +733,7 @@ function parseCandleUpdated(base: ReturnType<typeof parseEventBase>): MarketData
   return eventEnvelope(base, {
     eventType: "CANDLE_UPDATED",
     payload: {
+      slotGenerations,
       selection,
       revision: readInteger(base.payload.revision, `${path}.revision`, 0),
       candle,
@@ -717,10 +754,14 @@ function parseMarketDataError(base: ReturnType<typeof parseEventBase>): MarketDa
   const slotId = hasOwn(base.payload, "slotId")
     ? readNonEmptyString(base.payload.slotId, `${path}.slotId`)
     : undefined;
+  const generation = hasOwn(base.payload, "generation")
+    ? readInteger(base.payload.generation, `${path}.generation`, 0)
+    : undefined;
   return eventEnvelope<MarketDataErrorEvent>(base, {
     eventType: "MARKET_DATA_ERROR",
     payload: {
       ...(slotId === undefined ? {} : { slotId }),
+      ...(generation === undefined ? {} : { generation }),
       code: parseRealtimeErrorCodeAt(base.payload.code, `${path}.code`),
       message: readNonEmptyString(base.payload.message, `${path}.message`),
       retryable: readBoolean(base.payload.retryable, `${path}.retryable`),

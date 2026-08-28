@@ -13,7 +13,7 @@ from crypto_lab.domain.market_data.timeframe import Timeframe
 @dataclass(frozen=True, slots=True)
 class ProviderCapabilities:
     providers: tuple[str, ...] = ("BINANCE",)
-    pairs: tuple[str, ...] = ("BTCUSDT",)
+    pairs: tuple[str, ...] = ("BTCUSDT", "ETHUSDT", "SOLUSDT")
     timeframes: tuple[Timeframe, ...] = tuple(Timeframe)
 
     def validate(self, provider: str, pair: str, timeframe: Timeframe) -> None:

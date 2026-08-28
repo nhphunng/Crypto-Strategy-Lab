@@ -7,6 +7,7 @@ import { ChartSlot } from "./ChartSlot";
 export type ChartGridProps = {
   heading?: string;
   pair: string;
+  pairs?: readonly string[];
   slots: readonly ChartSlotState[];
   timeframes: readonly Timeframe[];
   limitMessage?: string;
@@ -16,11 +17,13 @@ export type ChartGridProps = {
   onRemove(slotId: string): void;
   onTimeframeChange(slotId: string, timeframe: Timeframe): void;
   onRetry(slotId: string): void;
+  onPairChange?(pair: string): void;
 };
 
 export function ChartGrid({
   heading,
   pair,
+  pairs = [pair],
   slots,
   timeframes,
   limitMessage,
@@ -30,6 +33,7 @@ export function ChartGrid({
   onRemove,
   onTimeframeChange,
   onRetry,
+  onPairChange,
 }: ChartGridProps) {
   const compact = slots.length >= 3;
 
@@ -52,10 +56,14 @@ export function ChartGrid({
             aria-label="Dashboard pair"
             title="Choose the market pair shown by every chart"
             value={pair}
-            onChange={() => undefined}
+            onChange={(event) => onPairChange?.(event.target.value)}
             className="h-8 min-w-32 rounded-md border border-subtle bg-workspace px-2 font-mono text-xs font-semibold text-ink outline-none transition-colors hover:border-line focus:border-accent"
           >
-            <option value={pair}>{pair}</option>
+            {pairs.map((candidate) => (
+              <option key={candidate} value={candidate}>
+                {candidate}
+              </option>
+            ))}
           </select>
         </label>
         <div

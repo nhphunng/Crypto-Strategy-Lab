@@ -28,7 +28,37 @@ const response = {
   },
 } as const;
 
+const dimensionsResponse = {
+  success: true,
+  message: "Market dimensions loaded.",
+  timestamp: "2026-08-13T10:05:00Z",
+  requestId: "req-dimensions",
+  data: {
+    schemaVersion: "1",
+    providers: ["BINANCE"],
+    pairs: ["BTCUSDT", "ETHUSDT", "SOLUSDT"],
+    timeframes: ["1m", "5m", "15m", "30m", "1h", "2h", "4h", "1d"],
+  },
+} as const;
+
 describe("bounded market-data history client", () => {
+  it("loads the provider-neutral market dimensions", async () => {
+    const fetcher = vi.fn(
+      async () => new Response(JSON.stringify(dimensionsResponse), { status: 200 }),
+    );
+    const api = createMarketDataApi({ baseUrl: "http://localhost:8000", fetcher });
+
+    await expect(api.getDimensions()).resolves.toEqual(dimensionsResponse.data);
+    expect(fetcher).toHaveBeenCalledOnce();
+    expect(new URL(String(fetcher.mock.calls[0][0])).pathname).toBe(
+      "/api/v1/market-data/dimensions",
+    );
+    expect(fetcher.mock.calls[0][1]).toMatchObject({
+      method: "GET",
+      headers: { Accept: "application/json" },
+    });
+  });
+
   it("encodes the accepted explicit range and validates the response", async () => {
     const fetcher = vi.fn(async () => new Response(JSON.stringify(response), { status: 200 }));
     const api = createMarketDataApi({ baseUrl: "http://localhost:8000", fetcher });

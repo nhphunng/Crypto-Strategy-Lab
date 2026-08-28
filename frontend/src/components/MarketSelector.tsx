@@ -179,7 +179,7 @@ export function MarketSelector({
             )}
           </div>
           <div className="border-t border-subtle px-3 py-2 text-[11px] leading-relaxed text-faint">
-            Only BTC / USDT has live prototype data. Other pairs are on the roadmap.
+            Supported live prototype pairs: BTC / USDT, ETH / USDT, and SOL / USDT.
           </div>
         </div>
       )}

@@ -25,14 +25,29 @@
  */
 
 import { spawn, spawnSync } from "node:child_process";
+import { existsSync } from "node:fs";
+import { join } from "node:path";
 import process from "node:process";
 
 const ROOT = new URL("../..", import.meta.url).pathname.replace(/^\/([A-Za-z]):/, "$1:");
-const PYTHON = process.env.PYTHON ?? "python";
+const DEFAULT_PYTHON = join(
+  ROOT,
+  "backend",
+  ".venv",
+  process.platform === "win32" ? "Scripts/python.exe" : "bin/python",
+);
+const PYTHON = process.env.PYTHON ?? (existsSync(DEFAULT_PYTHON) ? DEFAULT_PYTHON : "python");
+const PLAYWRIGHT_CLI = join(ROOT, "node_modules", "@playwright", "test", "cli.js");
+const PLAYWRIGHT = existsSync(PLAYWRIGHT_CLI)
+  ? process.execPath
+  : process.platform === "win32"
+    ? "npx.cmd"
+    : "npx";
 const KEEP_STACK = process.env.KEEP_STACK === "1";
 const DETERMINISTIC_SPECS = [
   "tests/e2e/leaderboard-visualization.spec.ts",
   "tests/e2e/realtime-multi-chart.spec.ts",
+  "tests/e2e/market-pair-context.spec.ts",
 ];
 
 function run(command, args, options = {}) {
@@ -95,9 +110,14 @@ async function main() {
   await waitFor("frontend", () => httpOk("http://127.0.0.1:5173/"));
 
   const exitCode = await runAsync(
-    "npx",
-    ["playwright", "test", "--config=playwright.compose.config.ts", ...DETERMINISTIC_SPECS],
-    { env: { ...process.env, COMPOSE_E2E: "1" }, shell: process.platform === "win32" },
+    PLAYWRIGHT,
+    [
+      ...(existsSync(PLAYWRIGHT_CLI) ? [PLAYWRIGHT_CLI] : ["playwright"]),
+      "test",
+      "--config=playwright.compose.config.ts",
+      ...DETERMINISTIC_SPECS,
+    ],
+    { env: { ...process.env, COMPOSE_E2E: "1" } },
   );
   if (exitCode !== 0) {
     throw new Error(`playwright test exited with code ${exitCode}`);

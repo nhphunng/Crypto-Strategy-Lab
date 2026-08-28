@@ -6,6 +6,7 @@ import httpx
 import pytest
 from fastapi.routing import APIWebSocketRoute
 from pydantic import TypeAdapter, ValidationError
+from starlette.testclient import TestClient
 
 from crypto_lab.api.schemas.market_data import (
     CandleUpdatedEvent,
@@ -13,8 +14,17 @@ from crypto_lab.api.schemas.market_data import (
     MarketDataEventEnvelope,
     SubscribeMarketDataCommand,
 )
+from crypto_lab.domain.market_data.timeframe import Timeframe
+from crypto_lab.infrastructure.settings import ProviderCapabilities, Settings
 from crypto_lab.main import create_app
 from tests.contract.test_market_data_api import build_test_container
+from tests.integration.fakes.fake_realtime_market_provider import FakeRealtimeMarketProvider
+
+
+class _FiveMinuteOnlySettings(Settings):
+    @property
+    def capabilities(self) -> ProviderCapabilities:
+        return ProviderCapabilities(timeframes=(Timeframe.FIVE_MINUTES,))
 
 SELECTION = {"provider": "BINANCE", "pair": "BTCUSDT", "timeframe": "5m"}
 CANDLE = {
@@ -114,14 +124,19 @@ def test_websocket_command_and_candle_event_match_the_accepted_v1_shape() -> Non
         "version": "1",
         "requestId": "req-01",
         "occurredAt": "2026-08-13T10:00:00Z",
-        "payload": {"slotId": "slot-1", "selection": SELECTION},
+        "payload": {"slotId": "slot-1", "generation": 1, "selection": SELECTION},
     }
     event = {
         "eventType": "CANDLE_UPDATED",
         "version": "1",
         "eventId": "evt-201",
         "occurredAt": "2026-08-13T10:00:01Z",
-        "payload": {"selection": SELECTION, "revision": 7, "candle": CANDLE},
+        "payload": {
+            "slotGenerations": {"slot-1": 1},
+            "selection": SELECTION,
+            "revision": 7,
+            "candle": CANDLE,
+        },
     }
 
     parsed_command = command_adapter.validate_python(command)
@@ -176,3 +191,47 @@ def test_market_data_websocket_uses_the_accepted_public_path() -> None:
 
     websocket_paths = {route.path for route in app.routes if isinstance(route, APIWebSocketRoute)}
     assert "/ws/v1/market-data" in websocket_paths
+
+
+@pytest.mark.parametrize(
+    ("selection", "expected_code"),
+    [
+        (
+            {"provider": "KRAKEN", "pair": "BTCUSDT", "timeframe": "5m"},
+            "MARKET_PROVIDER_UNSUPPORTED",
+        ),
+        (
+            {"provider": "BINANCE", "pair": "BNBUSDT", "timeframe": "5m"},
+            "MARKET_PAIR_UNSUPPORTED",
+        ),
+        (
+            {"provider": "BINANCE", "pair": "BTCUSDT", "timeframe": "1h"},
+            "MARKET_TIMEFRAME_UNSUPPORTED",
+        ),
+    ],
+)
+def test_market_data_websocket_endpoint_applies_configured_capabilities(
+    selection: dict[str, str], expected_code: str
+) -> None:
+    container, _ = build_test_container()
+    if expected_code == "MARKET_TIMEFRAME_UNSUPPORTED":
+        container.settings = _FiveMinuteOnlySettings(_env_file=None)
+    provider = FakeRealtimeMarketProvider()
+    container.realtime_provider = provider
+    app = create_app(container)
+    command = {
+        "eventType": "SUBSCRIBE_MARKET_DATA",
+        "version": "1",
+        "requestId": "req-capability-endpoint",
+        "occurredAt": "2026-08-13T10:00:00.000Z",
+        "payload": {"slotId": "slot-1", "generation": 1, "selection": selection},
+    }
+
+    with TestClient(app) as client:
+        with client.websocket_connect("/ws/v1/market-data") as websocket:
+            websocket.send_json(command)
+            response = websocket.receive_json()
+
+    assert response["eventType"] == "MARKET_DATA_ERROR"
+    assert response["payload"]["code"] == expected_code
+    assert provider.stream_calls == []
