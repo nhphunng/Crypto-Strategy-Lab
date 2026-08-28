@@ -257,6 +257,12 @@ $env:TEST_DATABASE_URL = "postgresql+asyncpg://crypto_lab:crypto_lab@localhost:5
 pytest backend/tests/integration -q
 ```
 
+`backend/tests/functional/` chứa các test đi theo hành trình người dùng thật qua nhiều endpoint (ví dụ: xem snapshot leaderboard rồi drill-down vào Trades, hoặc materialize dataset rồi phân trang toàn bộ Candle). Test market-data chạy với repository/provider giả lập nên không cần database; test leaderboard cần cùng `TEST_DATABASE_URL` ở trên:
+
+```powershell
+pytest backend/tests/functional -q
+```
+
 ## Cấu trúc chính
 
 ```text
