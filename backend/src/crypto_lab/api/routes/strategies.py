@@ -1,18 +1,25 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Path, Query, Request
+from uuid import uuid4
+
+from fastapi import APIRouter, Path, Query, Request, status
 
 from crypto_lab.api.common import SuccessEnvelope, success_envelope
 from crypto_lab.api.middleware import request_id
 from crypto_lab.api.schemas.strategy import (
+    CreateStrategyDefinitionRequest,
     StrategyAnalysisDto,
     StrategyAnalysisRequest,
+    StrategyDefinitionDto,
     StrategyListDto,
     StrategyMetadataDto,
     analysis_to_dto,
+    definition_to_dto,
     metadata_to_dto,
 )
 from crypto_lab.application.strategies.analyze_strategy import AnalyzeStrategyCommand
+from crypto_lab.domain.strategy.definition import StrategyDefinition, StrategyOrigin
+from crypto_lab.domain.strategy.errors import ErrorCategory, StrategyError
 from crypto_lab.domain.strategy.registry import RegistryStatus
 from crypto_lab.domain.strategy.version import ContractVersionRange
 
@@ -43,6 +50,41 @@ async def get_strategy_version(
 ) -> SuccessEnvelope[StrategyMetadataDto]:
     entry = request.app.state.container.strategy_discovery.get(strategy_id, strategy_version)
     return success_envelope(metadata_to_dto(entry), "Strategy loaded.", request_id(request))
+
+
+@router.post(
+    "/strategy-definitions",
+    response_model=SuccessEnvelope[StrategyDefinitionDto],
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_strategy_definition(
+    request: Request, body: CreateStrategyDefinitionRequest
+) -> SuccessEnvelope[StrategyDefinitionDto]:
+    container = request.app.state.container
+    entry = container.strategy_discovery.get(body.strategy_id, body.strategy_version)
+    metadata = entry.metadata
+    if metadata.origin is not StrategyOrigin.BUILT_IN:
+        raise StrategyError(
+            ErrorCategory.ACTIVATION_NOT_ALLOWED,
+            "generated Strategy Definitions must use the reviewed activation workflow",
+        )
+    parameters = entry.strategy.validate_parameters(body.parameters)
+    definition = await container.strategy_definitions.create_or_resolve(
+        StrategyDefinition(
+            id=uuid4(),
+            strategy_id=metadata.strategy_id,
+            strategy_type=metadata.strategy_type,
+            strategy_version=metadata.strategy_version,
+            contract_version=metadata.contract_version,
+            parameters=parameters,
+            created_at=container.clock.now(),
+        )
+    )
+    return success_envelope(
+        definition_to_dto(definition),
+        "Strategy Definition created or resolved.",
+        request_id(request),
+    )
 
 
 @router.post("/strategy-analyses", response_model=SuccessEnvelope[StrategyAnalysisDto])

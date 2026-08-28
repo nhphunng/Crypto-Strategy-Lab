@@ -10,7 +10,7 @@ execute(run, complete_dataset, strategy_analysis_result, execution_policy)
   | CategorizedBacktestError
 ```
 
-Inputs must identify exact versions and contain no implicit latest lookup. Dataset must satisfy Feature 001 contract `1`: `COMPLETE`, immutable, verified checksum, chronological unique closed Candles. Strategy output must satisfy Feature 003 contract `1.0.0`: aligned immutable Signals and matching provenance.
+Inputs must identify exact versions and contain no implicit latest lookup. Dataset must satisfy Feature 001 contract `1`: `COMPLETE`, immutable, positive `candle_count`, verified checksum, chronological unique closed Candles. Strategy output must satisfy Feature 003 contract `1.0.0`: aligned immutable Signals and matching provenance.
 
 ## Execution v1
 

@@ -3,10 +3,11 @@ from __future__ import annotations
 from typing import Literal
 from uuid import UUID
 
-from pydantic import Field
+from pydantic import Field, StrictInt, StrictStr
 
 from crypto_lab.api.common import ApiModel
 from crypto_lab.domain.market_data.candle import canonical_decimal, format_utc_millis
+from crypto_lab.domain.strategy.definition import StrategyDefinition
 from crypto_lab.domain.strategy.parameters import ParameterDefinition
 from crypto_lab.domain.strategy.registry import StrategyRegistryEntry
 from crypto_lab.domain.strategy.signal import StrategyAnalysisResult
@@ -38,6 +39,25 @@ class StrategyMetadataDto(ApiModel):
 
 class StrategyListDto(ApiModel):
     strategies: tuple[StrategyMetadataDto, ...]
+
+
+class CreateStrategyDefinitionRequest(ApiModel):
+    strategy_id: str = Field(alias="strategyId", min_length=1, max_length=64)
+    strategy_version: str = Field(alias="strategyVersion", min_length=1, max_length=32)
+    parameters: dict[str, StrictInt | StrictStr]
+
+
+class StrategyDefinitionDto(ApiModel):
+    definition_id: UUID = Field(alias="definitionId")
+    strategy_id: str = Field(alias="strategyId")
+    strategy_type: str = Field(alias="strategyType")
+    strategy_version: str = Field(alias="strategyVersion")
+    contract_version: str = Field(alias="contractVersion")
+    parameters: dict[str, str | int]
+    parameter_schema_fingerprint: str = Field(alias="parameterSchemaFingerprint")
+    content_fingerprint: str = Field(alias="contentFingerprint")
+    created_at: str = Field(alias="createdAt")
+    origin: str
 
 
 class StrategyAnalysisRequest(ApiModel):
@@ -89,6 +109,25 @@ def metadata_to_dto(entry: StrategyRegistryEntry) -> StrategyMetadataDto:
         ),
         generated_artifact_fingerprint=metadata.generated_artifact_fingerprint,
         parameters=tuple(_parameter_to_dto(item) for item in metadata.parameter_schema.definitions),
+    )
+
+
+def definition_to_dto(value: StrategyDefinition) -> StrategyDefinitionDto:
+    parameters = {
+        key: item if isinstance(item, int) else canonical_decimal(item)
+        for key, item in value.parameters.values.items()
+    }
+    return StrategyDefinitionDto(
+        definition_id=value.id,
+        strategy_id=value.strategy_id,
+        strategy_type=value.strategy_type,
+        strategy_version=str(value.strategy_version),
+        contract_version=str(value.contract_version),
+        parameters=parameters,
+        parameter_schema_fingerprint=value.parameters.schema_fingerprint,
+        content_fingerprint=value.content_fingerprint,
+        created_at=value.created_at_text,
+        origin=value.origin.value,
     )
 
 

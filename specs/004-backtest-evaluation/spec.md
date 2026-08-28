@@ -151,6 +151,7 @@ As an `ANALYST`, I want to compare Evaluation Results with their complete contex
 - **FR-020**: Run failures MUST expose a stable categorized reason without returning partial success as a completed Backtest Result or leaking secrets, credentials, private payloads, or internal exception traces.
 - **FR-021**: The feature MUST support automated acceptance coverage for determinism, look-ahead prevention, validation, Signal/execution behavior, Trade and Equity Curve reconciliation, no-trade results, metric formulas and edge cases, scoring-policy versioning, idempotency, provenance, and compatible/incompatible comparison.
 - **FR-022**: All user-facing results MUST be labelled as historical simulation for analysis only, MUST NOT imply guaranteed profit, and MUST NOT place, modify, or cancel a live exchange order.
+- **FR-023**: The integrated Single Backtest UI MUST obtain exact Dataset, Strategy Definition, execution-policy, Evaluation Policy, and Scoring Policy identities from versioned backend APIs; it MUST execute the create/start/evaluate/detail workflow without calculating Signals, Trades, Equity, metrics, or scores in the browser.
 
 ### Key Entities
 
@@ -191,9 +192,9 @@ As an `ANALYST`, I want to compare Evaluation Results with their complete contex
 
 ## Out of Scope
 
-- Candidate generation, Random Search, continuous loops, or choosing which Strategy Definition should run.
+- Candidate generation, Random Search, continuous loops, or automatic selection of which Strategy Definition should run. Manual selection of an exact available Strategy version for a Single Backtest is included by FR-023.
 - Durable queue/broker selection, worker leasing/acknowledgement, horizontal worker scaling, retry budgets, and dead-letter processing.
-- Leaderboard membership, Top-K projection, ranking updates, REST/WebSocket delivery, and chart rendering.
+- Leaderboard membership, Top-K projection, ranking updates, and REST/WebSocket delivery. The bounded Single Backtest result view required by FR-023 may render backend-owned Candles, Trades, and Equity Points.
 - Creating Strategy Signals, indicators, Strategy registration, or branches for MA, RSI, or any other concrete Strategy.
 - Collecting, repairing, sorting, filling, deduplicating, or mutating historical Candle data.
 - Composite Strategy member resolution; TV4 consumes its resulting common Strategy contract when that feature exists.
