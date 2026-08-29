@@ -31,10 +31,30 @@ Install the locked backend dependencies, apply migrations, and load deterministi
 
 ### Secure generated-strategy deployment
 
-Live generation uses the additive `docker-compose.generated.yml` profile. It requires file-backed
-Docker secrets for the provider credential and 256-bit source/artifact wrapping key, an explicit
-provider data-policy acknowledgement, a persistent encrypted-artifact volume, and the dedicated
-credentialless sandbox Docker Engine. The API MUST NOT mount the host Docker socket.
+Live generation uses the additive `docker-compose.generated.yml` profile. Configure the provider
+credential as `CSL_LLM_API_KEY` and a base64-encoded 256-bit source/artifact wrapping key as
+`CSL_SOURCE_ENCRYPTION_KEY_BASE64` directly in the local Git-ignored `.env`. Also configure the
+non-secret provider/model fields and explicitly set `CSL_LLM_DATA_POLICY_CONFIRMED=true` only after
+the provider satisfies the approved no-training/minimum-retention policy. Never commit, log, return,
+or place these secret values in prompts, generated artifacts, or test fixtures.
+
+Compose passes the secret values only to the trusted API process. The persistent artifact volume and
+retained raw source remain encrypted at rest. The dedicated credentialless sandbox Docker Engine
+receives no application secrets, every generated container is created with `Env: []`, and the API
+MUST NOT mount the host Docker socket.
+
+Use non-secret placeholders in documentation; put the real local values only in `.env`:
+
+```dotenv
+CSL_LLM_ENDPOINT=https://provider.example/v1/strategy-generation
+CSL_LLM_PROVIDER=approved-provider
+CSL_LLM_MODEL_ID=approved-model
+CSL_LLM_MODEL_VERSION=provider-version
+CSL_LLM_API_KEY=<provider-api-key>
+CSL_LLM_DATA_POLICY_CONFIRMED=true
+CSL_SOURCE_ENCRYPTION_KEY_BASE64=<base64-encoded-32-byte-key>
+CSL_SOURCE_ENCRYPTION_KEY_ID=deployment-key-v1
+```
 
 The deterministic US5–US7 E2E profile adds `docker-compose.e2e.yml`, whose LLM fixture implements the
 same provider-neutral structured-output boundary without a live provider. Start all three Compose

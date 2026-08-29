@@ -32,7 +32,7 @@ Validated change set: completed secure-deployment tasks T100–T104 in the curre
 | `cd frontend && npm run build` | PASS |
 | `$speckit-analyze` | PASS; 60/60 FR and 20/20 SC mapped, zero CRITICAL/HIGH, zero Constitution conflict |
 | `$speckit-converge` | No new remediation task; T085 remains the only substantive unmet acceptance gate |
-| Secure generated Compose profile | PASS; file-backed Docker secrets, mode-0700 encrypted artifact volume, dedicated credentialless Docker Engine, and no host Docker socket in API |
+| Secure generated Compose profile | PASS; direct secrets from Git-ignored `.env` enter only the trusted API, encrypted artifacts use a mode-0700 volume, the dedicated Docker Engine is credentialless, generated containers receive `Env: []`, and the API has no host Docker socket |
 | Migration `20260824_007_integrity` | PASS; repaired legacy dangling activation references and enforced artifact/report/provenance/definition foreign keys; migration round trip passed |
 | `CSL_RUN_GENERATED_E2E=1 ... test_generated_strategy_user_stories.py` | PASS; 1 test in 3.98 s covering US5 name generation, US6 zero-to-many natural-language extraction, US7 activation/restart/rediscovery after full migration round trip |
 | Browser US5 activation flow | PASS; exact rules/evidence/assumptions/fingerprints and 11 passing validation checks shown; confirmation refreshed catalog and selected `donchian-breakout@1.0.0` for configuration |

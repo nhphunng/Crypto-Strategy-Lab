@@ -347,8 +347,8 @@ def build_container(settings: Settings | None = None) -> Container:
     strategy_activation = None
     artifacts = None
     runtime = None
-    source_encryption_key = settings.resolved_source_encryption_key()
-    llm_api_key = settings.resolved_llm_api_key()
+    source_encryption_key = settings.source_encryption_key_base64
+    llm_api_key = settings.llm_api_key
     storage_configured = source_encryption_key is not None
     if storage_configured:
         assert source_encryption_key is not None

@@ -116,26 +116,24 @@ docker compose down
 
 ### 5. Bật Generated Strategy an toàn
 
-Profile mặc định không nhận LLM secret và vì vậy fail closed. Để bật User Stories 5–7, tạo hai
-secret file local (thư mục này đã bị Git ignore):
+Profile mặc định không nhận LLM secret và vì vậy fail closed. Để bật User Stories 5–7, lấy
+credential thật của provider và tạo một wrapping key 256-bit:
 
 ```bash
-mkdir -p .runtime-secrets
-openssl rand -out .runtime-secrets/llm_api_key -hex 32
-openssl rand -out .runtime-secrets/source_encryption_key -base64 32
-chmod 600 .runtime-secrets/*
+openssl rand -base64 32
 ```
 
-Thay `llm_api_key` bằng credential thật của provider, rồi thêm cấu hình không bí mật vào `.env`:
+Thêm credential và output của lệnh trên trực tiếp vào file `.env` local đã được Git ignore. Không
+commit, log, đưa các giá trị này xuống browser, hoặc sao chép chúng vào source/test fixture:
 
 ```dotenv
 CSL_LLM_ENDPOINT=https://provider.example/v1/strategy-generation
 CSL_LLM_PROVIDER=approved-provider
 CSL_LLM_MODEL_ID=approved-model
 CSL_LLM_MODEL_VERSION=provider-version
+CSL_LLM_API_KEY=<provider-api-key>
 CSL_LLM_DATA_POLICY_CONFIRMED=true
-CSL_LLM_API_KEY_HOST_FILE=.runtime-secrets/llm_api_key
-CSL_SOURCE_ENCRYPTION_KEY_HOST_FILE=.runtime-secrets/source_encryption_key
+CSL_SOURCE_ENCRYPTION_KEY_BASE64=<base64-output-of-openssl-rand>
 CSL_SOURCE_ENCRYPTION_KEY_ID=deployment-key-v1
 ```
 
@@ -149,9 +147,10 @@ docker compose \
   up --build -d
 ```
 
-Profile này dùng Docker secrets, volume artifact mã hóa mode `0700`, và một Docker daemon chuyên biệt
-không chứa application secrets. API không mount Docker socket của host. Sandbox invocation vẫn là
-ephemeral, non-root, networkless, read-only, capability-free và resource-bounded theo ADR-006.
+Compose chỉ truyền hai secret từ `.env` vào trusted API process. Profile vẫn dùng volume artifact mã
+hóa mode `0700` và một Docker daemon chuyên biệt không chứa application secrets. API không mount
+Docker socket của host; mỗi sandbox invocation nhận `Env: []` và vẫn là ephemeral, non-root,
+networkless, read-only, capability-free, resource-bounded theo ADR-006.
 
 `CSL_LLM_PROVIDER` chọn dialect: chứa `openai`/`gpt` sẽ nói contract OpenAI Chat Completions,
 chứa `gemini`/`google` sẽ nói contract Gemini `generateContent`, giá trị khác dùng contract
