@@ -39,7 +39,11 @@ describe('strategy catalog reuse workflow', () => {
     let discoveryCount = 0
     vi.stubGlobal(
       'fetch',
-      vi.fn().mockImplementation(() => {
+      vi.fn().mockImplementation((input: RequestInfo | URL) => {
+        const url = String(input)
+        if (url.includes('/api/v1/strategy-configurations')) {
+          return Promise.resolve(listResponse([]))
+        }
         discoveryCount += 1
         return Promise.resolve(response(discoveryCount === 1 ? [builtIn] : [builtIn, generated]))
       }),
@@ -63,17 +67,29 @@ describe('strategy catalog reuse workflow', () => {
 
   it('shows discovery failure and retries through the backend boundary', async () => {
     const user = userEvent.setup()
+    let catalogCalls = 0
     const fetchMock = vi
       .fn()
-      .mockResolvedValueOnce(new Response(JSON.stringify({ message: 'Catalog unavailable' }), { status: 503 }))
-      .mockResolvedValueOnce(response([builtIn]))
+      .mockImplementation((input: RequestInfo | URL) => {
+        const url = String(input)
+        if (url.includes('/api/v1/strategy-configurations')) {
+          return Promise.resolve(listResponse([]))
+        }
+        catalogCalls += 1
+        if (catalogCalls === 1) {
+          return Promise.resolve(
+            new Response(JSON.stringify({ message: 'Catalog unavailable' }), { status: 503 }),
+          )
+        }
+        return Promise.resolve(response([builtIn]))
+      })
     vi.stubGlobal('fetch', fetchMock)
     renderScreen()
 
     expect(await screen.findByText('Catalog unavailable')).toBeVisible()
     await user.click(screen.getByRole('button', { name: 'Retry' }))
     expect((await screen.findAllByText('Moving Average')).length).toBeGreaterThan(0)
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2))
+    await waitFor(() => expect(catalogCalls).toBe(2))
   })
 })
 
@@ -124,6 +140,18 @@ function response(strategies: ReturnType<typeof metadata>[]) {
       success: true,
       message: 'Strategies loaded.',
       data: { strategies },
+      timestamp: '2026-08-23T00:00:00Z',
+      requestId: 'request-1',
+    }),
+  )
+}
+
+function listResponse(configurations: unknown[]) {
+  return new Response(
+    JSON.stringify({
+      success: true,
+      message: 'Configurations loaded.',
+      data: { configurations },
       timestamp: '2026-08-23T00:00:00Z',
       requestId: 'request-1',
     }),

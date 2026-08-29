@@ -1,11 +1,14 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import {
   ArrowLeft,
   Check,
   ChevronDown,
+  Fingerprint,
   GitBranch,
   Info,
+  Plus,
   RotateCcw,
   Scale,
   TriangleAlert,
@@ -29,6 +32,12 @@ import {
   STRATEGY_CATALOG_QUERY_KEY,
   strategyCatalogKey,
 } from '../services/strategyCatalog'
+import {
+  getStrategyConfiguration,
+  listStrategyConfigurations,
+  saveStrategyConfiguration,
+  type SavedStrategyConfiguration,
+} from '../services/strategyConfigurations'
 import { PageHeader } from '../components/Shell'
 import { MarketSelector } from '../components/MarketSelector'
 import { StrategyGenerationForm } from '../features/strategies/components/StrategyGenerationForm'
@@ -211,10 +220,13 @@ function SummaryAside({
 // Main screen
 // ---------------------------------------------------------------------------
 
-export function Strategies() {
+export function Strategies({ mode = 'create' }: { mode?: 'list' | 'create' }) {
+  const isCreate = mode === 'create'
+  const [searchParams] = useSearchParams()
+  const createConfigurationId = isCreate ? searchParams.get('configurationId') : null
   const queryClient = useQueryClient()
-  const { navigate, setActiveStrategy, toast, showExplain, market, timeframe } = useStore()
-  const { byId: stratById } = useStrategyCatalog()
+  const { navigate, setActiveStrategy, setMarket, setTimeframe, toast, showExplain, market, timeframe } = useStore()
+  const { byId: stratById, methods: catalogMethods, isPending: catalogPending } = useStrategyCatalog()
   const recommendedValues = (id: string) => recommendedStrategyValues(stratById(id))
 
   const [step, setStep] = useState<Phase>(1)
@@ -231,6 +243,43 @@ export function Strategies() {
   const [inspector, setInspector] = useState(false)
   const [generationOpen, setGenerationOpen] = useState(false)
   const [generatedDrafts, setGeneratedDrafts] = useState<GeneratedDraft[]>([])
+  const [saving, setSaving] = useState(false)
+  const [savedConfigs, setSavedConfigs] = useState<SavedStrategyConfiguration[]>([])
+  const [savedLoading, setSavedLoading] = useState(true)
+  const [savedOpen, setSavedOpen] = useState(true)
+  const [savedPage, setSavedPage] = useState(1)
+
+  const SAVED_PAGE_SIZE = 5
+  const savedTotalPages = Math.max(1, Math.ceil(savedConfigs.length / SAVED_PAGE_SIZE))
+  const pageConfigs = savedConfigs.slice(
+    (savedPage - 1) * SAVED_PAGE_SIZE,
+    savedPage * SAVED_PAGE_SIZE,
+  )
+
+  function savedPaginationDots(): (number | '…')[] {
+    const total = savedTotalPages
+    const current = savedPage
+    if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1)
+    const pages: (number | '…')[] = [1]
+    const start = Math.max(2, current - 1)
+    const end = Math.min(total - 1, current + 1)
+    if (start > 2) pages.push('…')
+    for (let i = start; i <= end; i += 1) pages.push(i)
+    if (end < total - 1) pages.push('…')
+    pages.push(total)
+    return pages
+  }
+
+  useEffect(() => {
+    const controller = new AbortController()
+    listStrategyConfigurations(controller.signal)
+      .then((configs) => setSavedConfigs(configs))
+      .catch(() => setSavedConfigs([]))
+      .finally(() => {
+        if (!controller.signal.aborted) setSavedLoading(false)
+      })
+    return () => controller.abort()
+  }, [])
 
   const single = selected.length === 1
   const paramsFor = (id: string) => params[id] ?? recommendedValues(id)
@@ -307,12 +356,132 @@ export function Strategies() {
     return isCombine ? `${abbr} · ${method === 'majority' ? 'Majority Vote' : 'Weighted'}` : abbr
   }
 
-  function runBacktest() {
+  async function saveCurrentConfiguration() {
     const name = buildName()
+    setSaving(true)
+    try {
+      const saved = await saveStrategyConfiguration({
+        displayName: name,
+        selection: { provider: 'BINANCE', pair: market.pair, timeframe },
+        members: selected.map((id) => {
+          const strategy = stratById(id)
+          const configured = paramsFor(id)
+          return {
+            strategyId: strategy.strategyId ?? id.split('@')[0],
+            strategyVersion: strategy.version || strategy.contractVersion || '1.0.0',
+            parameters: Object.fromEntries(Object.entries(configured).map(([key, value]) => [
+              key,
+              Number.isInteger(value) ? value : String(value),
+            ])),
+            ...(isCombine && method === 'weighted'
+              ? { weight: String((weights[id] ?? 0) / 100) }
+              : {}),
+          }
+        }),
+        combination: !isCombine ? null : {
+          method: method === 'majority' ? 'MAJORITY' : 'WEIGHTED',
+          tieAction: tie.toUpperCase() as 'BUY' | 'SELL' | 'HOLD',
+          buyThreshold: String(buyTh),
+          sellThreshold: String(sellTh),
+        },
+      })
+      toast(`Saved ${name} · version ${saved.configurationVersion}`, 'positive')
+      setSavedConfigs((prev) =>
+        prev.some((item) => item.configurationId === saved.configurationId)
+          ? prev
+          : [saved, ...prev],
+      )
+      setSavedPage(1)
+      return saved
+    } catch (reason) {
+      toast(reason instanceof Error ? reason.message : 'Unable to save strategy configuration', 'warning')
+      throw reason
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function runBacktest() {
+    const name = buildName()
+    const saved = await saveCurrentConfiguration()
     setActiveStrategy(name)
-    navigate('backtests', { backtestTab: 'single', strategyName: name })
+    navigate('backtests', {
+      backtestTab: 'single',
+      strategyName: name,
+      strategyConfigurationId: saved.configurationId,
+    })
     toast(`Prefilled ${name} on ${market.display} · ${timeframe}`, 'info')
   }
+
+  function hydrateSavedConfig(config: SavedStrategyConfiguration) {
+    const ids = config.members.map((member) =>
+      strategyCatalogKey(member.strategyId, member.strategyVersion),
+    )
+    const missing = ids.find((id) => !catalogMethods.some((method) => method.id === id))
+    if (missing) {
+      toast(`Cannot reopen ${config.displayName}: a method is not in the catalog`, 'warning')
+      return
+    }
+    const method = config.combination?.method === 'WEIGHTED' ? 'weighted' : 'majority'
+    const paramsById = Object.fromEntries(
+      config.members.map((member, index) => [
+        ids[index],
+        Object.fromEntries(
+          Object.entries(member.parameters).map(([key, value]) => [
+            key,
+            typeof value === 'string' && /^-?\d+(\.\d+)?$/.test(value)
+              ? Number(value)
+              : (value as number),
+          ]),
+        ),
+      ]),
+    )
+    let weightsById: Record<string, number>
+    if (config.combination?.method === 'WEIGHTED') {
+      weightsById = Object.fromEntries(
+        config.members.map((member, index) => [
+          ids[index],
+          Math.round((Number(member.weight ?? '0') || 0) * 10000) / 100,
+        ]),
+      )
+    } else {
+      const even = Math.round(100 / Math.max(ids.length, 1))
+      weightsById = Object.fromEntries(ids.map((id, index) => [id, index === ids.length - 1 ? 100 - even * (ids.length - 1) : even]))
+    }
+    setSelected(ids)
+    setParams(paramsById)
+    setMethod(method)
+    setWeights(weightsById)
+    setTie((config.combination?.tieAction.toLowerCase() ?? 'hold') as Sig)
+    setBuyTh(Number(config.combination?.buyThreshold ?? '0.3'))
+    setSellTh(Number(config.combination?.sellThreshold ?? '-0.3'))
+    setMarket(config.selection.pair)
+    setTimeframe(config.selection.timeframe as typeof timeframe)
+    setStep(config.kind === 'SINGLE' ? 4 : 3)
+    toast(`Opened ${config.displayName} · config v${config.configurationVersion}`, 'info')
+  }
+
+  function backtestSavedConfig(config: SavedStrategyConfiguration) {
+    setActiveStrategy(config.displayName)
+    navigate('backtests', {
+      backtestTab: 'single',
+      strategyName: config.displayName,
+      strategyConfigurationId: config.configurationId,
+    })
+    toast(`Open ${config.displayName} on ${config.selection.pair} · ${config.selection.timeframe}`, 'info')
+  }
+
+  // hydrate the create wizard from an opened saved configuration
+  useEffect(() => {
+    if (!createConfigurationId || catalogPending) return
+    const controller = new AbortController()
+    getStrategyConfiguration(createConfigurationId, controller.signal)
+      .then(hydrateSavedConfig)
+      .catch((reason: unknown) =>
+        toast(reason instanceof Error ? reason.message : 'Unable to load the saved strategy', 'warning'),
+      )
+    return () => controller.abort()
+  }, [createConfigurationId, catalogPending, toast])
 
   // advance from Configure — skip Combine when single
   const continueFromConfigure = () => goTo(single ? 4 : 3)
@@ -321,14 +490,136 @@ export function Strategies() {
   return (
     <div className="flex h-full flex-col">
       <PageHeader title="Strategies">
-        <Button variant="default" onClick={() => setGenerationOpen((value) => !value)}>
-          <Sparkles size={14} /> Generate Strategy
-        </Button>
-        <Button variant="default" onClick={() => setInspector(true)}>
-          <GitBranch size={14} /> Strategy Details
-        </Button>
+        {isCreate ? (
+          <>
+            <Button variant="default" onClick={() => setGenerationOpen((value) => !value)}>
+              <Sparkles size={14} /> Generate Strategy
+            </Button>
+            <Button variant="default" onClick={() => setInspector(true)}>
+              <GitBranch size={14} /> Strategy Details
+            </Button>
+          </>
+        ) : (
+          <Button variant="primary" onClick={() => navigate('strategyNew')}>
+            <Plus size={14} /> Add new strategy
+          </Button>
+        )}
       </PageHeader>
 
+      {!isCreate && !savedLoading && savedConfigs.length > 0 && (
+        <div className="shrink-0 border-b border-subtle bg-surface">
+          <div className="flex items-center gap-2 px-5 py-2.5">
+            <Fingerprint size={13} className="text-faint" />
+            <span className="text-[12px] font-semibold text-ink">Saved strategies</span>
+            <span className="text-[11.5px] text-faint">{savedConfigs.length}</span>
+            <button
+              onClick={() => setSavedOpen((value) => !value)}
+              className="ml-auto rounded-[6px] p-1 text-dim hover:bg-surface-hover hover:text-ink"
+              aria-label={savedOpen ? 'Collapse saved strategies' : 'Expand saved strategies'}
+            >
+              <ChevronDown size={15} className={cn('transition-transform', !savedOpen && 'rotate-180')} />
+            </button>
+          </div>
+
+          {savedOpen && (
+            <div className="px-3 pb-3">
+              <ul className="divide-y divide-subtle">
+                {pageConfigs.map((config) => (
+                  <li key={config.configurationId} className="flex items-center gap-2.5 py-1.5 text-[12px]">
+                    <span className="truncate font-medium text-ink">{config.displayName}</span>
+                    <span
+                      className={cn(
+                        'shrink-0 rounded px-1.5 py-0.5 text-[9.5px] font-semibold uppercase',
+                        config.kind === 'COMPOSITE'
+                          ? 'bg-accent/15 text-accent'
+                          : 'bg-pos/15 text-pos',
+                      )}
+                    >
+                      {config.kind}
+                    </span>
+                    <span className="shrink-0 font-mono text-[10.5px] text-faint">
+                      v{config.configurationVersion}
+                    </span>
+                    <span className="truncate font-mono text-[11px] text-dim">
+                      {config.selection.pair} · {config.selection.timeframe}
+                    </span>
+                    <span className="ml-auto flex shrink-0 items-center gap-1.5">
+                      <button
+                        onClick={() => navigate('strategyNew', {
+                          strategyName: config.displayName,
+                          strategyConfigurationId: config.configurationId,
+                        })}
+                        className="rounded-[6px] border border-subtle bg-workspace px-2 py-0.5 text-[11px] font-medium text-dim hover:bg-surface-hover hover:text-ink"
+                      >
+                        Open
+                      </button>
+                      <button
+                        onClick={() => backtestSavedConfig(config)}
+                        className="rounded-[6px] bg-accent px-2 py-0.5 text-[11px] font-medium text-white hover:bg-accent-hover"
+                      >
+                        Backtest
+                      </button>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+
+              {savedTotalPages > 1 && (
+                <div className="mt-2 flex items-center justify-center gap-1 text-[11px] text-dim">
+                  <button
+                    disabled={savedPage === 1}
+                    onClick={() => setSavedPage((page) => Math.max(1, page - 1))}
+                    className={cn('rounded-[4px] px-1.5 py-1', savedPage === 1 ? 'cursor-default text-faint' : 'hover:bg-surface-hover')}
+                  >
+                    ‹
+                  </button>
+                  {savedPaginationDots().map((dot, index) =>
+                    dot === '…' ? (
+                      <span key={`dots-${index}`} className="px-0.5 text-faint">…</span>
+                    ) : (
+                      <button
+                        key={dot}
+                        onClick={() => setSavedPage(dot)}
+                        className={cn(
+                          'h-5 w-5 rounded-[4px] font-mono',
+                          dot === savedPage ? 'bg-accent text-white' : 'hover:bg-surface-hover',
+                        )}
+                      >
+                        {dot}
+                      </button>
+                    ),
+                  )}
+                  <button
+                    disabled={savedPage === savedTotalPages}
+                    onClick={() => setSavedPage((page) => Math.min(savedTotalPages, page + 1))}
+                    className={cn('rounded-[4px] px-1.5 py-1', savedPage === savedTotalPages ? 'cursor-default text-faint' : 'hover:bg-surface-hover')}
+                  >
+                    ›
+                  </button>
+                </div>
+              )}
+
+              <div className="mt-2 flex items-center gap-2 text-[10px] text-faint">
+                <span className="h-px flex-1 bg-subtle" />
+                <span>hoặc</span>
+                <span className="h-px flex-1 bg-subtle" />
+              </div>
+              <button
+                onClick={() => navigate('strategyNew')}
+                className="mt-1.5 inline-flex items-center gap-1.5 text-[12px] font-medium text-accent hover:text-accent-hover"
+              >
+                <span className="grid h-4 w-4 place-items-center rounded-[4px] border border-accent/60 text-[12px] leading-none">
+                  +
+                </span>
+                Add new strategy
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {isCreate && (
+        <>
       {generationOpen && (
         <div className="max-h-[55vh] shrink-0 overflow-auto border-b border-line">
           <StrategyGenerationForm onDrafts={setGeneratedDrafts} />
@@ -358,6 +649,17 @@ export function Strategies() {
           {generatedDrafts.length === 0 && (
             <p className="bg-workspace px-5 py-3 text-[11px] text-faint">A source may validly produce zero drafts.</p>
           )}
+        </div>
+      )}
+
+      {step === 1 && (
+        <div className="shrink-0 border-b border-subtle bg-surface px-5 py-2">
+          <button
+            onClick={() => navigate('strategies')}
+            className="inline-flex items-center gap-1.5 rounded-[5px] border border-subtle bg-workspace px-2.5 py-1 text-[12px] font-medium text-dim hover:bg-surface-hover hover:text-ink"
+          >
+            <ArrowLeft size={14} /> Back to list
+          </button>
         </div>
       )}
 
@@ -469,8 +771,8 @@ export function Strategies() {
               onEditMethods={() => goTo(2)}
               onEditCombine={() => goTo(3)}
               onBack={backFromReview}
-              onRun={runBacktest}
-              onSave={() => toast(`Saved ${buildName()} as a new version`, 'positive')}
+              onRun={() => { if (!saving) void runBacktest() }}
+              onSave={() => { if (!saving) void saveCurrentConfiguration() }}
             />
           )}
         </div>
@@ -542,6 +844,8 @@ export function Strategies() {
           </DrawerSection>
         )}
       </Drawer>
+        </>
+      )}
     </div>
   )
 }

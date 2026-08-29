@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { ChevronDown, Fingerprint, Play, Square } from 'lucide-react'
+import { useSearchParams } from 'react-router-dom'
 import { useStore } from '../lib/store'
 import type { RunRow, Trade } from '../domain'
 import type { Candle, Marker } from '../lib/mock'
@@ -11,7 +12,12 @@ import {
   type ParameterValue,
   type PolicyBundle,
   type SingleBacktestOutput,
+  type StrategyDefinition,
 } from '../features/backtests'
+import {
+  getStrategyConfiguration,
+  type SavedStrategyConfiguration,
+} from '../services/strategyConfigurations'
 import { useServices } from '../services/registry'
 import { PageHeader } from '../components/Shell'
 import { CandleChart } from '../components/CandleChart'
@@ -338,7 +344,9 @@ function LegacySingleBacktest() {
 const backtestApi = createBacktestApi()
 
 function SingleBacktest() {
-  const { showExplain, market, timeframe, setTimeframe, setActiveStrategy, toast } = useStore()
+  const { showExplain, market, setMarket, timeframe, setTimeframe, setActiveStrategy, toast } = useStore()
+  const [searchParams, setSearchParams] = useSearchParams()
+  const requestedConfigurationId = searchParams.get('configurationId')
   const [strategies, setStrategies] = useState<BacktestStrategy[]>([])
   const [policies, setPolicies] = useState<PolicyBundle | null>(null)
   const [strategyId, setStrategyId] = useState('')
@@ -356,15 +364,35 @@ function SingleBacktest() {
   const [subView, setSubView] = useState<'equity' | 'drawdown'>('equity')
   const [selectedTrade, setSelectedTrade] = useState<number | null>(null)
   const [showAdvanced, setShowAdvanced] = useState(false)
+  const [savedConfiguration, setSavedConfiguration] = useState<SavedStrategyConfiguration | null>(null)
   const activeRequest = useRef<AbortController | null>(null)
 
   useEffect(() => {
     const controller = new AbortController()
-    backtestApi.loadCatalog(controller.signal).then((catalog) => {
-      setStrategies(catalog.strategies)
+    Promise.all([
+      backtestApi.loadCatalog(controller.signal),
+      requestedConfigurationId
+        ? getStrategyConfiguration(requestedConfigurationId, controller.signal)
+        : Promise.resolve(null),
+    ]).then(([catalog, configuration]) => {
+      let nextStrategies = catalog.strategies
       setPolicies(catalog.policies)
-      const first = catalog.strategies[0]
-      if (first) {
+      if (configuration) {
+        const configuredStrategy = configurationStrategy(configuration)
+        nextStrategies = [
+          configuredStrategy,
+          ...nextStrategies.filter((item) => item.strategyId !== configuredStrategy.strategyId),
+        ]
+        setSavedConfiguration(configuration)
+        setStrategyId(configuredStrategy.strategyId)
+        setActiveStrategy(configuration.displayName)
+        setParameters(configuration.kind === 'SINGLE' ? configuration.members[0].parameters : {})
+        setMarket(configuration.selection.pair)
+        setTimeframe(configuration.selection.timeframe as typeof timeframe)
+      }
+      setStrategies(nextStrategies)
+      const first = nextStrategies[0]
+      if (first && !configuration) {
         setStrategyId(first.strategyId)
         setActiveStrategy(first.displayName)
         setParameters(defaultParameters(first))
@@ -375,7 +403,7 @@ function SingleBacktest() {
       if (!controller.signal.aborted) setCatalogLoading(false)
     })
     return () => controller.abort()
-  }, [setActiveStrategy])
+  }, [requestedConfigurationId, setActiveStrategy, setMarket, setTimeframe])
 
   useEffect(() => () => activeRequest.current?.abort(), [])
 
@@ -433,6 +461,7 @@ function SingleBacktest() {
       const result = await backtestApi.runSingleBacktest({
         strategy: selectedStrategy,
         parameters,
+        definition: savedConfiguration ? configurationDefinition(savedConfiguration) : undefined,
         policies,
         selection: { provider: 'BINANCE', pair: market.pair, timeframe },
         range: {
@@ -483,6 +512,8 @@ function SingleBacktest() {
               const next = strategies.find((item) => item.strategyId === event.target.value)
               if (!next) return
               setStrategyId(next.strategyId)
+              setSavedConfiguration(null)
+              setSearchParams({}, { replace: true })
               setActiveStrategy(next.displayName)
               setParameters(defaultParameters(next))
               setOutput(null)
@@ -545,7 +576,7 @@ function SingleBacktest() {
                 key={parameter.name}
                 label={parameter.name}
                 value={String(parameters[parameter.name] ?? '')}
-                disabled={running}
+                disabled={running || savedConfiguration !== null}
                 onChange={(value) => setParameters((current) => ({
                   ...current,
                   [parameter.name]: parameter.valueType === 'INTEGER' ? Number(value) : value,
@@ -634,6 +665,36 @@ function defaultParameters(strategy: BacktestStrategy): Record<string, Parameter
       .filter((parameter) => parameter.defaultValue !== null)
       .map((parameter) => [parameter.name, parameter.defaultValue as ParameterValue]),
   )
+}
+
+function configurationStrategy(configuration: SavedStrategyConfiguration): BacktestStrategy {
+  const single = configuration.kind === 'SINGLE' ? configuration.members[0] : null
+  return {
+    strategyId: `saved:${configuration.configurationId}`,
+    strategyType: configuration.kind,
+    displayName: `${configuration.displayName} · config v${configuration.configurationVersion}`,
+    strategyVersion: single?.strategyVersion ?? '1.0.0',
+    contractVersion: '1.0.0',
+    status: 'AVAILABLE',
+    origin: 'SAVED_CONFIGURATION',
+    parameters: [],
+  }
+}
+
+function configurationDefinition(configuration: SavedStrategyConfiguration): StrategyDefinition {
+  const single = configuration.kind === 'SINGLE' ? configuration.members[0] : null
+  return {
+    definitionId: configuration.rootDefinitionId,
+    strategyId: single?.strategyId ?? configuration.configurationKey,
+    strategyType: configuration.kind,
+    strategyVersion: single?.strategyVersion ?? '1.0.0',
+    contractVersion: '1.0.0',
+    parameters: single?.parameters ?? {},
+    parameterSchemaFingerprint: configuration.contentFingerprint,
+    contentFingerprint: configuration.contentFingerprint,
+    createdAt: configuration.createdAt,
+    origin: 'BUILT_IN',
+  }
 }
 
 function backtestErrorMessage(reason: unknown): string {

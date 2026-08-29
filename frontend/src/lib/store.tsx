@@ -17,6 +17,7 @@ export type Page =
   | 'landing'
   | 'market'
   | 'strategies'
+  | 'strategyNew'
   | 'backtests'
   | 'leaderboard'
   | 'news'
@@ -29,6 +30,7 @@ export type Toast = { id: number; text: string; tone: 'info' | 'positive' | 'war
 type NavPayload = {
   backtestTab?: 'single' | 'search' | 'runs'
   strategyName?: string
+  strategyConfigurationId?: string
   overlayContext?: string
 }
 
@@ -177,7 +179,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const navigate = useCallback((p: Page, payload?: NavPayload) => {
-    routeNavigate(PAGE_PATHS[p])
+    const query = new URLSearchParams()
+    if (payload?.strategyConfigurationId) {
+      query.set('configurationId', payload.strategyConfigurationId)
+    }
+    const suffix = query.size > 0 ? `?${query.toString()}` : ''
+    routeNavigate(`${PAGE_PATHS[p]}${suffix}`)
     if (payload?.strategyName) setActiveStrategy(payload.strategyName)
     if (payload?.overlayContext !== undefined) setOverlayContext(payload.overlayContext)
     if (payload?.backtestTab) setRequestedBacktestTab(payload.backtestTab)
