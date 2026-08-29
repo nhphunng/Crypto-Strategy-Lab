@@ -42,6 +42,7 @@ import { PageHeader } from '../components/Shell'
 import { MarketSelector } from '../components/MarketSelector'
 import { StrategyGenerationForm } from '../features/strategies/components/StrategyGenerationForm'
 import { GeneratedStrategyReview } from '../features/strategies/components/GeneratedStrategyReview'
+import { StrategiesGuide } from '../features/strategies/components/StrategiesGuide'
 import type { GeneratedDraft } from '../features/strategies/types'
 import {
   Button,
@@ -249,7 +250,7 @@ export function Strategies({ mode = 'create' }: { mode?: 'list' | 'create' }) {
   const [savedOpen, setSavedOpen] = useState(true)
   const [savedPage, setSavedPage] = useState(1)
 
-  const SAVED_PAGE_SIZE = 5
+  const SAVED_PAGE_SIZE = 15
   const savedTotalPages = Math.max(1, Math.ceil(savedConfigs.length / SAVED_PAGE_SIZE))
   const pageConfigs = savedConfigs.slice(
     (savedPage - 1) * SAVED_PAGE_SIZE,
@@ -506,115 +507,132 @@ export function Strategies({ mode = 'create' }: { mode?: 'list' | 'create' }) {
         )}
       </PageHeader>
 
-      {!isCreate && !savedLoading && savedConfigs.length > 0 && (
-        <div className="shrink-0 border-b border-subtle bg-surface">
-          <div className="flex items-center gap-2 px-5 py-2.5">
-            <Fingerprint size={13} className="text-faint" />
-            <span className="text-[12px] font-semibold text-ink">Saved strategies</span>
-            <span className="text-[11.5px] text-faint">{savedConfigs.length}</span>
-            <button
-              onClick={() => setSavedOpen((value) => !value)}
-              className="ml-auto rounded-[6px] p-1 text-dim hover:bg-surface-hover hover:text-ink"
-              aria-label={savedOpen ? 'Collapse saved strategies' : 'Expand saved strategies'}
-            >
-              <ChevronDown size={15} className={cn('transition-transform', !savedOpen && 'rotate-180')} />
-            </button>
-          </div>
-
-          {savedOpen && (
-            <div className="px-3 pb-3">
-              <ul className="divide-y divide-subtle">
-                {pageConfigs.map((config) => (
-                  <li key={config.configurationId} className="flex items-center gap-2.5 py-1.5 text-[12px]">
-                    <span className="truncate font-medium text-ink">{config.displayName}</span>
-                    <span
-                      className={cn(
-                        'shrink-0 rounded px-1.5 py-0.5 text-[9.5px] font-semibold uppercase',
-                        config.kind === 'COMPOSITE'
-                          ? 'bg-accent/15 text-accent'
-                          : 'bg-pos/15 text-pos',
-                      )}
-                    >
-                      {config.kind}
-                    </span>
-                    <span className="shrink-0 font-mono text-[10.5px] text-faint">
-                      v{config.configurationVersion}
-                    </span>
-                    <span className="truncate font-mono text-[11px] text-dim">
-                      {config.selection.pair} · {config.selection.timeframe}
-                    </span>
-                    <span className="ml-auto flex shrink-0 items-center gap-1.5">
-                      <button
-                        onClick={() => navigate('strategyNew', {
-                          strategyName: config.displayName,
-                          strategyConfigurationId: config.configurationId,
-                        })}
-                        className="rounded-[6px] border border-subtle bg-workspace px-2 py-0.5 text-[11px] font-medium text-dim hover:bg-surface-hover hover:text-ink"
-                      >
-                        Open
-                      </button>
-                      <button
-                        onClick={() => backtestSavedConfig(config)}
-                        className="rounded-[6px] bg-accent px-2 py-0.5 text-[11px] font-medium text-white hover:bg-accent-hover"
-                      >
-                        Backtest
-                      </button>
-                    </span>
-                  </li>
-                ))}
-              </ul>
-
-              {savedTotalPages > 1 && (
-                <div className="mt-2 flex items-center justify-center gap-1 text-[11px] text-dim">
-                  <button
-                    disabled={savedPage === 1}
-                    onClick={() => setSavedPage((page) => Math.max(1, page - 1))}
-                    className={cn('rounded-[4px] px-1.5 py-1', savedPage === 1 ? 'cursor-default text-faint' : 'hover:bg-surface-hover')}
-                  >
-                    ‹
-                  </button>
-                  {savedPaginationDots().map((dot, index) =>
-                    dot === '…' ? (
-                      <span key={`dots-${index}`} className="px-0.5 text-faint">…</span>
-                    ) : (
-                      <button
-                        key={dot}
-                        onClick={() => setSavedPage(dot)}
-                        className={cn(
-                          'h-5 w-5 rounded-[4px] font-mono',
-                          dot === savedPage ? 'bg-accent text-white' : 'hover:bg-surface-hover',
-                        )}
-                      >
-                        {dot}
-                      </button>
-                    ),
-                  )}
-                  <button
-                    disabled={savedPage === savedTotalPages}
-                    onClick={() => setSavedPage((page) => Math.min(savedTotalPages, page + 1))}
-                    className={cn('rounded-[4px] px-1.5 py-1', savedPage === savedTotalPages ? 'cursor-default text-faint' : 'hover:bg-surface-hover')}
-                  >
-                    ›
-                  </button>
-                </div>
-              )}
-
-              <div className="mt-2 flex items-center gap-2 text-[10px] text-faint">
-                <span className="h-px flex-1 bg-subtle" />
-                <span>hoặc</span>
-                <span className="h-px flex-1 bg-subtle" />
+      {!isCreate && !savedLoading && (
+        <div className="flex min-h-0 flex-1">
+          {(savedConfigs.length > 0 ? (
+            <div className={cn('flex min-h-0 flex-1 flex-col border-b border-subtle bg-surface', savedOpen ? '' : 'shrink-0')}>
+              <div className="flex shrink-0 items-center gap-2 px-5 py-2.5">
+                <Fingerprint size={13} className="text-faint" />
+                <span className="text-[12px] font-semibold text-ink">Saved strategies</span>
+                <span className="text-[11.5px] text-faint">{savedConfigs.length}</span>
+                <button
+                  onClick={() => setSavedOpen((value) => !value)}
+                  className="ml-auto rounded-[6px] p-1 text-dim hover:bg-surface-hover hover:text-ink"
+                  aria-label={savedOpen ? 'Collapse saved strategies' : 'Expand saved strategies'}
+                >
+                  <ChevronDown size={15} className={cn('transition-transform', !savedOpen && 'rotate-180')} />
+                </button>
               </div>
-              <button
-                onClick={() => navigate('strategyNew')}
-                className="mt-1.5 inline-flex items-center gap-1.5 text-[12px] font-medium text-accent hover:text-accent-hover"
-              >
-                <span className="grid h-4 w-4 place-items-center rounded-[4px] border border-accent/60 text-[12px] leading-none">
-                  +
-                </span>
-                Add new strategy
-              </button>
+
+              {savedOpen && (
+                <>
+                  {/* list — fixed columns so every row AND every page share identical geometry;
+                      the region scrolls internally so a short page never collapses or jumps */}
+                  <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-2">
+                    <ul className="divide-y divide-subtle">
+                      {pageConfigs.map((config) => (
+                        <li
+                          key={config.configurationId}
+                          className="grid grid-cols-[minmax(0,1fr)_72px_48px_118px_auto] items-center gap-x-3 py-2 text-[12px]"
+                        >
+                          <span className="min-w-0 truncate font-medium text-ink">{config.displayName}</span>
+                          <span
+                            className={cn(
+                              'justify-self-start rounded px-1.5 py-0.5 text-[9.5px] font-semibold uppercase',
+                              config.kind === 'COMPOSITE'
+                                ? 'bg-accent/15 text-accent'
+                                : 'bg-pos/15 text-pos',
+                            )}
+                          >
+                            {config.kind}
+                          </span>
+                          <span className="justify-self-start font-mono text-[10.5px] text-faint">
+                            v{config.configurationVersion}
+                          </span>
+                          <span className="min-w-0 truncate font-mono text-[11px] text-dim">
+                            {config.selection.pair} · {config.selection.timeframe}
+                          </span>
+                          <span className="flex items-center gap-1.5 justify-self-end">
+                            <button
+                              onClick={() => navigate('strategyNew', {
+                                strategyName: config.displayName,
+                                strategyConfigurationId: config.configurationId,
+                              })}
+                              className="rounded-[6px] border border-subtle bg-workspace px-2 py-0.5 text-[11px] font-medium text-dim hover:bg-surface-hover hover:text-ink"
+                            >
+                              Open
+                            </button>
+                            <button
+                              onClick={() => backtestSavedConfig(config)}
+                              className="rounded-[6px] bg-accent px-2 py-0.5 text-[11px] font-medium text-white hover:bg-accent-hover"
+                            >
+                              Backtest
+                            </button>
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+
+                  {/* pinned footer — only when pagination is needed */}
+                  {savedTotalPages > 1 && (
+                    <div className="shrink-0 border-t border-subtle px-5 py-3">
+                      <div className="flex items-center justify-center gap-1 text-[11px] text-dim">
+                        <button
+                          disabled={savedPage === 1}
+                          onClick={() => setSavedPage((page) => Math.max(1, page - 1))}
+                          className={cn('rounded-[4px] px-1.5 py-1', savedPage === 1 ? 'cursor-default text-faint' : 'hover:bg-surface-hover')}
+                        >
+                          ‹
+                        </button>
+                        {savedPaginationDots().map((dot, index) =>
+                          dot === '…' ? (
+                            <span key={`dots-${index}`} className="px-0.5 text-faint">…</span>
+                          ) : (
+                            <button
+                              key={dot}
+                              onClick={() => setSavedPage(dot)}
+                              className={cn(
+                                'h-5 w-5 rounded-[4px] font-mono',
+                                dot === savedPage ? 'bg-accent text-white' : 'hover:bg-surface-hover',
+                              )}
+                            >
+                              {dot}
+                            </button>
+                          ),
+                        )}
+                        <button
+                          disabled={savedPage === savedTotalPages}
+                          onClick={() => setSavedPage((page) => Math.min(savedTotalPages, page + 1))}
+                          className={cn('rounded-[4px] px-1.5 py-1', savedPage === savedTotalPages ? 'cursor-default text-faint' : 'hover:bg-surface-hover')}
+                        >
+                          ›
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
             </div>
-          )}
+          ) : (
+            <div className="flex min-h-0 flex-1 flex-col border-b border-subtle bg-surface px-6 text-center">
+              <div className="flex flex-1 flex-col items-center justify-center">
+                <div className="grid h-12 w-12 place-items-center rounded-[12px] bg-accent/10 text-accent">
+                  <GitBranch size={22} />
+                </div>
+                <p className="mt-4 text-[14px] font-semibold text-ink">No saved strategies yet</p>
+                <p className="mt-1 max-w-[38ch] text-[12.5px] leading-relaxed text-dim">
+                  Build a strategy from a preset or a plain description, then backtest it on history.
+                </p>
+                <Button variant="primary" className="mt-4" onClick={() => navigate('strategyNew')}>
+                  <Plus size={14} /> Create your first strategy
+                </Button>
+              </div>
+            </div>
+          ))}
+
+          {/* guide rail — persistent orientation, fills the right column */}
+          <StrategiesGuide />
         </div>
       )}
 
@@ -884,14 +902,14 @@ function StepChoose({
   return (
     <>
       <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5 pb-8">
-        <div className="mx-auto max-w-3xl">
+        <div className="mx-auto w-full max-w-5xl">
           <h2 className="text-[16px] font-semibold text-ink">Choose how you want to analyze {market.display}</h2>
           {showExplain && (
             <p className="mt-1 text-[12.5px] text-dim">Start with a recommended setup or build your own.</p>
           )}
 
-          {/* presets */}
-          <div className="mt-4 grid gap-2.5 md:grid-cols-3">
+          {/* presets — auto-fit columns so any count fills the row (no empty cell) */}
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-[repeat(auto-fit,minmax(260px,1fr))]">
             {availablePresets.map((p) => {
               const on = presetSelected(p)
               return (
@@ -932,14 +950,14 @@ function StepChoose({
           </div>
 
           {/* divider */}
-          <div className="my-6 flex items-center gap-3 text-[11px] uppercase tracking-wide text-faint">
+          <div className="my-5 flex items-center gap-3 text-[11px] uppercase tracking-wide text-faint">
             <span className="h-px flex-1 bg-subtle" />
             Or build your own
             <span className="h-px flex-1 bg-subtle" />
           </div>
 
           {showExplain && (
-            <p className="mb-3 -mt-2 text-center text-[12px] text-dim">Choose one or more analysis methods.</p>
+            <p className="mb-3 text-center text-[12px] text-dim">Choose one or more analysis methods.</p>
           )}
 
           {/* build your own */}
@@ -977,13 +995,13 @@ function StepChoose({
                   </span>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
-                      <span className="text-[13.5px] font-medium text-ink">{m.friendly}</span>
-                      <span className="rounded-[3px] bg-surface-active px-1.5 py-0.5 text-[10px] uppercase text-faint">
+                      <span className="truncate text-[13.5px] font-medium text-ink">{m.friendly}</span>
+                      <span className="shrink-0 rounded-[3px] bg-surface-active px-1.5 py-0.5 text-[10px] uppercase text-faint">
                         {m.catLabel}
                       </span>
-                      <span className="font-mono text-[11px] text-faint">{m.tech}</span>
+                      <span className="ml-auto min-w-0 truncate font-mono text-[10.5px] text-faint">{m.tech}</span>
                     </div>
-                    <p className="mt-1 text-[12px] text-dim">{m.question}</p>
+                    <p className="mt-1 text-[12px] leading-relaxed text-dim">{m.question}</p>
                     {showExplain && <p className="mt-0.5 text-[11.5px] leading-relaxed text-faint">{m.plain}</p>}
                   </div>
                 </button>
@@ -1069,15 +1087,15 @@ function StepConfigure({
     <>
       <div className="flex min-h-0 flex-1">
         <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">
-          <div className="mx-auto max-w-3xl">
-            <h2 className="text-[16px] font-semibold text-ink">Configure your methods</h2>
+          <div className="mx-auto w-full max-w-5xl">
+            <h2 className="text-[16px] font-semibold text-ink">Set the parameters</h2>
             {showExplain && (
               <p className="mt-1 text-[12.5px] text-dim">
-                Recommended values are already filled in. You can keep them or customize them.
+                Recommended values are prefilled. Keep them or adjust as needed.
               </p>
             )}
 
-            <div className="mt-4 grid gap-4 md:grid-cols-[200px_1fr]">
+            <div className="mt-4 grid gap-4 lg:grid-cols-[220px_minmax(0,1fr)]">
               {/* method list */}
               <div className="space-y-1.5">
                 <div className="text-[10px] font-semibold uppercase tracking-wide text-faint">Selected methods</div>
@@ -1178,7 +1196,9 @@ function StepConfigure({
                         </div>
                       ))}
                       {strat.rules.length === 0 && (
-                        <p className="text-[11.5px] text-faint">This catalog contract exposes parameter metadata; exact generated rules remain available in its activation provenance.</p>
+                        <p className="text-[11.5px] text-faint">
+                          The full rules live in the immutable registered contract. Open Strategy Details to review them.
+                        </p>
                       )}
                     </div>
                   </div>
@@ -1265,7 +1285,7 @@ function StepCombine({
     <>
       <div className="flex min-h-0 flex-1">
         <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">
-          <div className="mx-auto max-w-3xl">
+          <div className="mx-auto w-full max-w-5xl">
             <h2 className="text-[16px] font-semibold text-ink">Combine strategy signals</h2>
             {showExplain && (
               <p className="mt-1 text-[12.5px] text-dim">
@@ -1319,7 +1339,7 @@ function StepCombine({
                   <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-faint">Tie behavior</div>
                   {showExplain && (
                     <p className="mb-2 text-[12px] text-dim">
-                      What should happen when BUY and SELL receive the same number of votes?
+                      When BUY and SELL tie, which signal wins?
                     </p>
                   )}
                   <Segmented
@@ -1511,7 +1531,7 @@ function StepReview({
   return (
     <>
       <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">
-        <div className="mx-auto max-w-2xl">
+        <div className="mx-auto w-full max-w-4xl">
           <h2 className="text-[16px] font-semibold text-ink">Review your strategy</h2>
           {showExplain && (
             <p className="mt-1 text-[12.5px] text-dim">

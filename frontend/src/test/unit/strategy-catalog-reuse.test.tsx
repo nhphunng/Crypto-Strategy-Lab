@@ -55,7 +55,7 @@ describe('strategy catalog reuse workflow', () => {
     await user.click(screen.getByRole('button', { name: 'Create draft fixture' }))
     await user.click(screen.getByRole('button', { name: 'Activate fixture' }))
 
-    expect(await screen.findByRole('heading', { name: 'Configure your methods' })).toBeVisible()
+    expect(await screen.findByRole('heading', { name: 'Set the parameters' })).toBeVisible()
     expect(screen.getAllByText('Breakout').length).toBeGreaterThan(0)
     expect(discoveryCount).toBeGreaterThanOrEqual(2)
 

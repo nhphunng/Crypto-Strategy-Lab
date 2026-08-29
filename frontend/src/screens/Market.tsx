@@ -1,13 +1,11 @@
 import { useMemo, useState } from 'react'
 import {
   Maximize2,
-  MoreHorizontal,
   PanelRightClose,
   PanelRightOpen,
   RefreshCw,
   Search,
   Settings2,
-  Signal,
   Star,
 } from 'lucide-react'
 import { useStore, type ConnState } from '../lib/store'
@@ -144,7 +142,6 @@ function ChartPane({
           <IconBtn onClick={() => onOpenSettings(index)} title="Indicator settings">
             <Settings2 size={13} />
           </IconBtn>
-          <IconBtn title="More"><MoreHorizontal size={13} /></IconBtn>
         </div>
       </div>
 
@@ -333,10 +330,9 @@ function WatchlistPanel({ open, onToggle }: { open: boolean; onToggle: () => voi
 }
 
 export function Market() {
-  const { conn, overlayContext, showExplain, market } = useStore()
+  const { conn, reconnect, overlayContext, showExplain, market } = useStore()
   const [watchOpen, setWatchOpen] = useState(false)
   const [layout, setLayout] = useState<Layout>('4')
-  const [sync, setSync] = useState(true)
   const [settingsFor, setSettingsFor] = useState<number | null>(null)
 
   const [panes, setPanes] = useState<PaneState[]>(
@@ -378,16 +374,22 @@ export function Market() {
           onChange={(v) => setLayout(v as Layout)}
         />
         <button
-          onClick={() => setSync((s) => !s)}
-          className={cn(
-            'inline-flex h-7 items-center gap-1.5 rounded-[5px] border px-2 text-[12px]',
-            sync ? 'border-accent/40 bg-accent/15 text-accent' : 'border-subtle text-dim hover:bg-surface-hover',
-          )}
+          onClick={() => {
+            const el = document.documentElement
+            if (document.fullscreenElement) {
+              void document.exitFullscreen()
+            } else {
+              void el.requestFullscreen?.().catch(() => {})
+            }
+          }}
+          title={document.fullscreenElement ? 'Exit fullscreen' : 'Fullscreen workspace'}
+          className="inline-flex h-7 items-center gap-1.5 rounded-[5px] border border-subtle px-2 text-[12px] text-dim hover:bg-surface-hover"
         >
-          <Signal size={13} /> Sync crosshair
+          <Maximize2 size={13} /> Fullscreen
         </button>
-        <IconBtn title="Reconnect"><RefreshCw size={14} /></IconBtn>
-        <IconBtn title="Fullscreen workspace"><Maximize2 size={14} /></IconBtn>
+        <IconBtn title="Reconnect" onClick={reconnect} aria-label="Reconnect market data">
+          <RefreshCw size={14} />
+        </IconBtn>
       </PageHeader>
 
       {showExplain && (

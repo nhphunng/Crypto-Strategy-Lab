@@ -300,8 +300,8 @@ describe("responsive grid and route composition", () => {
     expect(screen.queryByText(/Compare one dashboard pair/i)).not.toBeInTheDocument();
     expect(screen.getByRole("complementary", { name: "Beginner candle guide" })).toBeVisible();
     expect(screen.getByRole("heading", { name: "How candles update" })).toBeVisible();
-    expect(screen.getByText("Same open time")).toBeVisible();
-    expect(screen.getByText("New open time")).toBeVisible();
+    expect(screen.getByText("The current candle is still forming")).toBeVisible();
+    expect(screen.getByText("A new candle starts each period")).toBeVisible();
     expect(screen.getByRole("heading", { name: "Read a candle" })).toBeVisible();
     expect(screen.getByText("O · Open")).toBeVisible();
     expect(screen.getByText("H · High")).toBeVisible();
