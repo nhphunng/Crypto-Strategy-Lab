@@ -17,6 +17,7 @@ import { NAV_ITEMS } from '../config'
 import { useServices } from '../services/registry'
 import { cn, IconBtn, LearnTooltip, Segmented, Toggle } from './ui'
 import { CoinIcon, MarketSelector } from './MarketSelector'
+import { CommandPalette } from './CommandPalette'
 
 const CONN_META: Record<ConnState, { label: string; color: string; spin?: boolean; pulse?: boolean }> = {
   live: { label: 'Live', color: 'text-pos', pulse: true },
@@ -72,8 +73,8 @@ function ConnectionStatus() {
   )
 }
 
-function TopBar() {
-  const { navigate, showExplain, toggleExplain, market } = useStore()
+function TopBar({ onOpenCommandPalette }: { onOpenCommandPalette: () => void }) {
+  const { navigate, showExplain, toggleExplain, market, reconnect } = useStore()
   const { operations } = useServices()
   const pos = market.change24h >= 0
   return (
@@ -127,14 +128,17 @@ function TopBar() {
             label={<span className="hidden sm:inline">Show explanations</span>}
           />
         </LearnTooltip>
-        <button className="hidden items-center gap-1.5 rounded-[5px] border border-subtle bg-workspace px-2 py-1 text-[11px] text-faint hover:text-dim md:flex">
+        <button
+          onClick={onOpenCommandPalette}
+          className="hidden items-center gap-1.5 rounded-[5px] border border-subtle bg-workspace px-2 py-1 text-[11px] text-faint hover:text-dim md:flex"
+        >
           <Search size={12} />
           <span>Search</span>
           <kbd className="rounded-[3px] border border-subtle bg-surface px-1 font-mono text-[10px]">⌘K</kbd>
         </button>
         <ConnectionStatus />
         <span className="hidden font-mono text-[11px] text-faint xl:inline">{operations.now()}</span>
-        <IconBtn title="Reconnect">
+        <IconBtn title="Reconnect" onClick={reconnect} aria-label="Reconnect market data">
           <RefreshCw size={14} />
         </IconBtn>
       </div>
@@ -188,13 +192,26 @@ export function AppShell({ children }: { children: ReactNode }) {
   useEffect(() => {
     document.title = 'Crypto Strategy Lab'
   }, [])
+  const [commandOpen, setCommandOpen] = useState(false)
+  // Global command-palette shortcut: Cmd/Ctrl + K.
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault()
+        setCommandOpen((o) => !o)
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [])
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-canvas">
-      <TopBar />
+      <TopBar onOpenCommandPalette={() => setCommandOpen(true)} />
       <div className="flex min-h-0 flex-1">
         <Nav />
         <main className="min-w-0 flex-1 overflow-hidden bg-workspace">{children}</main>
       </div>
+      <CommandPalette open={commandOpen} onClose={() => setCommandOpen(false)} />
     </div>
   )
 }

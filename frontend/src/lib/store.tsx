@@ -42,6 +42,7 @@ type Store = {
 
   conn: ConnState
   setConn: (c: ConnState) => void
+  reconnect: () => void
 
   // beginner-friendly explanations (progressive disclosure)
   showExplain: boolean
@@ -118,6 +119,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     typeof window !== 'undefined' ? window.innerWidth < 1180 : false,
   )
   const [conn, setConn] = useState<ConnState>('live')
+  const reconnect = useCallback(() => {
+    setConn('reconnecting')
+    window.setTimeout(() => setConn('live'), 900)
+  }, [])
 
   const [showExplain, setShowExplain] = useState<boolean>(() => {
     return browserStorage()?.getItem('csl.showExplain') !== '0'
@@ -236,6 +241,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       toggleNav: () => setNavCollapsed((c) => !c),
       conn,
       setConn,
+      reconnect,
       showExplain,
       toggleExplain,
       market,
@@ -266,6 +272,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       navigate,
       navCollapsed,
       conn,
+      reconnect,
       showExplain,
       toggleExplain,
       market,

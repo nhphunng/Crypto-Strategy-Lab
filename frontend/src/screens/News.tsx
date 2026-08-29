@@ -55,9 +55,11 @@ export function News() {
   return (
     <div className="flex h-full flex-col">
       <PageHeader title="News & Sentiment">
-        <Button variant="ghost" size="sm" onClick={() => setDegraded((d) => !d)}>
-          <WifiOff size={13} /> {degraded ? 'Restore sentiment' : 'Simulate degraded'}
-        </Button>
+        {import.meta.env?.DEV && (
+          <Button variant="ghost" size="sm" onClick={() => setDegraded((d) => !d)}>
+            <WifiOff size={13} /> {degraded ? 'Restore sentiment' : 'Simulate degraded'}
+          </Button>
+        )}
       </PageHeader>
 
       {/* filters */}

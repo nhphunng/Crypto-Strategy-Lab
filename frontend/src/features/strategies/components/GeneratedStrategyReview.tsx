@@ -43,11 +43,19 @@ export function GeneratedStrategyReview({
         <ReviewBlock title="Assumptions" value={draft.assumptions} />
       </div>
       <div className="mt-3 rounded border border-subtle bg-surface p-3 text-[11px] text-dim">
-        <div>Draft fingerprint: <code>{draft.draftFingerprint}</code></div>
-        <div>Source fingerprint: <code>{draft.sourceProvenance.contentFingerprint}</code></div>
-        <div>Validation policy: <code>{report?.policyVersion ?? 'not validated'}</code></div>
-        <div>Artifact fingerprint: <code>{report?.artifactFingerprint ?? 'not available'}</code></div>
-        <div className="mt-2">Checks: {report?.checks.map((check) => `${check.name}: ${check.status}`).join(' · ') ?? 'none'}</div>
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 font-mono">
+          <span>Draft <code className="text-ink">{draft.draftFingerprint}</code></span>
+          <span>Source <code className="text-ink">{draft.sourceProvenance.contentFingerprint}</code></span>
+        </div>
+        <div className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 font-mono">
+          <span>Policy <code className="text-ink">{report?.policyVersion ?? 'pending'}</code></span>
+          <span>Artifact <code className="text-ink">{report?.artifactFingerprint ?? 'not available'}</code></span>
+        </div>
+        {report?.checks && report.checks.length > 0 && (
+          <div className="mt-1.5 font-mono">
+            Checks: {report.checks.map((check) => `${check.name}: ${check.status}`).join(' · ')}
+          </div>
+        )}
       </div>
       {(draft.failureIssues.length > 0 || report?.checks.some((check) => check.findings.length > 0)) && (
         <ReviewBlock
@@ -57,7 +65,7 @@ export function GeneratedStrategyReview({
       )}
       <label className="mt-3 flex items-start gap-2 text-[12px] text-dim">
         <input type="checkbox" checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} />
-        I reviewed these exact rules, evidence, assumptions, fingerprints and the passing validation report.
+        I reviewed the rules, evidence, assumptions and passing validation report above.
       </label>
       <div className="mt-3 flex items-center gap-3">
         <Button variant="primary" disabled={!confirmed || report?.status !== 'PASSED' || busy} onClick={activate}>
