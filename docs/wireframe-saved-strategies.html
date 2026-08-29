@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Wireframe — Strategies saved list</title>
+<style>
+  :root{
+    --bg:#0a0e14; --surface:#10151d; --surface2:#161c26; --border:#202a38;
+    --ink:#d7dee9; --dim:#8a94a6; --faint:#5b6675; --accent:#4f7cff; --accent2:#3a60d6;
+    --ok:#39c07f; --comp:#4f7cff; --warn:#e0a02f;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:#05070c;color:var(--ink);font-family:ui-sans-serif,system-ui,'Segoe UI',Roboto,sans-serif;padding:28px;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:1180px;margin:0 auto}
+  .title{font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--faint);margin:6px 0 4px}
+  .h1{font-size:22px;font-weight:700;margin:0 0 2px}
+  .sub{font-size:13px;color:var(--dim);margin:0 0 22px}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:26px}
+  @media(max-width:920px){.grid{grid-template-columns:1fr}}
+  .panel{background:var(--surface);border:1px solid var(--border);border-radius:14px;overflow:hidden}
+  .panel-h{padding:12px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;background:var(--surface2)}
+  .panel-h .tag{font-size:11px;color:var(--faint);margin-left:auto}
+  .tagpill{font-size:10px;font-weight:600;border-radius:999px;padding:2px 8px}
+  .t-ok{background:rgba(57,192,127,.15);color:var(--ok)}
+  .t-comp{background:rgba(79,124,255,.16);color:var(--comp)}
+  .t-warn{background:rgba(224,160,47,.16);color:var(--warn)}
+
+  /* header */
+  .hd{display:flex;align-items:center;gap:12px;margin-bottom:16px}
+  .hd .brand{font-weight:700;font-size:15px}
+  .hd .spacer{flex:1}
+  .btn{border:1px solid var(--border);background:var(--surface2);color:var(--ink);border-radius:8px;padding:7px 13px;font-size:12.5px;font-weight:500}
+  .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+  .btn.ghost{background:transparent}
+
+  /* wizard below */
+  .wizard{margin-top:14px;border:1px solid var(--border);border-radius:12px;overflow:hidden}
+  .wizard .ctx{display:flex;gap:18px;align-items:center;padding:10px 14px;border-bottom:1px solid var(--border);background:var(--surface2);font-size:12px}
+  .ctx .k{font-size:10px;color:var(--faint);text-transform:uppercase;letter-spacing:.06em}
+  .ctx .v{color:var(--ink);font-weight:600}
+  .steps{display:flex;gap:4px;padding:8px 14px;border-bottom:1px solid var(--border);font-size:12px}
+  .steps .s{border-radius:6px;padding:5px 10px;color:var(--dim)}
+  .steps .s.on{background:rgba(79,124,255,.16);color:var(--accent);font-weight:600}
+  .wizard-body{padding:18px 16px;background:var(--surface)}
+  .wb-title{font-size:16px;font-weight:600;margin:4px 0 2px}
+  .wb-sub{font-size:12.5px;color:var(--dim);margin-bottom:16px}
+  .cards{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  @media(max-width:560px){.cards{grid-template-columns:1fr}}
+  .card{border:1px solid var(--border);border-radius:11px;padding:14px;background:var(--surface2);min-height:150px}
+  .card .nm{font-size:14px;font-weight:600}
+  .card .ds{font-size:11.5px;color:var(--dim);margin:3px 0 12px;min-height:30px}
+  .card .sel{margin-top:auto;border:1px solid var(--border);border-radius:7px;background:transparent;color:var(--ink);padding:7px 12px;font-size:12px;width:100%}
+  .card.reco{border-color:var(--accent)}
+  .card .recobadge{float:right;font-size:10px;color:var(--ok);border:1px solid rgba(57,192,127,.4);border-radius:999px;padding:1px 7px}
+
+  /* saved list — compact rows */
+  .saved{padding:6px 12px}
+  .srow{display:flex;align-items:center;gap:10px;padding:9px 8px;border-bottom:1px dashed #212b3a;font-size:12.5px}
+  .srow:last-child{border-bottom:none}
+  .srow .nm{font-weight:600;color:var(--ink)}
+  .srow .meta{color:var(--faint);font-size:11px;margin-left:2px}
+  .srow .meta· tf{color:var(--dim)}
+  .srow .mid{color:var(--dim);font-size:11px}
+  .srow .spacer{flex:1}
+  .srow .btn{padding:5px 11px;font-size:11.5px}
+  .pag{display:flex;align-items:center;justify-content:center;gap:10px;padding:9px;font-size:11.5px;color:var(--dim)}
+  .pag .dot{width:22px;height:22px;border-radius:6px;display:grid;place-items:center;border:1px solid var(--border)}
+  .pag .dot.on{background:var(--accent);border-color:var(--accent);color:#fff}
+  .divider{display:flex;align-items:center;gap:10px;padding:8px 12px;color:var(--faint);font-size:11px}
+  .divider::before,.divider::after{content:"";flex:1;height:1px;background:#212b3a}
+  .add{display:flex;align-items:center;gap:8px;color:var(--accent);font-weight:600;padding:10px 14px;font-size:13px;cursor:pointer}
+  .add .plus{width:18px;height:18px;border-radius:6px;border:1px solid var(--accent);display:grid;place-items:center;font-size:13px}
+
+  /* collapsed state */
+  .collapsed{display:flex;align-items:center;gap:10px;padding:12px 16px;border-top:1px solid var(--border)}
+  .collapsed .nm{font-weight:600}
+  .collapsed .meta{color:var(--faint);font-size:11.5px}
+  .collapsed .chev{transition:.2s}
+  .note{font-size:12px;color:var(--dim);background:rgba(79,124,255,.08);border:1px solid rgba(79,124,255,.22);border-radius:10px;padding:10px 13px;margin-top:22px;line-height:1.55}
+  .note b{color:var(--ink)}
+  code{background:#1a2129;padding:1px 5px;border-radius:4px;font-size:11.5px;color:#c9d4ff}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="h1">Wireframe — Saved Strategies trên màn <span style="color:var(--accent)">Strategies</span></div>
+  <p class="sub">Hai cách bố trí để em chọn. Cả hai đều không đẩy wizard xuống như hiện tại.</p>
+
+  <div class="grid">
+
+    <!-- PHƯƠNG ÁN A: Accordion mở rộng (mặc định) -->
+    <div class="panel">
+      <div class="panel-h">
+        <span style="font-weight:600;font-size:13px">Phương án A — Accordion compact</span>
+        <span class="tag">mở rộng mặc định</span>
+      </div>
+      <div style="padding:14px 16px">
+        <div class="title" style="margin:0 0 6px">Saved strategies · 12 bản</div>
+        <div class="saved">
+          <div class="srow"><span class="nm">MA + RSI · Weighted</span><span class="tagpill t-comp">COMPOSITE</span><span class="meta">v1 · ETHUSDT 15m</span><span class="spacer"></span><button class="btn ghost">Open</button><button class="btn primary">Backtest</button></div>
+          <div class="srow"><span class="nm">MA + RSI · Majority Vote</span><span class="tagpill t-comp">COMPOSITE</span><span class="meta">v1 · ETHUSDT 30m</span><span class="spacer"></span><button class="btn ghost">Open</button><button class="btn primary">Backtest</button></div>
+          <div class="srow"><span class="nm">MA 34</span><span class="tagpill t-ok">SINGLE</span><span class="meta">v1 · SOLUSDT 1h</span><span class="spacer"></span><button class="btn ghost">Open</button><button class="btn primary">Backtest</button></div>
+          <div class="srow"><span class="nm">MA + RSI · Weighted</span><span class="tagpill t-comp">COMPOSITE</span><span class="meta">v2 · ETHUSDT 15m</span><span class="spacer"></span><button class="btn ghost">Open</button><button class="btn primary">Backtest</button></div>
+          <div class="srow"><span class="nm">MA + RSI · Weighted</span><span class="tagpill t-comp">COMPOSITE</span><span class="meta">v3 · ETHUSDT 15m</span><span class="spacer"></span><button class="btn ghost">Open</button><button class="btn primary">Backtest</button></div>
+        </div>
+        <div class="pag"><span>‹</span><span class="dot on">1</span><span class="dot">2</span><span class="dot">3</span><span>›</span><span style="margin-left:8px">1–5 / 12</span></div>
+        <div class="divider">hoặc</div>
+        <div class="add"><span class="plus">+</span> Add new strategy</div>
+      </div>
+    </div>
+
+    <!-- PHƯƠNG ÁN B: Thu gọn mặc định -->
+    <div class="panel">
+      <div class="panel-h">
+        <span style="font-weight:600;font-size:13px">Phương án B — Thu gọn mặc định</span>
+        <span class="tag">ít chiếm chỗ nhất</span>
+      </div>
+      <div style="padding:14px 16px">
+        <div class="title" style="margin:0 0 6px">Saved strategies</div>
+        <div class="collapsed">
+          <button class="btn ghost" style="padding:5px 8px">▸</button>
+          <span class="nm">Saved strategies</span>
+          <span class="meta">5</span>
+          <span class="spacer"></span>
+          <button class="btn primary">＋ Add new</button>
+        </div>
+        <div style="color:var(--faint);font-size:11.5px;padding:6px 2px">Bấm ▸ để mở danh sách phân trang (giống phương án A).</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Wizard luôn hiện bên dưới, không bị đẩy xuống -->
+  <div class="wizard">
+    <div class="hd" style="margin:0;padding:12px 14px;border-bottom:1px solid var(--border)">
+      <span class="brand" style="font-size:14px">Strategies</span>
+      <span class="spacer"></span>
+      <button class="btn">Generate Strategy</button>
+      <button class="btn">Strategy Details</button>
+    </div>
+    <div class="ctx">
+      <div><div class="k">Market</div><div class="v">ETH / USDT</div></div>
+      <div><div class="k">Timeframe</div><div class="v">15m</div></div>
+      <div style="margin-left:auto"><button class="btn ghost">Change market</button></div>
+    </div>
+    <div class="steps">
+      <span class="s on">① Choose methods</span><span class="s">② Configure</span><span class="s">③ Combine</span><span class="s">④ Review &amp; Test</span>
+    </div>
+    <div class="wizard-body">
+      <div class="wb-title">Choose how you want to analyze <span style="color:var(--accent)">ETH / USDT</span></div>
+      <div class="wb-sub">Start with a recommended setup or build your own.</div>
+      <div class="cards">
+        <div class="card">
+          <div class="nm">Trend Starter</div>
+          <div class="ds">Moving Average<br>A simple way to understand market direction.</div>
+          <button class="sel">Select</button>
+        </div>
+        <div class="card reco">
+          <span class="recobadge">RECOMMENDED</span>
+          <div class="nm">Balanced Starter</div>
+          <div class="ds">Moving Average + RSI<br>Combines market direction with momentum.</div>
+          <button class="sel">Select</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="note">
+    <b>Vì sao đỡ chiếm chỗ:</b> danh sách saved giờ là <b>hàng compact nhiều dòng ngắn</b> (không phải thẻ to), gom vào 1 khối có <code>Open</code>/<code>Backtest</code> + phân trang <b>5/trang</b> và nút <b>＋ Add new strategy</b> dưới dấu <code>---</code>. Wizard (Choose methods) nằm ngay dưới và <b>luôn thấy đủ</b>.
+    <br><br>Nếu em muốn gọn hơn nữa: <b>Phương án B</b> thu gọn thành 1 dòng mặc định, bấm mới xổ ra.
+  </div>
+</div>
+</body>
+</html>
