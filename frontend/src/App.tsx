@@ -20,7 +20,8 @@ function Router() {
   return (
     <AppShell>
       {page === 'market' && <ConnectedMarketRoute />}
-      {page === 'strategies' && <Strategies />}
+      {page === 'strategies' && <Strategies mode="list" key="strategies-list" />}
+      {page === 'strategyNew' && <Strategies mode="create" key="strategies-create" />}
       {page === 'backtests' && <Backtests />}
       {page === 'leaderboard' && <LeaderboardRoute />}
       {page === 'news' && <News />}

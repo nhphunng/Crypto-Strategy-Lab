@@ -186,6 +186,7 @@ export type DatasetCandle = {
 export type SingleBacktestInput = {
   strategy: BacktestStrategy
   parameters: Record<string, ParameterValue>
+  definition?: StrategyDefinition
   policies: PolicyBundle
   selection: MarketSelection
   range: TimeRange

@@ -60,7 +60,7 @@ export class BacktestApi {
     const completeDataset = dataset.status === 'COMPLETE' ? dataset : await this.waitForDataset(dataset.datasetId, input.signal)
     if (!completeDataset.checksum || (completeDataset.candleCount ?? 0) < 1) throw new Error('Dataset completed without a usable checksum or Candles.')
 
-    const definition = await this.request('/api/v1/strategy-definitions', parseDefinition, {
+    const definition = input.definition ?? await this.request('/api/v1/strategy-definitions', parseDefinition, {
       method: 'POST', signal: input.signal, body: JSON.stringify({ strategyId: input.strategy.strategyId, strategyVersion: input.strategy.strategyVersion, parameters: input.parameters }),
     })
     const run = await this.request('/api/v1/backtest-runs', parseRun, {

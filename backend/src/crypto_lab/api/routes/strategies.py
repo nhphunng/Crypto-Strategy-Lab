@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from uuid import uuid4
+from decimal import Decimal
+from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Path, Query, Request, status
 
@@ -17,13 +18,106 @@ from crypto_lab.api.schemas.strategy import (
     definition_to_dto,
     metadata_to_dto,
 )
+from crypto_lab.api.schemas.strategy_configuration import (
+    SavedStrategyConfigurationDto,
+    SaveStrategyConfigurationRequest,
+    StrategyConfigurationListDto,
+    configuration_to_dto,
+)
 from crypto_lab.application.strategies.analyze_strategy import AnalyzeStrategyCommand
+from crypto_lab.application.strategies.save_configuration import (
+    SaveStrategyConfigurationCommand,
+    StrategyCombinationInput,
+    StrategyConfigurationMemberInput,
+)
+from crypto_lab.domain.strategy.configuration import CombinationMethod
 from crypto_lab.domain.strategy.definition import StrategyDefinition, StrategyOrigin
 from crypto_lab.domain.strategy.errors import ErrorCategory, StrategyError
 from crypto_lab.domain.strategy.registry import RegistryStatus
+from crypto_lab.domain.strategy.signal import SignalAction
 from crypto_lab.domain.strategy.version import ContractVersionRange
 
 router = APIRouter(prefix="/api/v1", tags=["strategies"])
+
+
+@router.post(
+    "/strategy-configurations",
+    response_model=SuccessEnvelope[SavedStrategyConfigurationDto],
+    status_code=status.HTTP_201_CREATED,
+)
+async def save_strategy_configuration(
+    request: Request, body: SaveStrategyConfigurationRequest
+) -> SuccessEnvelope[SavedStrategyConfigurationDto]:
+    combination = body.combination
+    value = await request.app.state.container.save_strategy_configuration.execute(
+        SaveStrategyConfigurationCommand(
+            display_name=body.display_name,
+            provider=body.selection.provider,
+            pair=body.selection.pair,
+            timeframe=body.selection.timeframe,
+            members=tuple(
+                StrategyConfigurationMemberInput(
+                    strategy_id=member.strategy_id,
+                    strategy_version=member.strategy_version,
+                    parameters=member.parameters,
+                    weight=None if member.weight is None else Decimal(member.weight),
+                )
+                for member in body.members
+            ),
+            combination=None
+            if combination is None
+            else StrategyCombinationInput(
+                method=CombinationMethod(combination.method),
+                tie_action=SignalAction(combination.tie_action),
+                buy_threshold=Decimal(combination.buy_threshold),
+                sell_threshold=Decimal(combination.sell_threshold),
+            ),
+        )
+    )
+    dto = (
+        SavedStrategyConfigurationDto.model_validate(value)
+        if isinstance(value, dict)
+        else configuration_to_dto(value)
+    )
+    return success_envelope(
+        dto,
+        "Strategy configuration saved.",
+        request_id(request),
+    )
+
+
+@router.get(
+    "/strategy-configurations",
+    response_model=SuccessEnvelope[StrategyConfigurationListDto],
+)
+async def list_strategy_configurations(
+    request: Request,
+) -> SuccessEnvelope[StrategyConfigurationListDto]:
+    values = await request.app.state.container.strategy_configurations.list()
+    return success_envelope(
+        StrategyConfigurationListDto(
+            configurations=tuple(configuration_to_dto(value) for value in values)
+        ),
+        "Strategy configurations loaded.",
+        request_id(request),
+    )
+
+
+@router.get(
+    "/strategy-configurations/{configurationId}",
+    response_model=SuccessEnvelope[SavedStrategyConfigurationDto],
+)
+async def get_strategy_configuration(
+    request: Request, configuration_id: UUID = Path(alias="configurationId")
+) -> SuccessEnvelope[SavedStrategyConfigurationDto]:
+    value = await request.app.state.container.strategy_configurations.get(configuration_id)
+    if value is None:
+        raise StrategyError(ErrorCategory.UNKNOWN_STRATEGY, "strategy configuration is unavailable")
+    return success_envelope(
+        configuration_to_dto(value),
+        "Strategy configuration loaded.",
+        request_id(request),
+    )
 
 
 @router.get("/strategies", response_model=SuccessEnvelope[StrategyListDto])

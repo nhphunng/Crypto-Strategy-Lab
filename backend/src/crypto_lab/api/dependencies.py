@@ -17,7 +17,7 @@ from crypto_lab.api.leaderboard_dependencies import (
 from crypto_lab.application.backtests.create_run import CreateBacktestRun
 from crypto_lab.application.backtests.execute_run import ExecuteBacktestRun
 from crypto_lab.application.backtests.get_result import GetBacktestResult
-from crypto_lab.application.backtests.ports import BacktestDataset
+from crypto_lab.application.backtests.ports import BacktestDataset, StrategyAnalyzer
 from crypto_lab.application.evaluations.auto_evaluate import (
     AutoEvaluationLoop,
     AutoEvaluationPipeline,
@@ -34,6 +34,7 @@ from crypto_lab.application.market_data.ports import (
 )
 from crypto_lab.application.strategies.activate_generated_strategy import ActivateGeneratedStrategy
 from crypto_lab.application.strategies.analyze_strategy import AnalyzeStrategy
+from crypto_lab.application.strategies.combine_configuration import ConfiguredStrategyAnalyzer
 from crypto_lab.application.strategies.discover_strategies import DiscoverStrategies
 from crypto_lab.application.strategies.generate_strategies import GenerateStrategies
 from crypto_lab.application.strategies.ports import (
@@ -41,6 +42,7 @@ from crypto_lab.application.strategies.ports import (
     StrategyDefinitionRepository,
     StrategyGenerationRepository,
 )
+from crypto_lab.application.strategies.save_configuration import SaveStrategyConfiguration
 from crypto_lab.bootstrap.strategies import build_strategy_registry
 from crypto_lab.domain.backtest.configuration import ExecutionPolicy
 from crypto_lab.domain.evaluation.policy import (
@@ -73,6 +75,9 @@ from crypto_lab.infrastructure.persistence.repositories.backtest_repository impo
 )
 from crypto_lab.infrastructure.persistence.repositories.evaluation_repository import (
     SqlAlchemyEvaluationRepository,
+)
+from crypto_lab.infrastructure.persistence.repositories.strategy_configuration_repository import (
+    SqlAlchemyStrategyConfigurationRepository,
 )
 from crypto_lab.infrastructure.persistence.repositories.strategy_definition_repository import (
     SqlAlchemyStrategyDefinitionRepository,
@@ -209,11 +214,13 @@ class Container:
     generated_artifacts: GeneratedArtifactStore | None = None
     generated_runtime: DockerGeneratedStrategyRuntime | None = None
     strategy_definitions: StrategyDefinitionRepository | None = None
+    strategy_configurations: SqlAlchemyStrategyConfigurationRepository | None = None
+    save_strategy_configuration: SaveStrategyConfiguration | None = None
     realtime_provider: RealtimeMarketDataProvider | None = None
     realtime_hub: RealtimeSelectionHub | None = None
     backtest_repository: SqlAlchemyBacktestRepository | None = None
     backtest_datasets: BacktestDatasetReader | None = None
-    backtest_strategy_analyzer: BacktestStrategyAnalyzer | None = None
+    backtest_strategy_analyzer: StrategyAnalyzer | None = None
     create_backtest: CreateBacktestRun | None = None
     execute_backtest: ExecuteBacktestRun | None = None
     get_backtest: GetBacktestResult | None = None
@@ -322,6 +329,10 @@ def build_container(settings: Settings | None = None) -> Container:
     strategy_registry = build_strategy_registry()
     strategy_discovery = DiscoverStrategies(strategy_registry)
     strategy_definitions = SqlAlchemyStrategyDefinitionRepository(database.sessions)
+    strategy_configurations = SqlAlchemyStrategyConfigurationRepository(database.sessions)
+    save_strategy_configuration = SaveStrategyConfiguration(
+        strategy_registry, strategy_definitions, strategy_configurations, clock
+    )
     strategy_contexts = SqlAlchemyStrategyContextReader(repository)
     strategy_analysis = AnalyzeStrategy(
         strategy_definitions,
@@ -330,7 +341,9 @@ def build_container(settings: Settings | None = None) -> Container:
     )
     backtest_repository = SqlAlchemyBacktestRepository(database.sessions)
     backtest_datasets = BacktestDatasetReader(repository)
-    backtest_strategy_analyzer = BacktestStrategyAnalyzer(strategy_analysis)
+    backtest_strategy_analyzer = ConfiguredStrategyAnalyzer(
+        strategy_analysis, strategy_configurations, strategy_definitions
+    )
     create_backtest = CreateBacktestRun(backtest_repository, clock)
     execute_backtest = ExecuteBacktestRun(
         backtest_repository,
@@ -453,6 +466,8 @@ def build_container(settings: Settings | None = None) -> Container:
         generated_artifacts=artifacts,
         generated_runtime=runtime,
         strategy_definitions=strategy_definitions,
+        strategy_configurations=strategy_configurations,
+        save_strategy_configuration=save_strategy_configuration,
         realtime_provider=realtime_provider,
         realtime_hub=realtime_hub,
         backtest_repository=backtest_repository,

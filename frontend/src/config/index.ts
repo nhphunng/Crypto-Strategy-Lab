@@ -23,6 +23,7 @@ export const PAGE_PATHS: Record<Page, string> = {
   landing: '/',
   market: '/market',
   strategies: '/strategies',
+  strategyNew: '/strategies/new',
   backtests: '/backtests',
   leaderboard: '/leaderboard',
   news: '/news',
