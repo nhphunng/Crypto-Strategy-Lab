@@ -12,6 +12,8 @@ Repo hiện có backend và frontend chạy được độc lập hoặc cùng n
 | Strategy và Backtest/Evaluation | `backend/src/crypto_lab/`, `frontend/src/features/backtests/` | Đã có Strategy Foundation, backtest deterministic, metrics, scoring, comparison, REST API, PostgreSQL schema/repository và Single Backtest frontend integration |
 | Leaderboard & Visualization backend | `backend/src/crypto_lab/{domain,application}/leaderboard/` | Đã có Top-K projection, REST snapshot/detail/visualization/trades, WebSocket `LEADERBOARD_UPDATED` |
 | Leaderboard & Visualization frontend | `frontend/src/features/leaderboard/` | Đã kết nối API thật: bảng Top-K, live update, chart Buy/Sell + Entry/Exit, trade drill-down |
+| News collection Task 3 | `backend/src/crypto_lab/{domain,application,infrastructure}/news/`, `frontend/src/features/news/` | Provider-neutral RSS-first collect/store/API/TanStack Query; `sentiment: null` và `Pending analysis` là deliberate |
+| News Sentiment Task 4 | `specs/007-news-sentiment/handoff-task-3-to-4.md` | **Chưa hoàn thành**; chưa có model/score/label thật hoặc `NewsSentimentStrategy` |
 | Web frontend | `frontend/` | `/market`, `/backtests` (Single Backtest) và `/leaderboard` đã dùng API thật; Strategy Search, Runs và các màn hình ngoài phạm vi các feature đã tích hợp vẫn dùng adapter mô phỏng |
 
 `frontend/` là vị trí frontend chính thức. Market dashboard, Single Backtest và Leaderboard đã nối backend; Strategy Search/Runs vẫn thuộc các feature queue/search sau.
@@ -158,6 +160,89 @@ provider-neutral gốc (dành cho fixture xác định hoặc provider có proxy
 đều được implement trực tiếp trong
 `backend/src/crypto_lab/infrastructure/llm/strategy_generation_adapter.py`; `CSL_LLM_ENDPOINT` trỏ
 thẳng vào API thật của OpenAI/Gemini, không cần proxy.
+
+## News collect → store → API → UI (Task 3)
+
+Theo `docs/REQUIREMENT.md` §§27–28 và ADR-007, News không gắn cứng với một website:
+
+```text
+HTTPS RSS/Atom → RSS NewsProvider → CollectNews → NewsRepository
+               → PostgreSQL news_items → GET /api/v1/news
+               → TanStack Query → /news
+```
+
+RSS/Atom là adapter đầu tiên. Adapter khác có thể được thêm sau `NewsProvider` mà không sửa repository, API hoặc frontend. Deduplication dùng unique `(provider, provider_item_id)` và `canonical_url`; `related_coins` có GIN index, còn newest-first pagination dùng `(published_at DESC, id)`.
+
+Task 3 không chạy sentiment model. API cố ý trả `sentiment: null` và UI hiển thị `Pending analysis`; không có model/label/score giả. Task 4 vẫn incomplete và phải dùng bảng analysis bất biến/có version cùng `SentimentContextReader`, xem [handoff Task 3 → Task 4](specs/007-news-sentiment/handoff-task-3-to-4.md).
+
+### Cấu hình collector
+
+| Biến | Mặc định | Ý nghĩa |
+|---|---|---|
+| `CSL_NEWS_COLLECTION_ENABLED` | `false` | Bật collection loop; local/test mặc định không gọi mạng |
+| `CSL_NEWS_COLLECTION_INTERVAL_SECONDS` | `900` | Khoảng cách giữa hai chu kỳ; loop chạy một lần ngay khi bật |
+| `CSL_NEWS_FEEDS` | JSON array | Danh sách `{source,url}` HTTPS do server quản lý |
+
+Ví dụ:
+
+```dotenv
+CSL_NEWS_COLLECTION_ENABLED=false
+CSL_NEWS_COLLECTION_INTERVAL_SECONDS=900
+CSL_NEWS_FEEDS=[{"source":"Cointelegraph","url":"https://cointelegraph.com/rss"}]
+```
+
+Lỗi một provider được cô lập và ghi log; stored News, Market, Strategy và technical Backtest không phụ thuộc uptime của RSS. Có thể chạy một lần bằng normal application use case:
+
+```powershell
+backend\.venv\Scripts\python.exe backend\scripts\collect_news_once.py
+```
+
+One-shot trả non-zero chỉ khi mọi provider đã cấu hình đều thất bại.
+
+### Operator/manual smoke checklist
+
+Các bước sau là checklist cần chạy; tài liệu này **không** tuyên bố chúng đã được chạy.
+
+1. Khởi động database, migrate đến head và collect một lần từ HTTPS RSS:
+
+```powershell
+docker compose up -d postgres
+docker compose run --rm migrate
+
+$env:CSL_DATABASE_URL = "postgresql+asyncpg://crypto_lab:crypto_lab@localhost:55432/crypto_lab"
+$env:CSL_NEWS_COLLECTION_ENABLED = "false"
+$env:CSL_NEWS_COLLECTION_INTERVAL_SECONDS = "900"
+$env:CSL_NEWS_FEEDS = '[{"source":"Cointelegraph","url":"https://cointelegraph.com/rss"}]'
+backend\.venv\Scripts\python.exe backend\scripts\collect_news_once.py
+```
+
+2. Khởi động API/frontend và đọc persisted News:
+
+```powershell
+docker compose up -d --build api frontend
+curl.exe http://localhost:8000/health/live
+curl.exe http://localhost:8000/health/ready
+curl.exe "http://localhost:8000/api/v1/news?coin=BTC&page=1&pageSize=50"
+```
+
+Mở API docs tại [http://localhost:8000/docs](http://localhost:8000/docs) và News UI tại [http://localhost:5173/news](http://localhost:5173/news). Xác nhận headline/source/published time/related coins khớp API; ghi lại một `newsId`/headline, nhấn **F5**, và xác nhận item vẫn còn từ PostgreSQL. UI phải hiển thị `Pending analysis`, không hiển thị `FinSent-v2.3`, model, label hoặc score giả.
+
+3. Kiểm tra degraded isolation mà không xóa volume/database:
+
+```powershell
+$env:CSL_NEWS_COLLECTION_ENABLED = "true"
+$env:CSL_NEWS_COLLECTION_INTERVAL_SECONDS = "60"
+$env:CSL_NEWS_FEEDS = '[{"source":"Broken feed","url":"https://example.invalid/rss"}]'
+docker compose up -d --force-recreate api
+docker compose logs --since=2m api
+
+curl.exe http://localhost:8000/health/live
+curl.exe "http://localhost:8000/api/v1/news?coin=BTC&page=1&pageSize=50"
+```
+
+Mở và nhấn **F5** tại [News](http://localhost:5173/news), [Market](http://localhost:5173/market) và [Backtests](http://localhost:5173/backtests). Xác nhận log có News provider error nhưng API vẫn live, stored `newsId`/headline vẫn đọc được, Market/Backtests không bị News exception kéo sập, và không có sentiment giả trong degraded state.
+
+Nếu one-shot chỉ có provider hỏng, exit code non-zero là expected vì mọi provider fail; điều đó không đồng nghĩa API/Market/Backtest bị lỗi.
 
 ## Leaderboard và trực quan hóa giao dịch (feature 005)
 

@@ -2,7 +2,7 @@
 
 **Status:** Accepted  
 **Date:** 2026-08-23  
-**Last reviewed:** 2026-08-23  
+**Last reviewed:** 2026-08-30
 **Review owner:** Crypto Strategy Lab Team  
 **Related documents:** [Requirement](REQUIREMENT.md), [SRS](SRS.md), [Constitution](../.specify/memory/constitution.md), [ADR Index](ADR/README.md)
 
@@ -90,8 +90,8 @@ API và worker là các process riêng nhưng dùng chung domain/application cod
 | Backtest | Mô phỏng trade trên dataset cố định | Quyết định thứ hạng |
 | Evaluation | Tính Return, Win Rate, MDD và các metrics | Hiển thị UI hoặc sinh candidate |
 | Leaderboard | Xếp hạng và cung cấp Top-K | Chạy strategy/backtest |
-| News | Thu thập, chuẩn hóa và lưu NewsItem | Phân loại sentiment |
-| Sentiment | Phân tích NewsItem và tạo SentimentResult có version | Crawl news hoặc đặt lệnh thật |
+| News | Thu thập qua `NewsProvider`, chuẩn hóa, deduplicate, lưu và cung cấp NewsItem | Phân loại sentiment, gọi model hoặc tính strategy |
+| Sentiment (Task 4 — incomplete) | Đọc stored News và tạo immutable/versioned SentimentResult | Crawl news, sửa News identity hoặc đặt lệnh thật |
 | API/WebSocket | Xác thực boundary, mapping và delivery | Chứa business rules |
 | Persistence/Queue/LLM/Source/Sandbox Adapters | Cài đặt external ports | Quyết định signal, score, policy hoặc business state |
 
@@ -118,6 +118,8 @@ flowchart BT
 9. Retrieved content và model output là untrusted DTO. Chúng chỉ trở thành domain draft/artifact sau explicit mapping và validation.
 10. API/domain/normal worker không execute generated source. Chỉ `GeneratedStrategyRuntime` adapter gọi ADR-006 sandbox.
 11. Sandbox chỉ nhận bounded exact artifact + immutable Strategy Context và trả versioned result/error; không nhận repository/provider/queue handle.
+12. News adapter cài `NewsProvider`; RSS DTO không đi qua application boundary. `CollectNews` không import hoặc gọi Sentiment analyzer.
+13. `NewsSentimentStrategy` tương lai chỉ đọc aggregate qua `SentimentContextReader`/`StrategyContext`, không truy cập News/Sentiment repository trực tiếp.
 
 ## 5. Market Data Flow
 
@@ -193,25 +195,38 @@ High-level rules:
 
 ```mermaid
 flowchart LR
-    SOURCE["RSS / API / Crawler"] --> PROVIDER["News Provider Adapter"]
-    PROVIDER --> NEWS["Normalized NewsItem"]
-    NEWS --> DB[("PostgreSQL")]
-    DB --> ANALYZER["Sentiment Analyzer"]
-    ANALYZER --> RESULT["Versioned SentimentResult"]
-    RESULT --> UI["News / Sentiment UI"]
-    RESULT --> CONTEXT["Timestamp-aligned StrategyContext"]
-    CONTEXT --> STRATEGY["News Sentiment Strategy"]
+    RSS["HTTPS RSS / Atom"] --> PROVIDER["RSS NewsProvider adapter"]
+    PROVIDER --> COLLECT["CollectNews"]
+    COLLECT --> REPOSITORY["NewsRepository"]
+    REPOSITORY --> DB[("PostgreSQL news_items")]
+    DB --> LIST["ListNews"]
+    LIST --> API["GET /api/v1/news"]
+    API --> QUERY["TanStack Query"]
+    QUERY --> UI["News UI"]
+    DB -. "Task 4" .-> ANALYZER["Sentiment Analyzer"]
+    ANALYZER -.-> RESULT[("immutable/versioned analyses")]
+    RESULT -.-> CONTEXT["SentimentContextReader"]
+    CONTEXT -.-> STRATEGY["News Sentiment Strategy"]
 ```
 
-High-level rules:
+Task 3 rules:
 
-- News Provider trả cùng `NewsItem` contract bất kể nguồn RSS/API/crawler.
-- News được deduplicate và giữ source attribution.
-- SentimentResult giữ analyzer/model version và không overwrite kết quả cũ.
-- News Sentiment Strategy dùng Strategy contract chung.
-- News/Sentiment lỗi không dừng chart hoặc technical backtest.
-- Candidate cần sentiment phải failed/deferred rõ ràng, không dùng dữ liệu giả.
-- Model/runtime và integration chi tiết được chốt trong ADR của sentiment feature.
+- Mọi nguồn cài `NewsProvider` và trả cùng normalized contract. RSS/Atom là adapter đầu tiên, không phải provider duy nhất hoặc public DTO.
+- `CollectNews` điều phối provider; `NewsRepository` upsert theo `(provider, provider_item_id)` và unique `canonical_url`, giữ source attribution và `content_fingerprint`.
+- Query theo exact `related_coins` dùng GIN index; thứ tự/pagination dùng `(published_at DESC, id)`.
+- `GET /api/v1/news` chỉ đọc PostgreSQL. Frontend dùng TanStack Query và không gọi RSS hoặc mock News trực tiếp.
+- Collection loop được điều khiển bằng `CSL_NEWS_COLLECTION_ENABLED`, `CSL_NEWS_COLLECTION_INTERVAL_SECONDS`, `CSL_NEWS_FEEDS`; one-shot dùng `backend/scripts/collect_news_once.py`.
+- Lỗi một provider được cô lập; stored News, Market, Strategy và technical Backtest vẫn hoạt động độc lập.
+- Task 3 luôn project `sentiment: null`; UI hiển thị `Pending analysis`. Không model/label/score nào được dựng giả.
+
+Task 4 hiện **incomplete** và phải tuân theo các rule sau:
+
+- Sentiment Service consume stored News; crawler/`CollectNews` không invoke model.
+- Mỗi analysis nằm trong bảng riêng, bất biến và versioned theo model + content fingerprint; không thêm mutable sentiment columns vào `news_items`.
+- API read mapper có thể join latest completed analysis vào field `sentiment` đã reserve mà không đổi collector.
+- `NewsSentimentStrategy` dùng Strategy contract chung và `SentimentContextReader`; provenance phải giữ model version và không look ahead.
+- News/Sentiment lỗi không dừng chart hoặc technical backtest. Candidate cần sentiment phải failed/deferred rõ ràng, không dùng dữ liệu giả.
+- Model/runtime và integration chi tiết được chốt trong ADR của Task 4.
 
 ## 8. LLM-Assisted Strategy Generation and Reuse Flow
 
@@ -309,8 +324,9 @@ Docker Compose
 | [ADR-004](ADR/ADR-004-strategy-plugin-and-versioning.md) | Strategy contract, registry và version | Accepted |
 | [ADR-005](ADR/ADR-005-reproducible-backtesting.md) | Deterministic/reproducible backtesting | Accepted |
 | [ADR-006](ADR/ADR-006-llm-generated-strategy-isolation.md) | Isolated validation/execution, immutable generated artifacts và activation trust boundary | Accepted |
+| [ADR-007](ADR/ADR-007-news-provider-pipeline.md) | Provider-neutral RSS-first News collect/store/read pipeline và Sentiment boundary | Accepted |
 
-ADRs 001–006 are Accepted and binding. Các ADR về Redis/Celery, scoring policy/formula và sentiment model/runtime được tạo khi nhóm làm feature tương ứng; proposal tương lai chưa binding trước Accepted review.
+ADRs 001–007 are Accepted and binding. Các ADR về Redis/Celery, scoring policy/formula và sentiment model/runtime của Task 4 được tạo khi nhóm làm feature tương ứng; proposal tương lai chưa binding trước Accepted review.
 
 ## 11. Team Review Checklist
 
