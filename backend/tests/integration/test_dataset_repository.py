@@ -2,7 +2,6 @@ import asyncio
 from datetime import UTC, datetime, timedelta
 
 import pytest
-from tests.fixtures.market_data import make_candle
 
 from crypto_lab.domain.market_data.candle import MarketSelection
 from crypto_lab.domain.market_data.dataset import DatasetStatus
@@ -11,6 +10,7 @@ from crypto_lab.domain.market_data.timeframe import Timeframe
 from crypto_lab.infrastructure.persistence.market_data_repository import (
     SqlAlchemyMarketDataRepository,
 )
+from tests.fixtures.market_data import make_candle
 
 pytestmark = pytest.mark.integration
 NOW = datetime(2026, 8, 13, 12, tzinfo=UTC)

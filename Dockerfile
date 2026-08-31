@@ -16,11 +16,13 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PATH=/home/app/.local/bin:$PATH
 
-RUN groupadd --system app && useradd --system --gid app --create-home app
+RUN groupadd --system --gid 65532 app && useradd --system --uid 65532 --gid app --create-home app
 WORKDIR /app
 COPY --from=builder /install /usr/local
 COPY backend/alembic.ini /app/backend/alembic.ini
 COPY backend/migrations /app/backend/migrations
+COPY backend/sandbox /app/backend/sandbox
+COPY infra/security /app/infra/security
 
 USER app
 EXPOSE 8000

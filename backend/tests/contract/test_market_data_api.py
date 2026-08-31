@@ -4,14 +4,8 @@ from datetime import UTC, datetime, timedelta
 
 import httpx
 import pytest
-from tests.fixtures.market_data import (
-    FakeProvider,
-    FixedClock,
-    InMemoryMarketDataRepository,
-    make_candle,
-)
 
-from crypto_lab.api.dependencies import Container
+from crypto_lab.api.dependencies import Container, build_container
 from crypto_lab.application.market_data.dataset_service import DatasetService
 from crypto_lab.application.market_data.historical_service import HistoricalMarketDataService
 from crypto_lab.domain.market_data.candle import MarketSelection
@@ -19,6 +13,12 @@ from crypto_lab.domain.market_data.ranges import TimeRange
 from crypto_lab.domain.market_data.timeframe import Timeframe
 from crypto_lab.infrastructure.settings import Settings
 from crypto_lab.main import create_app
+from tests.fixtures.market_data import (
+    FakeProvider,
+    FixedClock,
+    InMemoryMarketDataRepository,
+    make_candle,
+)
 
 NOW = datetime(2026, 8, 13, 12, tzinfo=UTC)
 START = datetime(2024, 1, 1, tzinfo=UTC)
@@ -26,11 +26,24 @@ SELECTION = MarketSelection("BINANCE", "BTCUSDT", Timeframe.FIVE_MINUTES)
 RANGE = TimeRange(START, START + timedelta(minutes=10))
 
 
-def build_test_container() -> tuple[Container, FakeProvider]:
+def build_test_container(pair: str = "BTCUSDT") -> tuple[Container, FakeProvider]:
     clock = FixedClock(NOW)
     repository = InMemoryMarketDataRepository()
-    provider = FakeProvider((make_candle(START), make_candle(START + timedelta(minutes=5))))
-    historical = HistoricalMarketDataService(repository, provider, clock)
+    settings = Settings(_env_file=None)
+    selection = MarketSelection("BINANCE", pair, Timeframe.FIVE_MINUTES)
+    provider = FakeProvider(
+        (
+            make_candle(START, selection=selection),
+            make_candle(START + timedelta(minutes=5), selection=selection),
+        )
+    )
+    historical = HistoricalMarketDataService(
+        repository,
+        provider,
+        clock,
+        supported_pairs=frozenset(settings.capabilities.pairs),
+        supported_timeframes=frozenset(settings.capabilities.timeframes),
+    )
     datasets = DatasetService(
         repository,
         historical,
@@ -40,7 +53,7 @@ def build_test_container() -> tuple[Container, FakeProvider]:
     )
     return (
         Container(
-            settings=Settings(_env_file=None),
+            settings=settings,
             clock=clock,
             repository=repository,
             historical=historical,
@@ -80,6 +93,11 @@ async def test_dimensions_and_historical_range_use_versioned_camel_case_envelope
 
     assert dimensions.status_code == 200
     assert dimensions.json()["requestId"] == "req-1"
+    assert dimensions.json()["data"]["pairs"] == [
+        "BTCUSDT",
+        "ETHUSDT",
+        "SOLUSDT",
+    ]
     assert dimensions.json()["data"]["maxRangeLimit"] == 1000
     payload = history.json()
     assert history.status_code == 200 and payload["success"] is True
@@ -87,6 +105,68 @@ async def test_dimensions_and_historical_range_use_versioned_camel_case_envelope
     assert payload["data"]["range"]["startTime"].endswith(".000Z")
     assert payload["data"]["candles"][0]["open"] == "100"
     assert "open_time" not in payload["data"]["candles"][0]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("pair", ("ETHUSDT", "SOLUSDT"))
+async def test_supported_altcoin_pairs_return_matching_fake_provider_candles(pair: str) -> None:
+    container, provider = build_test_container(pair)
+    app = create_app(container)
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        response = await client.get(
+            "/api/v1/market-data/candles",
+            params={
+                "provider": "BINANCE",
+                "pair": pair,
+                "timeframe": "5m",
+                "startTime": "2024-01-01T00:00:00.000Z",
+                "endTime": "2024-01-01T00:10:00.000Z",
+                "limit": 2,
+                "schemaVersion": "1",
+            },
+        )
+
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["selection"]["pair"] == pair
+    assert [candle["pair"] for candle in data["candles"]] == [pair, pair]
+    assert provider.calls == [RANGE]
+
+
+@pytest.mark.asyncio
+async def test_unsupported_pair_returns_stable_market_pair_error(api: httpx.AsyncClient) -> None:
+    response = await api.get(
+        "/api/v1/market-data/candles",
+        params={
+            "provider": "BINANCE",
+            "pair": "BNBUSDT",
+            "timeframe": "5m",
+            "startTime": "2024-01-01T00:00:00.000Z",
+            "endTime": "2024-01-01T00:10:00.000Z",
+            "limit": 2,
+            "schemaVersion": "1",
+        },
+    )
+
+    assert response.status_code == 422
+    payload = response.json()
+    assert payload["success"] is False
+    assert payload["error"]["code"] == "MARKET_PAIR_UNSUPPORTED"
+    assert payload["error"]["retryable"] is False
+
+
+@pytest.mark.asyncio
+async def test_production_container_uses_configured_pair_capabilities() -> None:
+    container = build_container(Settings(_env_file=None))
+    try:
+        for pair in ("ETHUSDT", "SOLUSDT"):
+            container.historical.validate_request(
+                MarketSelection("BINANCE", pair, Timeframe.FIVE_MINUTES), RANGE, limit=2
+            )
+    finally:
+        await container.close()
 
 
 @pytest.mark.asyncio

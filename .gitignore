@@ -1,4 +1,9 @@
 node_modules/
+.npm-cache/
+.pnpm-store/
+test-results/
+playwright-report/
+blob-report/
 .env
 .env.local
 dist/
@@ -24,3 +29,8 @@ Thumbs.db
 .idea/
 .specify/feature.json
 .codegraph/
+.data/
+.hermes/
+.runtime-secrets/
+*.secret
+.ua/

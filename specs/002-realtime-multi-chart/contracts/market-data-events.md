@@ -1,5 +1,9 @@
 # Contract: Realtime Market Data Commands and Events
 
+**Status**: Accepted
+**Version**: `1`
+**Cross-review**: TV1/TV2 completed on 2026-08-19; Candle semantics remain owned by Feature 001 and realtime lifecycle remains owned by Feature 002.
+
 ## Endpoint and ownership
 
 - Endpoint: `/ws/v1/market-data`

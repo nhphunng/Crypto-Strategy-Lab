@@ -1,8 +1,11 @@
 # ADR-003: Provider-Neutral Market Data Contract
 
-**Status:** Proposed  
+**Status:** Accepted  
 **Date:** 2026-08-13  
+**Last reviewed:** 2026-08-19
 **Owners:** Market Data Team
+
+**Acceptance record:** TV1 and TV2 cross-reviewed and accepted the Feature 001/002 Candle/history version 1 boundary on 2026-08-19. This review confirmed the existing field, precision, UTC/timeframe, range, completeness, limit, version, and error semantics without changing them.
 
 ## Context
 

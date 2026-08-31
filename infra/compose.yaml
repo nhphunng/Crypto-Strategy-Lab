@@ -1,0 +1,19 @@
+services:
+  strategy-sandbox:
+    profiles: ["strategy-sandbox-build-only"]
+    build:
+      context: ../backend/sandbox
+    image: crypto-lab-strategy-sandbox:1
+    network_mode: none
+    read_only: true
+    user: "65532:65532"
+    cap_drop: ["ALL"]
+    security_opt:
+      - no-new-privileges:true
+      - seccomp=./security/strategy-sandbox-seccomp.json
+      - apparmor=crypto-lab-strategy-sandbox
+    pids_limit: 32
+    mem_limit: 256m
+    cpus: 1
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=16m

@@ -1,8 +1,9 @@
 # ADR-004: Strategy Contract, Registry, and Immutable Versions
 
-**Status:** Proposed  
+**Status:** Accepted  
 **Date:** 2026-08-13  
 **Owners:** Strategy Team
+**Extended by:** [ADR-006](ADR-006-llm-generated-strategy-isolation.md) for LLM-generated artifact validation and execution
 
 ## Context
 
@@ -26,7 +27,7 @@ Strategy không truy cập database, queue, HTTP hoặc sentiment model; dữ li
 ## Alternatives considered
 
 - **If/switch theo strategy name:** dễ bắt đầu nhưng sửa nhiều nơi khi thêm strategy.
-- **Dynamic code upload:** linh hoạt nhưng tăng rủi ro security và reproducibility, không cần cho MVP.
+- **Unrestricted dynamic code upload:** linh hoạt nhưng tăng rủi ro security và reproducibility; vẫn bị cấm. ADR-006 cho phép riêng LLM-generated artifacts qua review, validation và isolated runtime bắt buộc.
 - **Strategy tự tải dữ liệu:** làm implementation tự chủ nhưng phá consistency và testability.
 
 ## Consequences
@@ -51,6 +52,5 @@ Strategy không truy cập database, queue, HTTP hoặc sentiment model; dữ li
 
 ## Revisit when
 
-- Cần tải plugin từ bên thứ ba hoặc sandbox untrusted code.
+- Cần mở rộng beyond ADR-006 sandbox policy, ví dụ third-party arbitrary upload hoặc native/GPU capability.
 - Strategy contract không đủ cho multi-asset hoặc stateful strategies.
-

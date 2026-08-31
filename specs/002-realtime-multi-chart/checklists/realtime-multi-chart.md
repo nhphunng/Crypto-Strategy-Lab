@@ -58,9 +58,9 @@
 ## Dependencies, Assumptions, and Traceability
 
 - [x] CHK032 Is TV1 ownership of Candle/history fields and TV2 ownership of realtime/slot lifecycle explicit enough for cross-review? [Dependency, Spec §Traceability and Dependencies]
-- [x] CHK033 Are Proposed Architecture, ADR-002, and ADR-003 identified as planning inputs rather than accepted implementation authority? [Governance, Plan §Architecture Decision References]
+- [x] CHK033 Are Accepted Architecture, ADR-002, and ADR-003 identified as binding implementation authority? [Governance, Plan §Architecture Decision References]
 - [x] CHK034 Does every applicable SRS FR, business flow, NFR, and canonical story map into the feature artifacts? [Traceability, Spec §Traceability and Dependencies]
-- [x] CHK035 Are contract cross-check and architecture acceptance recorded as implementation gates rather than hidden assumptions? [Governance, Plan §Architecture Decision References; Quickstart §Before implementation starts]
+- [x] CHK035 Are the completed contract cross-review and architecture acceptance recorded with explicit evidence rather than hidden assumptions? [Governance, Plan §Architecture Decision References; Quickstart §Approval gates]
 
 ## Notes
 

@@ -8,7 +8,26 @@ from alembic import context
 from sqlalchemy import pool
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
+from crypto_lab.infrastructure.persistence import (
+    backtest_models,
+    evaluation_models,
+    leaderboard_models,
+    search_models,
+    strategy_configuration_models,
+    strategy_generation_models,
+    strategy_models,
+)
 from crypto_lab.infrastructure.persistence.models import Base
+
+_PERSISTENCE_MODEL_MODULES = (
+    strategy_models,
+    strategy_configuration_models,
+    strategy_generation_models,
+    backtest_models,
+    evaluation_models,
+    leaderboard_models,
+    search_models,
+)
 
 config = context.config
 if config.config_file_name is not None:

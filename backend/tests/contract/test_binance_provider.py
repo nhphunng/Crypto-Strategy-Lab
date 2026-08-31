@@ -6,13 +6,13 @@ from decimal import Decimal
 
 import httpx
 import pytest
-from tests.fixtures.market_data import FixedClock
 
 from crypto_lab.application.market_data.errors import ProviderPayloadInvalid
 from crypto_lab.domain.market_data.candle import MarketSelection
 from crypto_lab.domain.market_data.ranges import TimeRange
 from crypto_lab.domain.market_data.timeframe import Timeframe
 from crypto_lab.infrastructure.binance.market_data_provider import BinanceMarketDataProvider
+from tests.fixtures.market_data import FixedClock
 
 NOW = datetime(2026, 8, 13, 12, tzinfo=UTC)
 SELECTION = MarketSelection("BINANCE", "BTCUSDT", Timeframe.FIVE_MINUTES)
@@ -22,9 +22,13 @@ RANGE = TimeRange(
 )
 
 
-def row(open_time: datetime, close: str = "101.23000000") -> list[object]:
+def row(
+    open_time: datetime,
+    close: str = "101.23000000",
+    timeframe: Timeframe = Timeframe.FIVE_MINUTES,
+) -> list[object]:
     open_ms = int(open_time.timestamp() * 1000)
-    close_ms = int((open_time + timedelta(minutes=5)).timestamp() * 1000) - 1
+    close_ms = int((open_time + timeframe.duration).timestamp() * 1000) - 1
     return [
         open_ms,
         "100.10000000",
@@ -78,6 +82,34 @@ async def test_overlapping_repeated_page_terminates_without_duplicates() -> None
 
     assert len(result) == 1
     assert calls == 2
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("pair", "timeframe"),
+    (("ETHUSDT", Timeframe.FIVE_MINUTES), ("SOLUSDT", Timeframe.ONE_HOUR)),
+)
+async def test_passes_supported_altcoin_selection_to_binance_endpoint(
+    pair: str,
+    timeframe: Timeframe,
+) -> None:
+    selection = MarketSelection("BINANCE", pair, timeframe)
+    time_range = TimeRange(RANGE.start_time, RANGE.start_time + timeframe.duration * 2)
+    observed: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        observed.append(request)
+        return httpx.Response(200, json=[row(time_range.start_time, timeframe=timeframe)])
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        provider = BinanceMarketDataProvider(client, FixedClock(NOW))
+        pages = []
+        async for page in provider.iter_historical(selection, time_range):
+            pages.extend(page)
+
+    assert pages
+    assert observed[0].url.params["symbol"] == pair
+    assert observed[0].url.params["interval"] == timeframe.value
 
 
 @pytest.mark.asyncio

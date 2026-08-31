@@ -1,0 +1,68 @@
+services:
+  artifact-init:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    user: "0:0"
+    command: ["sh", "-c", "install -d -o 65532 -g 65532 -m 0700 /artifacts"]
+    volumes:
+      - generated_strategy_artifacts:/artifacts
+    restart: "no"
+    read_only: true
+    cap_drop: ["ALL"]
+    cap_add: ["CHOWN", "DAC_OVERRIDE", "FOWNER"]
+    security_opt:
+      - no-new-privileges:true
+
+  sandbox-docker:
+    image: docker:27.5.1-dind@sha256:aa3df78ecf320f5fafdce71c659f1629e96e9de0968305fe1de670e0ca9176ce
+    privileged: true
+    environment:
+      DOCKER_TLS_CERTDIR: ""
+    command:
+      - --host=tcp://0.0.0.0:2375
+      - --log-level=error
+    expose:
+      - "2375"
+    networks:
+      - sandbox-control
+      - sandbox-egress
+    healthcheck:
+      test: ["CMD", "docker", "--host=tcp://127.0.0.1:2375", "info"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+    volumes:
+      - sandbox_docker_data:/var/lib/docker
+
+  api:
+    environment:
+      CSL_LLM_ENDPOINT: ${CSL_LLM_ENDPOINT:-}
+      CSL_LLM_PROVIDER: ${CSL_LLM_PROVIDER:-configured-provider}
+      CSL_LLM_MODEL_ID: ${CSL_LLM_MODEL_ID:-}
+      CSL_LLM_MODEL_VERSION: ${CSL_LLM_MODEL_VERSION:-}
+      CSL_LLM_API_KEY: "${CSL_LLM_API_KEY:?Set CSL_LLM_API_KEY in the Git-ignored .env file}"
+      CSL_LLM_DATA_POLICY_CONFIRMED: "${CSL_LLM_DATA_POLICY_CONFIRMED:?Acknowledge the provider data policy in the Git-ignored .env file}"
+      CSL_SOURCE_ENCRYPTION_KEY_BASE64: "${CSL_SOURCE_ENCRYPTION_KEY_BASE64:?Set a base64-encoded 256-bit key in the Git-ignored .env file}"
+      CSL_SOURCE_ENCRYPTION_KEY_ID: ${CSL_SOURCE_ENCRYPTION_KEY_ID:-deployment-key-v1}
+      CSL_GENERATED_ARTIFACT_ROOT: /var/lib/crypto-lab/generated-strategies
+      CSL_STRATEGY_SANDBOX_ENGINE_URL: http://sandbox-docker:2375
+    volumes:
+      - generated_strategy_artifacts:/var/lib/crypto-lab/generated-strategies
+    networks:
+      - default
+      - sandbox-control
+    depends_on:
+      artifact-init:
+        condition: service_completed_successfully
+      sandbox-docker:
+        condition: service_healthy
+
+volumes:
+  generated_strategy_artifacts:
+  sandbox_docker_data:
+
+networks:
+  sandbox-control:
+    internal: true
+  sandbox-egress:

@@ -1,6 +1,6 @@
 # ADR-005: Deterministic and Reproducible Backtesting
 
-**Status:** Proposed  
+**Status:** Accepted  
 **Date:** 2026-08-13  
 **Owners:** Backtest and Evaluation Team
 

@@ -1,0 +1,16 @@
+{
+  "contractVersion": "1.0.0",
+  "strategy": {
+    "strategyId": "generated-breakout-fixture",
+    "strategyVersion": "1.0.0",
+    "origin": "LLM_GENERATED",
+    "artifactFingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "generationProvenanceId": "00000000-0000-0000-0000-000000000006"
+  },
+  "reuseAssertions": {
+    "modelCalls": 0,
+    "sourceCalls": 0,
+    "exactArtifactRequired": true,
+    "originBranchAllowed": false
+  }
+}

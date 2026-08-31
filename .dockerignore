@@ -8,6 +8,9 @@ __pycache__/
 *.log*
 .env*
 !.env.example
+.runtime-secrets/
+.data/
+*.secret
 .mypy_cache/
 .pytest_cache/
 .ruff_cache/

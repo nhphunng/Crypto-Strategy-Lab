@@ -4,7 +4,9 @@
 
 **Created**: 2026-08-13
 
-**Status**: Draft
+**Status**: Accepted
+
+**Accepted**: 2026-08-19 by the Crypto Strategy Lab Team; the TV1/TV2 shared Candle/history version 1 boundary is cross-reviewed and locked for implementation.
 
 **Input**: User description: "TV2 — 002-realtime-multi-chart — Dữ liệu realtime, tối đa 4 biểu đồ"
 
@@ -143,6 +145,7 @@ As an `OPERATOR`, I want a disconnected market stream to recover automatically s
 | NFR-001–NFR-007 | SRS §4–§5 and Constitution PF-03, PF-05, DOD-02, DOD-04–DOD-06 |
 
 - **TV1 / Feature 001** owns historical acquisition, persistence, and the shared Candle/history contract. TV1 and TV2 MUST agree on fields, precision, timestamp/timeframe encoding, completeness, range behavior, and error/version rules before implementation.
+- **Acceptance record**: TV1 and TV2 completed that cross-review on 2026-08-19. The accepted version 1 boundary is recorded in Feature 001's consumer contract and this feature's `contracts/openapi.yaml` and `data-model.md`; semantic changes require a new coordinated review.
 - **TV3 / Feature 003** consumes normalized candles for strategy work but does not change TV2's base chart contract.
 - **TV5 / Feature 005** may compose generic overlays with the base chart; TV2 does not own signal, trade, leaderboard, or provenance behavior.
 
@@ -166,4 +169,4 @@ As an `OPERATOR`, I want a disconnected market stream to recover automatically s
 - TV1 provides a versioned historical Candle contract and a bounded display range before TV2 implementation begins.
 - Automatic reconnect uses capped exponential backoff with jitter and a finite attempt window; exact timings belong in `research.md` and the public connection-state contract.
 - Authentication and account-specific saved layouts are outside the current MVP; the four-slot limit applies to one dashboard session.
-- Architecture and ADR-003 remain `Proposed` planning inputs until the team accepts or replaces them before implementation approval.
+- Architecture, ADR-002, and ADR-003 are `Accepted` implementation authorities. The TV1/TV2 Candle/history version 1 boundary is also accepted for this feature.
