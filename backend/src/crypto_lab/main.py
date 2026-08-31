@@ -14,10 +14,12 @@ from crypto_lab.api.routes.backtests import router as backtests_router
 from crypto_lab.api.routes.evaluations import router as evaluations_router
 from crypto_lab.api.routes.leaderboards import router as leaderboards_router
 from crypto_lab.api.routes.market_data import router as market_data_router
+from crypto_lab.api.routes.searches import router as searches_router
 from crypto_lab.api.routes.strategies import router as strategies_router
 from crypto_lab.api.routes.strategy_generation import router as strategy_generation_router
 from crypto_lab.api.websocket.leaderboard_channel import router as leaderboard_ws_router
 from crypto_lab.api.websocket.market_data_channel import router as market_data_websocket_router
+from crypto_lab.api.websocket.search_channel import router as search_websocket_router
 from crypto_lab.infrastructure.logging import configure_logging
 
 
@@ -61,9 +63,11 @@ def create_app(container: Container | None = None) -> FastAPI:
     app.include_router(evaluations_router)
     app.include_router(strategies_router)
     app.include_router(strategy_generation_router)
+    app.include_router(searches_router)
     app.include_router(market_data_websocket_router)
     app.include_router(leaderboards_router)
     app.include_router(leaderboard_ws_router)
+    app.include_router(search_websocket_router)
 
     @app.get("/health/live", include_in_schema=False)
     async def live() -> JSONResponse:

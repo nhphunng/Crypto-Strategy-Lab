@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { ChevronDown, Fingerprint, Play, Square } from 'lucide-react'
 import { useSearchParams } from 'react-router-dom'
 import { useStore } from '../lib/store'
-import type { RunRow, Trade } from '../domain'
+import type { Trade } from '../domain'
 import type { Candle, Marker } from '../lib/mock'
 import { BACKTEST_DEFAULTS } from '../config'
 import {
@@ -13,6 +13,10 @@ import {
   type PolicyBundle,
   type SingleBacktestOutput,
   type StrategyDefinition,
+  createSearchApi,
+  type SearchCandidate,
+  type SearchRun,
+  type BacktestRunSummary,
 } from '../features/backtests'
 import {
   getStrategyConfiguration,
@@ -777,34 +781,57 @@ function Sparkline({ points, mode }: { points: number[]; mode: 'equity' | 'drawd
 // ---------------------------------------------------------------------------
 
 function StrategySearch() {
-  const { searchStatus, searchTested, startSearch, stopSearch, toast, showExplain, market } = useStore()
-  const services = useServices()
-  const searchRun = services.backtests.searchRun
-  const leaderboard = services.leaderboard.listEntries()
+  const { toast, showExplain, market } = useStore()
+  const api = useMemo(() => createSearchApi(), [])
+  const catalogApi = useMemo(() => createBacktestApi(), [])
   const [confirmStop, setConfirmStop] = useState(false)
   const [level, setLevel] = useState<'basic' | 'advanced'>('basic')
-  const limit = level === 'basic' ? 100 : searchRun.candidateLimit
-  const shownTested = Math.min(searchTested, limit)
-  const pct = Math.min(100, (shownTested / limit) * 100)
+  const [run, setRun] = useState<SearchRun | null>(null)
+  const [feed, setFeed] = useState<SearchCandidate[]>([])
+  const [strategyIds, setStrategyIds] = useState<string[]>([])
+  const [strategyNames, setStrategyNames] = useState<Record<string, string>>({})
+  const [busy, setBusy] = useState(false)
+  const limit = level === 'basic' ? 100 : 2000
+  const tested = run?.succeeded ?? 0
+  const pct = Math.min(100, ((run?.generated ?? 0) / (run?.candidateLimit ?? limit)) * 100)
 
-  // deterministic rolling candidate feed
-  const feed = useMemo(() => {
-    const items: { id: number; name: string; score: number; isTop?: boolean; failed?: boolean }[] = []
-    for (let i = 0; i < 7; i++) {
-      const id = searchTested - i
-      if (id < 0) break
-      const name = services.backtests.candidateNames[id % services.backtests.candidateNames.length]
-      const score = 70 + ((id * 37) % 160) / 10
-      items.push({
-        id,
-        name,
-        score: Math.round(score * 10) / 10,
-        isTop: i === 0 && score > 83,
-        failed: id % 41 === 0,
+  useEffect(() => {
+    const controller = new AbortController()
+    Promise.all([api.listSearchRuns(controller.signal), catalogApi.loadCatalog(controller.signal)])
+      .then(([runs, catalog]) => {
+        setRun(runs[0] ?? null)
+        setStrategyIds(catalog.strategies.map((item) => item.strategyId))
+        setStrategyNames(Object.fromEntries(catalog.strategies.map((item) => [item.strategyId, item.displayName])))
       })
-    }
-    return items
-  }, [searchTested])
+      .catch(() => undefined)
+    return () => controller.abort()
+  }, [api, catalogApi])
+
+  useEffect(() => {
+    if (!run) return
+    api.candidates(run.id).then(setFeed).catch(() => undefined)
+    if (run.status !== 'QUEUED' && run.status !== 'RUNNING') return
+    return api.subscribe(run.id, (next) => {
+      setRun(next)
+      api.candidates(next.id).then(setFeed).catch(() => undefined)
+    })
+  }, [api, run?.id, run?.status])
+
+  async function start() {
+    if (strategyIds.length < 2) return toast('At least two strategies must be available', 'warning')
+    setBusy(true)
+    try {
+      const datasetId = await api.prepareDataset(market.pair, BACKTEST_DEFAULTS.timeframe)
+      const created = await api.start(datasetId, strategyIds, limit, BACKTEST_DEFAULTS.seed)
+      setFeed([]); setRun(created)
+      toast(`Search queued — ${limit.toLocaleString()} real candidates`, 'info')
+    } catch (error) {
+      toast(error instanceof Error ? error.message : 'Search could not start', 'warning')
+    } finally { setBusy(false) }
+  }
+
+  const active = run?.status === 'QUEUED' || run?.status === 'RUNNING'
+  const top = [...feed].filter((item) => item.score !== null).sort((a, b) => Number(b.score) - Number(a.score)).slice(0, 10)
 
   return (
     <div className="flex h-full flex-col">
@@ -835,9 +862,9 @@ function StrategySearch() {
             <div>
               <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-faint">Strategies to combine</div>
               <div className="flex flex-wrap gap-1.5">
-                {['MA', 'RSI', 'Bollinger', 'S/R'].map((s) => (
+                {strategyIds.map((s) => (
                   <span key={s} className="rounded-[4px] border border-accent/40 bg-accent/10 px-2 py-1 font-mono text-[11px] text-accent">
-                    {s}
+                    {strategyNames[s] ?? s}
                   </span>
                 ))}
               </div>
@@ -853,13 +880,13 @@ function StrategySearch() {
                 <ConfigRow label="Parameter ranges" value="Default" />
                 <ConfigRow label="Seed" value={String(BACKTEST_DEFAULTS.seed)} />
                 <ConfigRow label="Dataset" value={`${market.pair} · ${BACKTEST_DEFAULTS.timeframe} · 2026 H1`} />
-                <ConfigRow label="Workers" value={String(searchRun.workers)} />
-                <ConfigRow label="Stop condition" value="Candidate limit reached" />
+                <ConfigRow label="Timeout" value="15 minutes" />
+                <ConfigRow label="No improvement" value={`${Math.min(100, limit)} candidates`} />
               </>
             )}
 
             <div className="pt-1">
-              {searchStatus === 'running' ? (
+              {active ? (
                 <Button variant="danger" className="w-full" onClick={() => setConfirmStop(true)}>
                   <Square size={13} /> Stop Search
                 </Button>
@@ -867,12 +894,10 @@ function StrategySearch() {
                 <Button
                   variant="primary"
                   className="w-full"
-                  onClick={() => {
-                    startSearch()
-                    toast(`Search started — ${limit.toLocaleString()} candidates`, 'info')
-                  }}
+                  disabled={busy}
+                  onClick={start}
                 >
-                  <Play size={14} /> {level === 'basic' ? 'Find Strategy Combinations' : 'Start Search'}
+                  <Play size={14} /> {busy ? 'Preparing Dataset…' : level === 'basic' ? 'Find Strategy Combinations' : 'Start Search'}
                 </Button>
               )}
             </div>
@@ -884,27 +909,28 @@ function StrategySearch() {
           <div className="border-b border-subtle p-4">
             <div className="flex items-center gap-2">
               <span className="text-[13px] font-semibold text-ink">Experiment Progress</span>
-              {searchStatus === 'running' && <StatusBadge tone="running" pulse>Running</StatusBadge>}
-              {searchStatus === 'ready' && <StatusBadge tone="queued">Ready</StatusBadge>}
-              {searchStatus === 'stopped' && <StatusBadge tone="cancelled">Stopped</StatusBadge>}
-              {searchStatus === 'completed' && <StatusBadge tone="completed">Completed</StatusBadge>}
-              <span className="ml-auto font-mono text-[11px] text-faint">{searchRun.id}</span>
+              {active && <StatusBadge tone="running" pulse>{run?.status}</StatusBadge>}
+              {!run && <StatusBadge tone="queued">Ready</StatusBadge>}
+              {run?.status === 'CANCELLED' && <StatusBadge tone="cancelled">Stopped</StatusBadge>}
+              {run?.status === 'COMPLETED' && <StatusBadge tone="completed">Completed</StatusBadge>}
+              {run?.status === 'FAILED' && <StatusBadge tone="failed">Failed</StatusBadge>}
+              <span className="ml-auto font-mono text-[11px] text-faint">{run?.id ?? 'No search run'}</span>
             </div>
             <div className="mt-3 flex items-center gap-3">
               <div className="h-2 flex-1 overflow-hidden rounded-full bg-surface-active">
                 <div className="h-full rounded-full bg-accent transition-[width] duration-500" style={{ width: `${pct}%` }} />
               </div>
               <span className="font-mono text-[13px] font-semibold tabular-nums text-ink">
-                {shownTested} / {limit}
+                {run?.generated ?? 0} / {run?.candidateLimit ?? limit}
               </span>
               <span className="font-mono text-[12px] tabular-nums text-faint">combinations</span>
             </div>
             <div className="mt-3 flex items-center justify-between rounded-[6px] border border-accent/30 bg-accent/10 px-3 py-2">
               <span className="text-[12px] text-dim">Current best combination</span>
               <div className="flex items-center gap-2">
-                <span className="font-mono text-[12px] text-ink">{leaderboard[0].strategy}</span>
+                <span className="font-mono text-[12px] text-ink">{run?.topCandidate ?? 'Waiting for a completed candidate'}</span>
                 <span className="font-mono text-[13px] font-semibold tabular-nums text-ml">
-                  {leaderboard[0].score}
+                  {run?.topScore ? Number(run.topScore).toFixed(2) : '—'}
                 </span>
               </div>
             </div>
@@ -916,11 +942,11 @@ function StrategySearch() {
             )}
             <div className="mt-3 grid grid-cols-5 gap-2 text-center">
               {[
-                ['Generated', searchTested],
-                ['Completed', searchTested - 6],
-                ['Queued', searchRun.queue],
-                ['Failed', searchRun.failed],
-                ['Retried', searchRun.retried],
+                ['Generated', run?.generated ?? 0],
+                ['Tested', tested],
+                ['Running', run?.running ?? 0],
+                ['Failed', run?.failed ?? 0],
+                ['Remaining', Math.max(0, (run?.candidateLimit ?? limit) - (run?.generated ?? 0))],
               ].map(([l, v]) => (
                 <div key={l as string} className="rounded-[6px] border border-subtle bg-workspace py-2">
                   <div className="font-mono text-[14px] font-semibold tabular-nums text-ink">{v as number}</div>
@@ -938,17 +964,17 @@ function StrategySearch() {
                   key={f.id}
                   className={cn(
                     'flex items-center gap-2 rounded-[5px] border border-subtle px-2.5 py-1.5 font-mono text-[11px]',
-                    i === 0 && searchStatus === 'running' && 'csl-flash',
+                    i === 0 && active && 'csl-flash',
                   )}
                 >
-                  <span className="text-faint">#{String(f.id).padStart(4, '0')}</span>
-                  <span className="flex-1 text-dim">{f.name}</span>
-                  {f.failed ? (
-                    <StatusBadge tone="failed">Failed · retry 1/3</StatusBadge>
+                  <span className="text-faint">#{String(f.sequence).padStart(4, '0')}</span>
+                  <span className="flex-1 text-dim">{f.displayName}</span>
+                  {f.status === 'FAILED' ? (
+                    <StatusBadge tone="failed">Failed · {f.failureCode}</StatusBadge>
                   ) : (
                     <>
-                      <span className="text-ml">Score {f.score.toFixed(1)}</span>
-                      {f.isTop && <StatusBadge tone="new">New Top</StatusBadge>}
+                      <span className="text-ml">{f.score ? `Score ${Number(f.score).toFixed(2)}` : f.status}</span>
+                      {f.id === top[0]?.id && <StatusBadge tone="new">Top</StatusBadge>}
                     </>
                   )}
                 </div>
@@ -959,12 +985,12 @@ function StrategySearch() {
           {/* health strip */}
           <div className="grid grid-cols-6 divide-x divide-subtle border-t border-subtle bg-workspace text-center">
             {[
-              ['Workers', '4 / 4'],
-              ['Queue', '218'],
-              ['Failed', '3'],
-              ['Retried', '2'],
-              ['Throughput', '6.8/s'],
-              ['Top-1', '84.1'],
+              ['Workers', active ? '1 / 1' : '0 / 1'],
+              ['Queued', String(Math.max(0, (run?.candidateLimit ?? limit) - (run?.generated ?? 0)))],
+              ['Failed', String(run?.failed ?? 0)],
+              ['Tested', String(tested)],
+              ['Stop', run?.stopReason ?? '—'],
+              ['Top-1', run?.topScore ? Number(run.topScore).toFixed(2) : '—'],
             ].map(([l, v]) => (
               <div key={l} className="py-2">
                 <div className="font-mono text-[12px] font-semibold tabular-nums text-ink">{v}</div>
@@ -981,19 +1007,19 @@ function StrategySearch() {
             <StatusBadge tone="running" pulse>Live</StatusBadge>
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto">
-            {leaderboard.map((r) => (
+            {top.map((r, index) => (
               <div
-                key={r.rank}
+                key={r.id}
                 className={cn(
                   'flex items-center gap-2 border-b border-subtle px-3 py-2.5',
-                  r.rank === 1 && 'border-l-2 border-l-accent',
+                  index === 0 && 'border-l-2 border-l-accent',
                 )}
               >
-                <span className="w-4 font-mono text-[12px] text-faint">{r.rank}</span>
-                <span className={cn('flex-1 truncate text-[12px]', r.rank === 1 ? 'text-ink' : 'text-dim')}>
-                  {r.strategy}
+                <span className="w-4 font-mono text-[12px] text-faint">{index + 1}</span>
+                <span className={cn('flex-1 truncate text-[12px]', index === 0 ? 'text-ink' : 'text-dim')}>
+                  {r.displayName}
                 </span>
-                <span className="font-mono text-[13px] font-semibold tabular-nums text-ml">{r.score}</span>
+                <span className="font-mono text-[13px] font-semibold tabular-nums text-ml">{Number(r.score).toFixed(2)}</span>
               </div>
             ))}
           </div>
@@ -1003,16 +1029,15 @@ function StrategySearch() {
       <Modal
         open={confirmStop}
         onClose={() => setConfirmStop(false)}
-        title="Stop search SR-0184?"
+        title={`Stop search ${run?.id.slice(0, 8) ?? ''}?`}
         footer={
           <>
             <Button variant="ghost" onClick={() => setConfirmStop(false)}>Cancel</Button>
             <Button
               variant="danger"
               onClick={() => {
-                stopSearch()
-                setConfirmStop(false)
-                toast('Search stopped — completed candidates preserved', 'warning')
+                if (run) api.cancel(run.id).then(setRun).catch((error) => toast(String(error), 'warning'))
+                setConfirmStop(false); toast('Stop requested — completed candidates are preserved', 'warning')
               }}
             >
               Stop Search
@@ -1048,12 +1073,48 @@ const RUN_TONE = {
   CANCELLED: 'cancelled',
 } as const
 
+type RuntimeRun = {
+  id: string; type: 'Search' | 'Backtest'; space: string
+  status: keyof typeof RUN_TONE; started: string; duration: string
+  tested: number | null; failed: number; top1: string | null
+  generator: string; seed: number; datasetId: string; reason?: string
+}
+
+function elapsed(start: string, end: string | null) {
+  const seconds = Math.max(0, Math.round((Date.parse(end ?? new Date().toISOString()) - Date.parse(start)) / 1000))
+  return seconds < 60 ? `${seconds}s` : `${Math.floor(seconds / 60)}m ${seconds % 60}s`
+}
+
 function Runs() {
-  const services = useServices()
-  const runs = services.backtests.listRuns()
-  const [selected, setSelected] = useState<RunRow | null>(null)
+  const api = useMemo(() => createSearchApi(), [])
+  const [runs, setRuns] = useState<RuntimeRun[]>([])
+  const [selected, setSelected] = useState<RuntimeRun | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  useEffect(() => {
+    let active = true
+    const load = () => Promise.all([api.listSearchRuns(), api.listBacktestRuns()]).then(([searches, backtests]) => {
+      if (!active) return
+      const searchRows: RuntimeRun[] = searches.map((run) => ({
+        id: run.id, type: 'Search', space: run.strategyIds.join(' + '), status: run.status,
+        started: new Date(run.startedAt ?? run.createdAt).toLocaleString(), duration: elapsed(run.startedAt ?? run.createdAt, run.completedAt),
+        tested: run.succeeded, failed: run.failed, top1: run.topScore, generator: run.generator,
+        seed: run.seed, datasetId: run.datasetId, reason: run.failureDetail ?? run.stopReason ?? undefined,
+      }))
+      const backtestRows: RuntimeRun[] = backtests.map((run: BacktestRunSummary) => ({
+        id: run.id, type: 'Backtest', space: run.strategyDefinitionId, status: run.status,
+        started: new Date(run.requestedAt).toLocaleString(), duration: elapsed(run.requestedAt, run.completedAt),
+        tested: null, failed: run.status === 'FAILED' ? 1 : 0, top1: null, generator: '—',
+        seed: run.randomSeed, datasetId: run.datasetId, reason: run.failureCode ?? undefined,
+      }))
+      setRuns([...searchRows, ...backtestRows]); setError(null)
+    }).catch((value) => active && setError(value instanceof Error ? value.message : 'Runs could not be loaded'))
+    void load()
+    const timer = globalThis.setInterval(load, 3000)
+    return () => { active = false; globalThis.clearInterval(timer) }
+  }, [api])
   return (
     <div className="flex h-full min-h-0 flex-col">
+      {error && <div className="border-b border-neg/30 bg-neg/10 px-3 py-2 text-[12px] text-neg">{error}</div>}
       <div className="min-h-0 flex-1 overflow-auto">
         <table className="w-full border-collapse text-[12px]">
           <thead className="sticky top-0 z-10">
@@ -1114,7 +1175,7 @@ function Runs() {
             <DrawerSection title="Reproducibility">
               <KV k="Generator" v={selected.generator} />
               <KV k="Seed" v={selected.seed} />
-              <KV k="Dataset" v="BINANCE-BTCUSDT-15M-2026H1" />
+              <KV k="Dataset" v={selected.datasetId} />
               <KV k="Scoring policy" v="Balanced v2" />
             </DrawerSection>
           </>
