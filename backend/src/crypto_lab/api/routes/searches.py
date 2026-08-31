@@ -145,13 +145,13 @@ async def list_search_candidates(
         SearchCandidateDto(
             id=row.id,
             sequence=row.sequence,
-            displayName=row.display_name,
+            display_name=row.display_name,
             members=row.members,
             status=row.status,
             score=None if row.score is None else str(row.score),
-            backtestRunId=row.backtest_run_id,
-            evaluationResultId=row.evaluation_result_id,
-            failureCode=row.failure_code,
+            backtest_run_id=row.backtest_run_id,
+            evaluation_result_id=row.evaluation_result_id,
+            failure_code=row.failure_code,
         )
         for row in rows
     )

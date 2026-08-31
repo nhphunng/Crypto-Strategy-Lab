@@ -124,7 +124,7 @@ class StrategySearchService:
             row = await self.repository.get(run_id)
             if row is not None:
                 await self.hub.publish(run_id, search_run_payload(row))
-        return changed
+        return bool(changed)
 
     async def close(self) -> None:
         tasks = tuple(self._tasks.values())
