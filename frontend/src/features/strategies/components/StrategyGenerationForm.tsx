@@ -67,7 +67,7 @@ export function StrategyGenerationForm({ onDrafts }: { onDrafts: (drafts: Genera
         </Button>
       </div>
       <p className="mt-2 text-[11px] text-faint">
-        Analysis only. Each draft is checked for safety before it can be activated.
+        Analytical use only. Each draft is checked for safety before it can be activated.
       </p>
       {error && <p className="mt-2 text-[12px] text-neg">{error}</p>}
     </section>
