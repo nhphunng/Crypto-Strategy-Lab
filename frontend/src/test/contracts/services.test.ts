@@ -17,11 +17,6 @@ describe('mock service contracts', () => {
     expect(services.market.listMarkets('not-a-market')).toEqual([])
   })
 
-  it('composes news filters and range constraints', () => {
-    const btcNegative = services.news.listNews({ coin: 'BTC', sentiment: 'NEGATIVE', range: '24H' })
-    expect(btcNegative.every((item) => item.coin === 'BTC' && item.sentiment === 'NEGATIVE')).toBe(true)
-  })
-
   it('exposes provenance-bearing evaluation data behind gateways', () => {
     expect(services.backtests.listRuns()).not.toHaveLength(0)
     expect(services.leaderboard.listEntries()).not.toHaveLength(0)

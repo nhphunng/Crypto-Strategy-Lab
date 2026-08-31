@@ -1,7 +1,6 @@
 import type {
   LeaderRow,
   MarketInfo,
-  NewsItem,
   OperationsSnapshot,
   RunRow,
   SearchRun,
@@ -35,10 +34,6 @@ export type LeaderboardGateway = {
   listEntries: () => LeaderRow[]
 }
 
-export type NewsGateway = {
-  listNews: (query?: { coin?: string; sentiment?: string; range?: string }) => NewsItem[]
-}
-
 export type OperationsGateway = {
   now: () => string
   getSnapshot: () => OperationsSnapshot
@@ -49,6 +44,5 @@ export type AppServices = {
   strategies: StrategyGateway
   backtests: BacktestGateway
   leaderboard: LeaderboardGateway
-  news: NewsGateway
   operations: OperationsGateway
 }
