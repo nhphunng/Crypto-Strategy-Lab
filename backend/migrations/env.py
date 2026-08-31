@@ -12,6 +12,7 @@ from crypto_lab.infrastructure.persistence import (
     backtest_models,
     evaluation_models,
     leaderboard_models,
+    news_models,
     strategy_configuration_models,
     strategy_generation_models,
     strategy_models,
@@ -25,6 +26,7 @@ _PERSISTENCE_MODEL_MODULES = (
     backtest_models,
     evaluation_models,
     leaderboard_models,
+    news_models,
 )
 
 config = context.config
