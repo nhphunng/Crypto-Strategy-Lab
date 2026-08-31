@@ -62,6 +62,11 @@ class BacktestRunDto(ApiModel):
     status: str
     dataset_id: UUID = Field(alias="datasetId")
     strategy_definition_id: UUID = Field(alias="strategyDefinitionId")
+    strategy_id: str = Field(alias="strategyId")
+    pair: str
+    timeframe: str
+    parent_search_run_id: UUID | None = Field(None, alias="parentSearchRunId")
+    candidate_display_name: str | None = Field(None, alias="candidateDisplayName")
     execution_policy_id: UUID = Field(alias="executionPolicyId")
     execution_policy_version: str = Field(alias="executionPolicyVersion")
     initial_capital: str = Field(alias="initialCapital")
@@ -222,6 +227,9 @@ def run_to_dto(run: BacktestRun) -> BacktestRunDto:
         status=run.status.value,
         dataset_id=c.dataset_id,
         strategy_definition_id=c.strategy_definition_id,
+        strategy_id=c.strategy_id,
+        pair=c.pair,
+        timeframe=c.timeframe.value,
         execution_policy_id=c.execution_policy_id,
         execution_policy_version=c.execution_policy_version,
         initial_capital=canonical_decimal(c.initial_capital),

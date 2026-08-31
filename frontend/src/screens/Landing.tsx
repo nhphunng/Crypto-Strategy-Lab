@@ -775,7 +775,7 @@ function LandingNav({ scrolled, activeId }: { scrolled: boolean; activeId: strin
 function ProductPreview() {
   const services = useServices()
   const market = services.market.listMarkets()[0]
-  const searchRun = services.backtests.searchRun
+  const searchRun = { id: 'LIVE SEARCH PREVIEW', tested: 1842, candidateLimit: 2000 }
   const leaderboard = services.leaderboard.listEntries()
   const c1 = services.market.getCandles('15m', 60)
   const c2 = services.market.getCandles('1h', 60)

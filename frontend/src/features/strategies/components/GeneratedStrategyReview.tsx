@@ -65,7 +65,7 @@ export function GeneratedStrategyReview({
       )}
       <label className="mt-3 flex items-start gap-2 text-[12px] text-dim">
         <input type="checkbox" checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} />
-        I reviewed the rules, evidence, assumptions and passing validation report above.
+        I reviewed these exact rules, evidence, assumptions and passing validation report above.
       </label>
       <div className="mt-3 flex items-center gap-3">
         <Button variant="primary" disabled={!confirmed || report?.status !== 'PASSED' || busy} onClick={activate}>

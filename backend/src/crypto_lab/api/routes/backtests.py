@@ -26,6 +26,36 @@ from crypto_lab.domain.backtest.errors import BacktestError, BacktestErrorCode
 router = APIRouter(prefix="/api/v1", tags=["backtests"])
 
 
+@router.get("/backtest-runs", response_model=SuccessEnvelope[tuple[BacktestRunDto, ...]])
+async def list_backtest_runs(
+    request: Request, limit: int = Query(100, ge=1, le=200)
+) -> SuccessEnvelope[tuple[BacktestRunDto, ...]]:
+    runs = await request.app.state.container.backtest_repository.list_runs(limit)
+    search_repository = getattr(request.app.state.container, "search_repository", None)
+    links = (
+        await search_repository.candidate_links(tuple(run.configuration.run_id for run in runs))
+        if search_repository is not None
+        else {}
+    )
+    # Public queue terminology is consistent with the Runs UI while the immutable
+    # domain record retains its original REQUESTED state.
+    values = []
+    for run in runs:
+        value = run_to_dto(run)
+        if value.status == "REQUESTED":
+            value = value.model_copy(update={"status": "QUEUED"})
+        link = links.get(run.configuration.run_id)
+        if link is not None:
+            value = value.model_copy(
+                update={
+                    "parent_search_run_id": link[0],
+                    "candidate_display_name": link[1],
+                }
+            )
+        values.append(value)
+    return success_envelope(tuple(values), "Backtest runs loaded.", request_id(request))
+
+
 @router.get(
     "/backtest-evaluation/policies",
     response_model=SuccessEnvelope[BacktestEvaluationPolicyBundleDto],

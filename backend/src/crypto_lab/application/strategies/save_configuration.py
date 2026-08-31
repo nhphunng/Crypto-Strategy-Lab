@@ -169,9 +169,7 @@ class SaveStrategyConfiguration:
         )
         key = _configuration_key(tuple(members), combination)
         provisional_root = (
-            members[0].definition_id
-            if kind is StrategyConfigurationKind.SINGLE
-            else uuid4()
+            members[0].definition_id if kind is StrategyConfigurationKind.SINGLE else uuid4()
         )
         provisional = SavedStrategyConfiguration(
             id=uuid4(),
@@ -219,7 +217,11 @@ def _configuration_key(
 ) -> str:
     payload = {
         "members": [
-            {"strategyId": item.strategy_id, "strategyVersion": item.strategy_version}
+            {
+                "strategyId": item.strategy_id,
+                "strategyVersion": item.strategy_version,
+                "definitionFingerprint": item.definition_fingerprint,
+            }
             for item in members
         ],
         "method": None if combination is None else combination.method.value,

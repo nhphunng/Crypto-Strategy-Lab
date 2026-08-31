@@ -69,6 +69,13 @@ class SqlAlchemyBacktestRepository:
             )
         return None if row is None else ExecutionPolicy(row.id, row.policy_id, row.version)
 
+    async def list_runs(self, limit: int = 100) -> tuple[BacktestRun, ...]:
+        async with self._sessions() as session:
+            rows = (await session.scalars(
+                select(BacktestRunRow).order_by(BacktestRunRow.requested_at.desc()).limit(limit)
+            )).all()
+        return tuple(_run_domain(row) for row in rows)
+
     async def create_or_resolve_run(self, run: BacktestRun) -> BacktestRun:
         values = _run_values(run)
         async with self._sessions() as session, session.begin():

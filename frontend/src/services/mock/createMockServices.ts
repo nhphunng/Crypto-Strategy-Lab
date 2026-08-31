@@ -2,11 +2,8 @@ import {
   LEADERBOARD,
   MARKETS,
   NEWS,
-  RUNS,
-  SEARCH_RUN,
   STRATEGIES,
   TIMEFRAMES,
-  CANDIDATE_NAMES,
   makeCandles,
   makeTrades,
   signalMarkers,
@@ -76,9 +73,6 @@ export function createMockServices(): AppServices {
       getMethod: (id) => STRATEGIES.find((strategy) => strategy.id === id),
     },
     backtests: {
-      candidateNames: CANDIDATE_NAMES,
-      searchRun: SEARCH_RUN,
-      listRuns: () => RUNS,
       makeTrades,
     },
     leaderboard: {

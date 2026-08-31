@@ -62,10 +62,6 @@ type Store = {
   consumeBacktestTab: () => void
 
   // search run (Backtests › Strategy Search)
-  searchStatus: 'ready' | 'running' | 'stopped' | 'completed'
-  searchTested: number
-  startSearch: () => void
-  stopSearch: () => void
 
   // continuous loop (Operations)
   loopStatus: 'running' | 'stopped'
@@ -164,8 +160,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     'single' | 'search' | 'runs' | null
   >(null)
 
-  const [searchStatus, setSearchStatus] = useState<Store['searchStatus']>('running')
-  const [searchTested, setSearchTested] = useState(services.backtests.searchRun.tested)
 
   const [loopStatus, setLoopStatus] = useState<'running' | 'stopped'>('running')
   const [loopTested, setLoopTested] = useState(WORKSPACE_DEFAULTS.loopTested)
@@ -197,29 +191,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, [routeNavigate])
 
   const consumeBacktestTab = useCallback(() => setRequestedBacktestTab(null), [])
-
-  const startSearch = useCallback(() => {
-    setSearchStatus('running')
-    setSearchTested((v) =>
-      v >= services.backtests.searchRun.candidateLimit ? services.backtests.searchRun.tested : v,
-    )
-  }, [services])
-  const stopSearch = useCallback(() => setSearchStatus('stopped'), [])
-
-  // deterministic search progress animation
-  useEffect(() => {
-    if (searchStatus !== 'running') return
-    const iv = setInterval(() => {
-      setSearchTested((v) => {
-        if (v >= services.backtests.searchRun.candidateLimit) {
-          setSearchStatus('completed')
-          return v
-        }
-        return v + 1
-      })
-    }, 900)
-    return () => clearInterval(iv)
-  }, [searchStatus, services])
 
   // continuous loop metrics
   useEffect(() => {
@@ -255,10 +226,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       overlayContext,
       requestedBacktestTab,
       consumeBacktestTab,
-      searchStatus,
-      searchTested,
-      startSearch,
-      stopSearch,
       loopStatus,
       loopTested,
       loopElapsed,
@@ -284,10 +251,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       overlayContext,
       requestedBacktestTab,
       consumeBacktestTab,
-      searchStatus,
-      searchTested,
-      startSearch,
-      stopSearch,
       loopStatus,
       loopTested,
       loopElapsed,
