@@ -3,10 +3,39 @@ from __future__ import annotations
 from dataclasses import dataclass
 from urllib.parse import urlparse
 
+from pydantic import BaseModel as PydanticBaseModel
 from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from crypto_lab.domain.market_data.timeframe import Timeframe
+
+
+class NewsFeedConfig(PydanticBaseModel):
+    """A server-controlled HTTPS RSS/Atom feed to collect from."""
+
+    source: str
+    url: str
+
+    @field_validator("source")
+    @classmethod
+    def validate_source(cls, value: str) -> str:
+        normalized = " ".join(value.split())
+        if not normalized:
+            raise ValueError("news feed source must not be blank")
+        return normalized
+
+    @field_validator("url")
+    @classmethod
+    def validate_url(cls, value: str) -> str:
+        parsed = urlparse(value)
+        if parsed.scheme != "https" or not parsed.hostname:
+            raise ValueError("news feed URL must be a server-controlled HTTPS URL")
+        if parsed.username or parsed.password or parsed.query or parsed.fragment:
+            raise ValueError(
+                "news feed URL must not contain credentials, query, or fragment"
+            )
+        return value.rstrip("/")
+
 
 
 @dataclass(frozen=True, slots=True)
@@ -58,6 +87,13 @@ class Settings(BaseSettings):
     auto_evaluation_timeframe: str = "15m"
     auto_evaluation_candles: int = Field(default=500, ge=50, le=5000)
     auto_evaluation_interval_seconds: float = Field(default=3600, ge=60, le=86_400)
+    # News collection is off by default so tests and local runs never reach a
+    # feed on startup; the shipped Compose deployment turns it on.
+    news_collection_enabled: bool = False
+    news_collection_interval_seconds: float = Field(default=900, ge=60, le=86_400)
+    news_feeds: tuple[NewsFeedConfig, ...] = (
+        NewsFeedConfig(source="Cointelegraph", url="https://cointelegraph.com/rss"),
+    )
     cors_allowed_origins: tuple[str, ...] = (
         "http://localhost:5173",
         "http://127.0.0.1:5173",

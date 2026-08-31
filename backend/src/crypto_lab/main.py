@@ -14,6 +14,7 @@ from crypto_lab.api.routes.backtests import router as backtests_router
 from crypto_lab.api.routes.evaluations import router as evaluations_router
 from crypto_lab.api.routes.leaderboards import router as leaderboards_router
 from crypto_lab.api.routes.market_data import router as market_data_router
+from crypto_lab.api.routes.news import router as news_router
 from crypto_lab.api.routes.searches import router as searches_router
 from crypto_lab.api.routes.strategies import router as strategies_router
 from crypto_lab.api.routes.strategy_generation import router as strategy_generation_router
@@ -33,11 +34,15 @@ def create_app(container: Container | None = None) -> FastAPI:
         await owned_container.initialize_backtest_evaluation()
         if owned_container.leaderboard is not None:
             owned_container.leaderboard.dispatcher_loop.start()
+        if owned_container.news_collection_loop is not None:
+            owned_container.news_collection_loop.start()
         if owned_container.auto_evaluation is not None:
             owned_container.auto_evaluation.start()
         yield
         if owned_container.auto_evaluation is not None:
             await owned_container.auto_evaluation.stop()
+        if owned_container.news_collection_loop is not None:
+            await owned_container.news_collection_loop.stop()
         if owned_container.leaderboard is not None:
             await owned_container.leaderboard.dispatcher_loop.stop()
         await owned_container.close()
@@ -59,6 +64,7 @@ def create_app(container: Container | None = None) -> FastAPI:
     )
     install_error_handlers(app)
     app.include_router(market_data_router)
+    app.include_router(news_router)
     app.include_router(backtests_router)
     app.include_router(evaluations_router)
     app.include_router(strategies_router)

@@ -89,6 +89,7 @@ async def test_migrations_upgrade_in_dependency_order_and_round_trip() -> None:
         "generated_strategy_artifacts",
         "strategy_validation_reports",
         "strategy_generation_provenance",
+        "news_items",
         "strategy_search_runs",
         "strategy_search_candidates",
     } <= await table_names()

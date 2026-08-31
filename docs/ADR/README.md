@@ -27,10 +27,12 @@ Thư mục này lưu các quyết định kiến trúc có ảnh hưởng đến
 | [ADR-004](ADR-004-strategy-plugin-and-versioning.md) | Strategy contract, registry và version bất biến | Accepted; extended by ADR-006 |
 | [ADR-005](ADR-005-reproducible-backtesting.md) | Backtest xác định và có thể tái tạo | Accepted |
 | [ADR-006](ADR-006-llm-generated-strategy-isolation.md) | Sandbox, source/LLM trust boundary và immutable generated artifact activation | Accepted |
+| [ADR-007](ADR-007-news-provider-pipeline.md) | NewsProvider, RSS-first collect/store/read pipeline và ranh giới Sentiment | Accepted |
+
 ## Deferred ADRs
 
 Các ADR sau chỉ được tạo khi nhóm bắt đầu feature tương ứng và đã có `spec.md`/`plan.md` draft:
 
 - Queue technology và worker delivery semantics (Redis/Celery hoặc phương án khác).
 - Scoring policy, normalization và deterministic tie-breaker.
-- Sentiment model/runtime, model revision và failure handling chi tiết.
+- Sentiment model/runtime, model revision và failure handling chi tiết của Task 4; ADR-007 chỉ khóa collection boundary và yêu cầu immutable/versioned analysis.

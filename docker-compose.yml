@@ -30,6 +30,11 @@ services:
       CSL_AUTO_EVALUATION_TIMEFRAME: "${CSL_AUTO_EVALUATION_TIMEFRAME:-15m}"
       CSL_AUTO_EVALUATION_CANDLES: "${CSL_AUTO_EVALUATION_CANDLES:-500}"
       CSL_AUTO_EVALUATION_INTERVAL_SECONDS: "${CSL_AUTO_EVALUATION_INTERVAL_SECONDS:-3600}"
+      # News collection is off by default so the deterministic E2E and local runs
+      # never reach a public feed on startup; a deployment may enable it.
+      CSL_NEWS_COLLECTION_ENABLED: "${CSL_NEWS_COLLECTION_ENABLED:-false}"
+      CSL_NEWS_COLLECTION_INTERVAL_SECONDS: "${CSL_NEWS_COLLECTION_INTERVAL_SECONDS:-900}"
+      CSL_NEWS_FEEDS: "${CSL_NEWS_FEEDS:-[{\"source\":\"Cointelegraph\",\"url\":\"https://cointelegraph.com/rss\"}]}"
     ports:
       - "${CSL_API_PORT:-8000}:8000"
     depends_on:

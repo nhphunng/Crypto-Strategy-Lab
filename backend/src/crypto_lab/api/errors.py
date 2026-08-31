@@ -12,6 +12,7 @@ from crypto_lab.api.common import ErrorDetail, ErrorEnvelope
 from crypto_lab.api.middleware import request_id
 from crypto_lab.application.leaderboard.errors import LeaderboardError
 from crypto_lab.application.market_data.errors import ErrorDescriptor, MarketDataError
+from crypto_lab.application.news.errors import NewsError
 from crypto_lab.domain.backtest.errors import BacktestError, BacktestErrorCode
 from crypto_lab.domain.market_data.candle import format_utc_millis
 from crypto_lab.domain.strategy.errors import ErrorCategory, StrategyError
@@ -44,6 +45,10 @@ _STATUS_BY_CODE = {
     "LEADERBOARD_QUERY_INVALID": 422,
     "LEADERBOARD_RANGE_INVALID": 422,
     "LEADERBOARD_DEPENDENCY_UNAVAILABLE": 503,
+    "NEWS_COIN_INVALID": 422,
+    "NEWS_RANGE_INVALID": 422,
+    "NEWS_PAGE_INVALID": 422,
+    "NEWS_DEPENDENCY_UNAVAILABLE": 503,
 }
 
 _STRATEGY_STATUS = {
@@ -150,6 +155,10 @@ def install_error_handlers(app: FastAPI) -> None:
 
     @app.exception_handler(LeaderboardError)
     async def leaderboard_error(request: Request, error: LeaderboardError) -> JSONResponse:
+        return _response(request, error.descriptor)
+
+    @app.exception_handler(NewsError)
+    async def news_error(request: Request, error: NewsError) -> JSONResponse:
         return _response(request, error.descriptor)
 
     @app.exception_handler(RequestValidationError)

@@ -32,6 +32,9 @@ from crypto_lab.application.market_data.ports import (
     MarketDataRepository,
     RealtimeMarketDataProvider,
 )
+from crypto_lab.application.news.collect_news import CollectNews
+from crypto_lab.application.news.collection_loop import NewsCollectionLoop
+from crypto_lab.application.news.list_news import ListNews
 from crypto_lab.application.search_service import SearchEventHub, StrategySearchService
 from crypto_lab.application.strategies.activate_generated_strategy import ActivateGeneratedStrategy
 from crypto_lab.application.strategies.analyze_strategy import AnalyzeStrategy
@@ -53,6 +56,7 @@ from crypto_lab.domain.evaluation.policy import (
     ScoringPolicy,
 )
 from crypto_lab.domain.market_data.timeframe import Timeframe
+from crypto_lab.domain.news.coin_resolution import CoinResolver
 from crypto_lab.domain.search import RandomSearchGenerator
 from crypto_lab.domain.strategy.errors import StrategyError
 from crypto_lab.domain.strategy.registry import StrategyRegistry
@@ -69,6 +73,10 @@ from crypto_lab.infrastructure.market_data.binance_realtime_provider import (
 from crypto_lab.infrastructure.market_data.realtime_selection_hub import (
     RealtimeSelectionHub,
 )
+from crypto_lab.infrastructure.news.rss_provider import (
+    RssFeedDefinition,
+    RssNewsProvider,
+)
 from crypto_lab.infrastructure.persistence.market_data_repository import (
     SqlAlchemyMarketDataRepository,
 )
@@ -77,6 +85,9 @@ from crypto_lab.infrastructure.persistence.repositories.backtest_repository impo
 )
 from crypto_lab.infrastructure.persistence.repositories.evaluation_repository import (
     SqlAlchemyEvaluationRepository,
+)
+from crypto_lab.infrastructure.persistence.repositories.news_repository import (
+    SqlAlchemyNewsRepository,
 )
 from crypto_lab.infrastructure.persistence.repositories.search_repository import (
     SqlAlchemySearchRepository,
@@ -232,6 +243,10 @@ class Container:
     evaluation_repository: SqlAlchemyEvaluationRepository | None = None
     evaluate_backtest: EvaluateBacktestResult | None = None
     compare_evaluations: CompareEvaluationResults | None = None
+    news_repository: SqlAlchemyNewsRepository | None = None
+    list_news: ListNews | None = None
+    collect_news: CollectNews | None = None
+    news_collection_loop: NewsCollectionLoop | None = None
     search_repository: SqlAlchemySearchRepository | None = None
     search_hub: SearchEventHub | None = None
     strategy_search: StrategySearchService | None = None
@@ -291,6 +306,8 @@ class Container:
     auto_evaluation: AutoEvaluationLoop | None = None
 
     async def close(self) -> None:
+        if self.news_collection_loop is not None:
+            await self.news_collection_loop.stop()
         if self.strategy_search is not None:
             await self.strategy_search.close()
         if self.realtime_hub is not None:
@@ -371,6 +388,24 @@ def build_container(settings: Settings | None = None) -> Container:
         clock,
     )
     compare_evaluations = CompareEvaluationResults(evaluation_repository)
+    news_repository = SqlAlchemyNewsRepository(database.sessions)
+    list_news = ListNews(news_repository, clock)
+    collect_news = None
+    news_collection_loop = None
+    if settings.news_collection_enabled:
+        coin_resolver = CoinResolver()
+        rss_feeds = tuple(
+            RssFeedDefinition(source=feed.source, url=feed.url)
+            for feed in settings.news_feeds
+        )
+        rss_provider = RssNewsProvider(
+            client, rss_feeds, clock, coin_resolver
+        )
+        collect_news = CollectNews((rss_provider,), news_repository, clock=clock)
+        news_collection_loop = NewsCollectionLoop(
+            collect_news,
+            interval_seconds=settings.news_collection_interval_seconds,
+        )
     generation_repository = None
     strategy_generation = None
     strategy_activation = None
@@ -505,6 +540,10 @@ def build_container(settings: Settings | None = None) -> Container:
         evaluation_repository=evaluation_repository,
         evaluate_backtest=evaluate_backtest,
         compare_evaluations=compare_evaluations,
+        news_repository=news_repository,
+        list_news=list_news,
+        collect_news=collect_news,
+        news_collection_loop=news_collection_loop,
         search_repository=search_repository,
         search_hub=search_hub,
         strategy_search=strategy_search,

@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>Example Crypto Atom</title>
+  <id>urn:uuid:feed-1</id>
+  <updated>2026-08-30T12:00:00Z</updated>
+  <link href="https://feeds.example.com/" rel="alternate"/>
+  <entry>
+    <id>urn:uuid:entry-1</id>
+    <title>Bitcoin ETF inflows rise</title>
+    <link href="https://feeds.example.com/articles/btc-etf" rel="alternate"/>
+    <published>2026-08-30T09:30:00Z</published>
+    <updated>2026-08-30T09:35:00Z</updated>
+    <content type="html"><![CDATA[<p>Bitcoin ETF inflows continue to grow.</p>]]></content>
+  </entry>
+  <entry>
+    <id>urn:uuid:entry-2</id>
+    <title>Solana network upgrade</title>
+    <link href="https://feeds.example.com/articles/sol-upgrade" rel="alternate"/>
+    <published>2026-08-30T13:00:00+05:30</published>
+    <summary type="text">SOL upgrade ships.</summary>
+  </entry>
+</feed>

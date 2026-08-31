@@ -1,7 +1,6 @@
 import {
   LEADERBOARD,
   MARKETS,
-  NEWS,
   STRATEGIES,
   TIMEFRAMES,
   makeCandles,
@@ -9,15 +8,8 @@ import {
   signalMarkers,
 } from '../../lib/mock'
 import type { AppServices } from '../ports'
-import { NEWS_RANGE_HOURS } from '../../config'
 
 const normalize = (value: string) => value.trim().toLowerCase()
-const relativeHours = (label: string) => {
-  const value = Number.parseFloat(label)
-  if (label.includes('min')) return value / 60
-  if (label.includes('d')) return value * 24
-  return value
-}
 
 const OPERATIONS_SNAPSHOT = {
   pipeline: ['Generate', 'Backtest', 'Evaluate', 'Rank', 'Improve'],
@@ -77,18 +69,6 @@ export function createMockServices(): AppServices {
     },
     leaderboard: {
       listEntries: () => LEADERBOARD,
-    },
-    news: {
-      listNews(query) {
-        return NEWS.filter((item) => {
-          const coinMatches = !query?.coin || query.coin === 'All' || item.coin === query.coin
-          const sentimentMatches =
-            !query?.sentiment || query.sentiment === 'All' || item.sentiment === query.sentiment
-          const rangeMatches =
-            !query?.range || relativeHours(item.published) <= (NEWS_RANGE_HOURS[query.range] ?? Number.POSITIVE_INFINITY)
-          return coinMatches && sentimentMatches && rangeMatches
-        })
-      },
     },
     operations: {
       now: () => '18:24:12',

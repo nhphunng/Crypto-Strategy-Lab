@@ -1,8 +1,8 @@
 # Crypto Strategy Lab — Database Schema Contract
 
-**Status**: Integration baseline for Features 001–005  
+**Status**: Integration baseline through News collection Task 3; Sentiment Task 4 is planned/incomplete
 **Database**: PostgreSQL 16  
-**Last reviewed**: 2026-08-16  
+**Last reviewed**: 2026-08-30
 **Physical source of truth**: Alembic migrations in `backend/migrations/versions/`
 
 ## 1. Purpose
@@ -62,6 +62,8 @@ cross-row ordering, or checksum recomputation.
 | 003 Strategy Foundation | Immutable reproducible strategy definitions | `strategy_definitions` | `IMPLEMENTED` |
 | 004 Backtest and Evaluation | Execution policies, runs/results, snapshots, trades, equity, evaluation and scoring | Nine tables listed below | `IMPLEMENTED` |
 | 005 Leaderboard and Visualization | Durable Top-K projection and publication outbox | `leaderboards`, `leaderboard_entries`, `leaderboard_update_records` | `IMPLEMENTED` |
+| News collection Task 3 — Nguyễn Hoàng Phi Hùng | Provider-neutral normalized News persistence | `news_items` | `IMPLEMENTED IN FEATURE BRANCH`; acceptance evidence pending |
+| Sentiment Task 4 — Gia Thành | Immutable/versioned model analyses and Strategy context | `news_sentiment_analyses` | `PLANNED / INCOMPLETE` |
 
 Required migration order:
 
@@ -70,6 +72,11 @@ Required migration order:
   -> 20260813_003_strategy
     -> 20260813_004_backtest
       -> 20260813_005_leaderboard
+        -> 20260823_006_generation
+          -> 20260824_007_integrity
+            -> 20260828_008_failure_reason
+              -> 20260828_009_strategy_configs
+                -> 20260830_010_news
 ```
 
 Feature 002 introduces no PostgreSQL dependency. A feature must not create or
@@ -97,6 +104,7 @@ erDiagram
     LEADERBOARDS ||--o{ LEADERBOARD_ENTRIES : contains
     EVALUATION_RESULTS ||--o{ LEADERBOARD_ENTRIES : ranks
     LEADERBOARDS ||--o{ LEADERBOARD_UPDATE_RECORDS : publishes
+    NEWS_ITEMS ||--o{ NEWS_SENTIMENT_ANALYSES : "planned Task 4"
 ```
 
 ## 6. Implemented schema
@@ -327,6 +335,45 @@ idempotent.
 Visualization overlays and ranked-result details are composed read contracts,
 not additional mutable tables.
 
+### 7.4 `news_items` — owner News collection Task 3 (Nguyễn Hoàng Phi Hùng)
+
+Provider-neutral normalized News storage created by revision
+`20260830_010_news`. Core columns:
+
+| Column | Type | Null | Notes |
+|---|---|---:|---|
+| `id` | `UUID` | No | Primary key; stable local identity. |
+| `provider` | `VARCHAR(32)` | No | Canonical provider code/name used with provider item identity. |
+| `provider_item_id` | `VARCHAR(256)` | No | Stable external item identity within one provider. |
+| `title` | `VARCHAR(500)` | No | Normalized non-blank title. |
+| `content` | `TEXT` | No | Plain-text RSS/Atom summary/content for Task 3. |
+| `source` | `VARCHAR(160)` | No | Human-readable source attribution. |
+| `published_at`, `crawled_at` | `TIMESTAMPTZ` | No | UTC publication and collection times. |
+| `related_coins` | `VARCHAR(16)[]` | No | Canonical exact coin codes such as `BTC`, `ETH`, `SOL`. |
+| `url`, `canonical_url` | `TEXT` | No | HTTPS source URL and canonical deduplication URL. |
+| `content_fingerprint` | `CHAR(64)` | No | SHA-256 over normalized title/content/canonical URL. |
+
+Identity, conflict and query rules:
+
+- Unique `(provider, provider_item_id)` keeps repeat collection idempotent.
+- Unique `canonical_url` prevents the same article from becoming multiple rows across feeds.
+- Same provider identity may refresh mutable content while keeping `id`; a canonical-URL conflict from another provider must not rewrite source attribution.
+- GIN index `ix_news_items_related_coins` supports exact array membership.
+- B-tree index `ix_news_items_published` on `(published_at DESC, id)` supports deterministic newest-first pagination.
+- The table intentionally has no sentiment/model/score columns. Task 3 API projects `sentiment: null`.
+
+### 7.5 `news_sentiment_analyses` — owner Sentiment Task 4 (Gia Thành), `PLANNED / INCOMPLETE`
+
+Task 4 must add a separate forward migration after `20260830_010_news`. Target
+shape: UUID primary key; `news_id` FK to `news_items.id`; model id/version;
+`POSITIVE|NEUTRAL|NEGATIVE` label; exact numeric score; analyzed time; article
+content fingerprint; `COMPLETED|FAILED` status; nullable failure code; and unique
+`(news_id, model_id, model_version, content_fingerprint)`.
+
+Analyses are append-only across model/content revisions. Task 4 must not add
+mutable sentiment columns to `news_items`. See
+[`specs/007-news-sentiment/handoff-task-3-to-4.md`](../specs/007-news-sentiment/handoff-task-3-to-4.md).
+
 ## 8. Cross-feature integration rules
 
 1. Consumers reference immutable upstream IDs; they do not copy or recreate
@@ -346,6 +393,10 @@ not additional mutable tables.
 7. `BacktestJob` in the conceptual SRS maps to the physical `backtest_runs`
    lifecycle row; do not create a second `backtest_jobs` table without a new
    architecture decision.
+8. Sentiment reads `news_items` as immutable input identity/provenance and writes
+   a separate versioned analysis row. The News collector never updates model output.
+9. `NewsSentimentStrategy` accesses timestamp-bounded aggregate data through a
+   `SentimentContextReader`; it does not query either table directly.
 
 ## 9. Resolved physical decisions and remaining contract item
 
@@ -362,15 +413,21 @@ These items must be resolved in the owning migration PR and then updated here:
 Any future change must use a new forward migration. Follow
 [`DATABASE_MIGRATION_RULES.md`](DATABASE_MIGRATION_RULES.md).
 
-## 10. Verification snapshot
+## 10. Verification status
 
 At this document revision:
 
-- Alembic has one head: `20260813_005_leaderboard`.
-- The linear history contains the Feature 001 baseline followed by Features
-  003, 004, and 005.
-- All 16 durable tables in this contract are implemented.
+- The News migration declares the next/head revision `20260830_010_news` after
+  `20260828_009_strategy_configs`.
+- `news_items` is the Task 3 physical schema in the feature branch; acceptance
+  still requires actual Alembic head and downgrade/upgrade evidence.
+- `news_sentiment_analyses` does not exist yet and remains Task 4
+  `PLANNED / INCOMPLETE`.
 - Feature 002 continues to own ephemeral state and adds no table.
+
+Các dòng trên mô tả contract/source hiện tại, không tuyên bố test đã chạy. Chỉ
+đánh dấu Task 3/Task 4 hoàn thành sau khi các command trong README và handoff có
+output thực tế.
 
 Update the status and affected table sections in the same pull request that
 adds or changes a merged migration.
