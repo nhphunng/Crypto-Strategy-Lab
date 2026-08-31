@@ -11,7 +11,7 @@ from alembic import op
 from sqlalchemy.dialects import postgresql
 
 revision: str = "20260831_010_strategy_search"
-down_revision: str | None = "20260828_009_strategy_configs"
+down_revision: str | None = "20260830_010_news"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
