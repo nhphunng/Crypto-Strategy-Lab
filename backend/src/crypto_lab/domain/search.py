@@ -9,6 +9,7 @@ from decimal import Decimal
 from typing import Protocol
 
 from crypto_lab.domain.market_data.candle import canonical_decimal
+from crypto_lab.domain.strategy.errors import StrategyError
 from crypto_lab.domain.strategy.parameters import ParameterValueType
 from crypto_lab.domain.strategy.registry import RegistryStatus, StrategyRegistry
 
@@ -38,6 +39,7 @@ class StrategyGenerator(Protocol):
         maximum_size: int,
         limit: int,
         seed: int,
+        candle_count: int | None = None,
     ) -> Iterator[StrategyCandidate]: ...
 
 
@@ -57,6 +59,7 @@ class RandomSearchGenerator:
         maximum_size: int,
         limit: int,
         seed: int,
+        candle_count: int | None = None,
     ) -> Iterator[StrategyCandidate]:
         available = {
             entry.strategy_id: entry
@@ -73,7 +76,7 @@ class RandomSearchGenerator:
         while len(seen) < limit and attempts < max(100, limit * 50):
             attempts += 1
             chosen = sorted(rng.sample(tuple(available), rng.randint(low, high)))
-            members = tuple(self._member(available[item], rng) for item in chosen)
+            members = tuple(self._member(available[item], rng, candle_count) for item in chosen)
             payload = [
                 {
                     "strategyId": item.strategy_id,
@@ -95,39 +98,55 @@ class RandomSearchGenerator:
             )
 
     @staticmethod
-    def _member(entry: object, rng: random.Random) -> CandidateMember:
+    def _member(entry: object, rng: random.Random, candle_count: int | None) -> CandidateMember:
         metadata = entry.metadata  # type: ignore[attr-defined]
-        values: dict[str, str | int] = {}
-        for definition in metadata.parameter_schema.definitions:
-            value: int | Decimal
-            if definition.allowed_values:
-                value = rng.choice(sorted(definition.allowed_values))
-            elif definition.value_type is ParameterValueType.INTEGER:
-                low = int(
-                    definition.minimum
-                    if definition.minimum is not None
-                    else definition.default_value or 1
-                )
-                high = int(
-                    definition.maximum
-                    if definition.maximum is not None
-                    else definition.default_value or low
-                )
-                # Wide schemas are sampled on a stable, useful grid instead of every integer.
-                value = rng.randint(low, high)
-            else:
-                decimal_low = Decimal(
-                    definition.minimum
-                    if definition.minimum is not None
-                    else definition.default_value or 0
-                )
-                decimal_high = Decimal(
-                    definition.maximum
-                    if definition.maximum is not None
-                    else definition.default_value or decimal_low
-                )
-                value = decimal_low + (decimal_high - decimal_low) * Decimal(
-                    rng.randrange(0, 101)
-                ) / Decimal(100)
-            values[definition.name] = value if isinstance(value, int) else canonical_decimal(value)
-        return CandidateMember(metadata.strategy_id, str(metadata.strategy_version), values)
+        for _attempt in range(100):
+            raw: dict[str, str | int] = {}
+            for definition in metadata.parameter_schema.definitions:
+                value: int | Decimal
+                if definition.allowed_values:
+                    value = rng.choice(sorted(definition.allowed_values))
+                elif definition.value_type is ParameterValueType.INTEGER:
+                    low = int(
+                        definition.minimum
+                        if definition.minimum is not None
+                        else definition.default_value or 1
+                    )
+                    high = int(
+                        definition.maximum
+                        if definition.maximum is not None
+                        else definition.default_value or low
+                    )
+                    if not definition.minimum_inclusive:
+                        low += 1
+                    if not definition.maximum_inclusive:
+                        high -= 1
+                    if candle_count is not None and definition.name in {"period", "lookback"}:
+                        high = min(high, max(low, candle_count // 2))
+                    value = rng.randint(low, high)
+                else:
+                    decimal_low = Decimal(
+                        definition.minimum
+                        if definition.minimum is not None
+                        else definition.default_value or 0
+                    )
+                    decimal_high = Decimal(
+                        definition.maximum
+                        if definition.maximum is not None
+                        else definition.default_value or decimal_low
+                    )
+                    first = 0 if definition.minimum_inclusive else 1
+                    last = 1000 if definition.maximum_inclusive else 999
+                    position = Decimal(rng.randint(first, last)) / Decimal(1000)
+                    value = decimal_low + (decimal_high - decimal_low) * position
+                raw[definition.name] = value if isinstance(value, int) else canonical_decimal(value)
+            try:
+                validated = entry.strategy.validate_parameters(raw)  # type: ignore[attr-defined]
+            except StrategyError:
+                continue
+            values = {
+                name: value if isinstance(value, int) else canonical_decimal(value)
+                for name, value in validated.values.items()
+            }
+            return CandidateMember(metadata.strategy_id, str(metadata.strategy_version), values)
+        raise ValueError(f"could not sample valid parameters for {metadata.strategy_id}")

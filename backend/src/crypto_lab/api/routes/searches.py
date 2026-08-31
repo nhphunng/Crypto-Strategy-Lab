@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from typing import Literal
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Query, Request, status
@@ -134,9 +135,12 @@ async def cancel_search_run(request: Request, run_id: UUID) -> SuccessEnvelope[S
     response_model=SuccessEnvelope[tuple[SearchCandidateDto, ...]],
 )
 async def list_search_candidates(
-    request: Request, run_id: UUID, limit: int = Query(50, ge=1, le=200)
+    request: Request,
+    run_id: UUID,
+    limit: int = Query(50, ge=1, le=200),
+    sort: Literal["recent", "score"] = "recent",
 ) -> SuccessEnvelope[tuple[SearchCandidateDto, ...]]:
-    rows = await request.app.state.container.search_repository.candidates(run_id, limit)
+    rows = await request.app.state.container.search_repository.candidates(run_id, limit, sort)
     values = tuple(
         SearchCandidateDto(
             id=row.id,

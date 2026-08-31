@@ -140,12 +140,16 @@ class StrategySearchService:
         try:
             row = await self.repository.get(run_id)
             assert row is not None
+            dataset = await self.datasets.get_complete(row.dataset_id)
+            if dataset is None:
+                raise ValueError("complete dataset is unavailable")
             candidates = self.generator.generate(
                 tuple(row.strategy_ids),
                 row.minimum_size,
                 row.maximum_size,
                 row.candidate_limit,
                 row.seed,
+                dataset.metadata.candle_count,
             )
             reason = "SEARCH_SPACE_EXHAUSTED"
             for sequence, candidate in enumerate(candidates, 1):

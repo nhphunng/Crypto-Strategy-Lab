@@ -360,6 +360,7 @@ function SingleBacktest() {
   const [capital, setCapital] = useState(String(BACKTEST_DEFAULTS.capital))
   const [feeRate, setFeeRate] = useState(String(BACKTEST_DEFAULTS.feeRate))
   const [slippageRate, setSlippageRate] = useState(String(BACKTEST_DEFAULTS.slippageRate))
+  const [randomSeed, setRandomSeed] = useState(String(BACKTEST_DEFAULTS.seed))
   const [catalogLoading, setCatalogLoading] = useState(true)
   const [running, setRunning] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -456,6 +457,10 @@ function SingleBacktest() {
       setError('Start date must be before end date.')
       return
     }
+    if (!Number.isSafeInteger(Number(randomSeed))) {
+      setError('Seed must be a safe integer.')
+      return
+    }
     activeRequest.current?.abort()
     const controller = new AbortController()
     activeRequest.current = controller
@@ -475,7 +480,7 @@ function SingleBacktest() {
         initialCapital: capital,
         feeRate,
         slippageRate,
-        randomSeed: BACKTEST_DEFAULTS.seed,
+        randomSeed: Number(randomSeed),
         jobId: crypto.randomUUID(),
         signal: controller.signal,
       })
@@ -574,7 +579,7 @@ function SingleBacktest() {
             <ExactInput label="Fee rate" value={feeRate} onChange={setFeeRate} disabled={running} />
             <ExactInput label="Slippage rate" value={slippageRate} onChange={setSlippageRate} disabled={running} />
             <Field label="Position size" value="100% available cash" />
-            <Field label="Seed" value={String(BACKTEST_DEFAULTS.seed)} />
+            <ExactInput label="Seed" value={randomSeed} onChange={setRandomSeed} disabled={running} />
             {selectedStrategy?.parameters.map((parameter) => (
               <ExactInput
                 key={parameter.name}
@@ -781,18 +786,28 @@ function Sparkline({ points, mode }: { points: number[]; mode: 'equity' | 'drawd
 // ---------------------------------------------------------------------------
 
 function StrategySearch() {
-  const { toast, showExplain, market } = useStore()
+  const { toast, showExplain, market, timeframe, setTimeframe } = useStore()
   const api = useMemo(() => createSearchApi(), [])
   const catalogApi = useMemo(() => createBacktestApi(), [])
   const [confirmStop, setConfirmStop] = useState(false)
   const [level, setLevel] = useState<'basic' | 'advanced'>('basic')
   const [run, setRun] = useState<SearchRun | null>(null)
   const [feed, setFeed] = useState<SearchCandidate[]>([])
+  const [top, setTop] = useState<SearchCandidate[]>([])
+  const [availableStrategyIds, setAvailableStrategyIds] = useState<string[]>([])
   const [strategyIds, setStrategyIds] = useState<string[]>([])
   const [strategyNames, setStrategyNames] = useState<Record<string, string>>({})
   const [busy, setBusy] = useState(false)
-  const limit = level === 'basic' ? 100 : 2000
-  const tested = run?.succeeded ?? 0
+  const [startDate, setStartDate] = useState('2026-08-01')
+  const [endDate, setEndDate] = useState('2026-08-02')
+  const [candidateLimit, setCandidateLimit] = useState('100')
+  const [minimumSize, setMinimumSize] = useState('2')
+  const [maximumSize, setMaximumSize] = useState('4')
+  const [seed, setSeed] = useState(String(BACKTEST_DEFAULTS.seed))
+  const [timeoutSeconds, setTimeoutSeconds] = useState('900')
+  const [noImprovementLimit, setNoImprovementLimit] = useState('100')
+  const limit = Number(candidateLimit) || 100
+  const tested = (run?.succeeded ?? 0) + (run?.failed ?? 0)
   const pct = Math.min(100, ((run?.generated ?? 0) / (run?.candidateLimit ?? limit)) * 100)
 
   useEffect(() => {
@@ -800,7 +815,9 @@ function StrategySearch() {
     Promise.all([api.listSearchRuns(controller.signal), catalogApi.loadCatalog(controller.signal)])
       .then(([runs, catalog]) => {
         setRun(runs[0] ?? null)
-        setStrategyIds(catalog.strategies.map((item) => item.strategyId))
+        const ids = catalog.strategies.map((item) => item.strategyId)
+        setAvailableStrategyIds(ids)
+        setStrategyIds(ids)
         setStrategyNames(Object.fromEntries(catalog.strategies.map((item) => [item.strategyId, item.displayName])))
       })
       .catch(() => undefined)
@@ -809,21 +826,39 @@ function StrategySearch() {
 
   useEffect(() => {
     if (!run) return
-    api.candidates(run.id).then(setFeed).catch(() => undefined)
+    Promise.all([api.candidates(run.id, 'recent'), api.candidates(run.id, 'score')])
+      .then(([recent, ranked]) => { setFeed(recent); setTop(ranked.slice(0, 10)) })
+      .catch(() => undefined)
     if (run.status !== 'QUEUED' && run.status !== 'RUNNING') return
     return api.subscribe(run.id, (next) => {
       setRun(next)
-      api.candidates(next.id).then(setFeed).catch(() => undefined)
+      Promise.all([api.candidates(next.id, 'recent'), api.candidates(next.id, 'score')])
+        .then(([recent, ranked]) => { setFeed(recent); setTop(ranked.slice(0, 10)) })
+        .catch(() => undefined)
     })
   }, [api, run?.id, run?.status])
 
   async function start() {
     if (strategyIds.length < 2) return toast('At least two strategies must be available', 'warning')
+    const numeric = {
+      minimumSize: level === 'basic' ? 2 : Number(minimumSize),
+      maximumSize: level === 'basic' ? Math.min(4, strategyIds.length) : Number(maximumSize),
+      candidateLimit: Number(candidateLimit), timeoutSeconds: Number(timeoutSeconds),
+      noImprovementLimit: Number(noImprovementLimit), seed: Number(seed),
+    }
+    if (startDate >= endDate) return toast('Start date must be before end date', 'warning')
+    if (!Object.values(numeric).every(Number.isSafeInteger)) return toast('Search settings must be whole numbers', 'warning')
+    if (numeric.minimumSize < 2 || numeric.maximumSize > Math.min(4, strategyIds.length) || numeric.minimumSize > numeric.maximumSize) {
+      return toast('Combination size must be between 2 and the selected strategy count', 'warning')
+    }
+    if (numeric.candidateLimit < 1 || numeric.candidateLimit > 2000) return toast('Candidate limit must be between 1 and 2,000', 'warning')
+    if (numeric.timeoutSeconds < 1 || numeric.timeoutSeconds > 7200) return toast('Timeout must be between 1 and 7,200 seconds', 'warning')
+    if (numeric.noImprovementLimit < 1 || numeric.noImprovementLimit > 2000) return toast('No-improvement limit must be between 1 and 2,000', 'warning')
     setBusy(true)
     try {
-      const datasetId = await api.prepareDataset(market.pair, BACKTEST_DEFAULTS.timeframe)
-      const created = await api.start(datasetId, strategyIds, limit, BACKTEST_DEFAULTS.seed)
-      setFeed([]); setRun(created)
+      const datasetId = await api.prepareDataset(market.pair, timeframe, startDate, endDate)
+      const created = await api.start({ datasetId, strategyIds, ...numeric })
+      setFeed([]); setTop([]); setRun(created)
       toast(`Search queued — ${limit.toLocaleString()} real candidates`, 'info')
     } catch (error) {
       toast(error instanceof Error ? error.message : 'Search could not start', 'warning')
@@ -831,7 +866,13 @@ function StrategySearch() {
   }
 
   const active = run?.status === 'QUEUED' || run?.status === 'RUNNING'
-  const top = [...feed].filter((item) => item.score !== null).sort((a, b) => Number(b.score) - Number(a.score)).slice(0, 10)
+
+  function toggleStrategy(id: string) {
+    if (active || busy) return
+    setStrategyIds((current) => current.includes(id)
+      ? current.length > 2 ? current.filter((item) => item !== id) : current
+      : [...current, id])
+  }
 
   return (
     <div className="flex h-full flex-col">
@@ -847,7 +888,12 @@ function StrategySearch() {
                 { value: 'advanced', label: 'Advanced' },
               ]}
               value={level}
-              onChange={(v) => setLevel(v as typeof level)}
+              onChange={(v) => {
+                const next = v as typeof level
+                setLevel(next)
+                setCandidateLimit(next === 'basic' ? '100' : '2000')
+                setNoImprovementLimit('100')
+              }}
             />
           </div>
           <div className="space-y-4 p-3 text-[12px]">
@@ -858,19 +904,45 @@ function StrategySearch() {
               </HelperText>
             )}
             <ConfigRow label="Market" value={market.pair} />
-            <ConfigRow label="Timeframe" value={BACKTEST_DEFAULTS.timeframe} />
+            <label className="flex items-center justify-between">
+              <span className="text-[11px] uppercase tracking-wide text-faint">Timeframe</span>
+              <select value={timeframe} disabled={active || busy} onChange={(event) => setTimeframe(event.target.value as typeof timeframe)} className="border border-subtle bg-workspace px-2 py-1 font-mono text-[12px] text-ink">
+                {['5m', '15m', '1h', '4h'].map((value) => <option key={value}>{value}</option>)}
+              </select>
+            </label>
+            <div className="grid grid-cols-2 gap-2">
+              <DateInput label="Start" value={startDate} onChange={setStartDate} disabled={active || busy} />
+              <DateInput label="End" value={endDate} onChange={setEndDate} disabled={active || busy} />
+            </div>
             <div>
               <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-faint">Strategies to combine</div>
               <div className="flex flex-wrap gap-1.5">
-                {strategyIds.map((s) => (
-                  <span key={s} className="rounded-[4px] border border-accent/40 bg-accent/10 px-2 py-1 font-mono text-[11px] text-accent">
+                {availableStrategyIds.map((s) => (
+                  <button type="button" disabled={active || busy} onClick={() => toggleStrategy(s)} key={s} className={cn(
+                    'rounded-[4px] border px-2 py-1 text-left font-mono text-[11px] disabled:opacity-60',
+                    strategyIds.includes(s) ? 'border-accent/40 bg-accent/10 text-accent' : 'border-subtle bg-workspace text-faint',
+                  )}>
                     {strategyNames[s] ?? s}
-                  </span>
+                  </button>
                 ))}
               </div>
             </div>
-            <ConfigRow label="Combination size" value="2 – 4" />
-            <ConfigRow label="Candidates to try" value={level === 'basic' ? '100' : '2,000'} />
+            {level === 'basic' ? (
+              <label className="flex items-center justify-between">
+                <span className="text-[11px] uppercase tracking-wide text-faint">Candidates to try</span>
+                <select value={candidateLimit} disabled={active || busy} onChange={(event) => setCandidateLimit(event.target.value)} className="border border-subtle bg-workspace px-2 py-1 font-mono text-[12px] text-ink">
+                  {['25', '50', '100'].map((value) => <option key={value}>{value}</option>)}
+                </select>
+              </label>
+            ) : (
+              <>
+                <div className="grid grid-cols-2 gap-3">
+                  <ExactInput label="Min combination" value={minimumSize} onChange={setMinimumSize} disabled={active || busy} />
+                  <ExactInput label="Max combination" value={maximumSize} onChange={setMaximumSize} disabled={active || busy} />
+                </div>
+                <ExactInput label="Candidate limit" value={candidateLimit} onChange={setCandidateLimit} disabled={active || busy} />
+              </>
+            )}
 
             {level === 'advanced' && (
               <>
@@ -878,10 +950,10 @@ function StrategySearch() {
                   <ConfigRow label="Generator" value="Random Search v1" ml />
                 </div>
                 <ConfigRow label="Parameter ranges" value="Default" />
-                <ConfigRow label="Seed" value={String(BACKTEST_DEFAULTS.seed)} />
-                <ConfigRow label="Dataset" value={`${market.pair} · ${BACKTEST_DEFAULTS.timeframe} · 2026 H1`} />
-                <ConfigRow label="Timeout" value="15 minutes" />
-                <ConfigRow label="No improvement" value={`${Math.min(100, limit)} candidates`} />
+                <ExactInput label="Seed" value={seed} onChange={setSeed} disabled={active || busy} />
+                <ExactInput label="Timeout seconds" value={timeoutSeconds} onChange={setTimeoutSeconds} disabled={active || busy} />
+                <ExactInput label="No improvement" value={noImprovementLimit} onChange={setNoImprovementLimit} disabled={active || busy} />
+                <ConfigRow label="Dataset" value={`${market.pair} · ${timeframe} · ${startDate} → ${endDate}`} />
               </>
             )}
 
@@ -944,7 +1016,7 @@ function StrategySearch() {
               {[
                 ['Generated', run?.generated ?? 0],
                 ['Tested', tested],
-                ['Running', run?.running ?? 0],
+                ['Succeeded', run?.succeeded ?? 0],
                 ['Failed', run?.failed ?? 0],
                 ['Remaining', Math.max(0, (run?.candidateLimit ?? limit) - (run?.generated ?? 0))],
               ].map(([l, v]) => (
@@ -1078,6 +1150,7 @@ type RuntimeRun = {
   status: keyof typeof RUN_TONE; started: string; duration: string
   tested: number | null; failed: number; top1: string | null
   generator: string; seed: number; datasetId: string; reason?: string
+  parentSearchRunId?: string | null; candidateName?: string | null
 }
 
 function elapsed(start: string, end: string | null) {
@@ -1090,6 +1163,7 @@ function Runs() {
   const [runs, setRuns] = useState<RuntimeRun[]>([])
   const [selected, setSelected] = useState<RuntimeRun | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [filter, setFilter] = useState<'all' | 'search' | 'backtest'>('all')
   useEffect(() => {
     let active = true
     const load = () => Promise.all([api.listSearchRuns(), api.listBacktestRuns()]).then(([searches, backtests]) => {
@@ -1097,14 +1171,15 @@ function Runs() {
       const searchRows: RuntimeRun[] = searches.map((run) => ({
         id: run.id, type: 'Search', space: run.strategyIds.join(' + '), status: run.status,
         started: new Date(run.startedAt ?? run.createdAt).toLocaleString(), duration: elapsed(run.startedAt ?? run.createdAt, run.completedAt),
-        tested: run.succeeded, failed: run.failed, top1: run.topScore, generator: run.generator,
+        tested: run.succeeded + run.failed, failed: run.failed, top1: run.topScore, generator: run.generator,
         seed: run.seed, datasetId: run.datasetId, reason: run.failureDetail ?? run.stopReason ?? undefined,
       }))
       const backtestRows: RuntimeRun[] = backtests.map((run: BacktestRunSummary) => ({
-        id: run.id, type: 'Backtest', space: run.strategyDefinitionId, status: run.status,
+        id: run.id, type: 'Backtest', space: run.candidateDisplayName ?? `${run.strategyId} · ${run.pair} · ${run.timeframe}`, status: run.status,
         started: new Date(run.requestedAt).toLocaleString(), duration: elapsed(run.requestedAt, run.completedAt),
         tested: null, failed: run.status === 'FAILED' ? 1 : 0, top1: null, generator: '—',
         seed: run.randomSeed, datasetId: run.datasetId, reason: run.failureCode ?? undefined,
+        parentSearchRunId: run.parentSearchRunId, candidateName: run.candidateDisplayName,
       }))
       setRuns([...searchRows, ...backtestRows]); setError(null)
     }).catch((value) => active && setError(value instanceof Error ? value.message : 'Runs could not be loaded'))
@@ -1112,9 +1187,16 @@ function Runs() {
     const timer = globalThis.setInterval(load, 3000)
     return () => { active = false; globalThis.clearInterval(timer) }
   }, [api])
+  const visibleRuns = runs.filter((run) => filter === 'all' || run.type.toLowerCase() === filter)
   return (
     <div className="flex h-full min-h-0 flex-col">
       {error && <div className="border-b border-neg/30 bg-neg/10 px-3 py-2 text-[12px] text-neg">{error}</div>}
+      <div className="flex items-center justify-between border-b border-subtle bg-surface px-3 py-2">
+        <span className="text-[12px] text-dim">Durable search and backtest history</span>
+        <Segmented ariaLabel="Run type filter" options={[
+          { value: 'all', label: 'All' }, { value: 'search', label: 'Search' }, { value: 'backtest', label: 'Backtest' },
+        ]} value={filter} onChange={(value) => setFilter(value as typeof filter)} />
+      </div>
       <div className="min-h-0 flex-1 overflow-auto">
         <table className="w-full border-collapse text-[12px]">
           <thead className="sticky top-0 z-10">
@@ -1125,7 +1207,7 @@ function Runs() {
             </tr>
           </thead>
           <tbody>
-            {runs.map((r) => (
+            {visibleRuns.map((r) => (
               <tr
                 key={r.id}
                 onClick={() => setSelected(r)}
@@ -1166,6 +1248,8 @@ function Runs() {
             </DrawerSection>
             <DrawerSection title="Summary">
               <KV k="Search space" v={selected.space} />
+              {selected.parentSearchRunId && <KV k="Parent search" v={selected.parentSearchRunId} />}
+              {selected.candidateName && <KV k="Candidate" v={selected.candidateName} />}
               <KV k="Started" v={selected.started} />
               <KV k="Duration" v={selected.duration} />
               <KV k="Tested" v={selected.tested ?? '—'} />

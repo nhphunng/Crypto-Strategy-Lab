@@ -80,7 +80,11 @@ async def test_generate_backtest_evaluate_rank_progress_reaches_candidate_limit(
         repository=repository,
         generator=RandomSearchGenerator(build_strategy_registry()),
         configurations=None,
-        datasets=SimpleNamespace(get_complete=lambda _id: _value(object())),
+        datasets=SimpleNamespace(
+            get_complete=lambda _id: _value(
+                SimpleNamespace(metadata=SimpleNamespace(candle_count=96))
+            )
+        ),
         analyzer=None,
         create_backtest=None,
         execute_backtest=None,

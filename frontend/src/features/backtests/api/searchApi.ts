@@ -14,7 +14,8 @@ export type SearchCandidate = {
 }
 export type BacktestRunSummary = {
   id: string; jobId: string; status: 'QUEUED' | 'RUNNING' | 'COMPLETED' | 'FAILED'
-  datasetId: string; strategyDefinitionId: string; randomSeed: number
+  datasetId: string; strategyDefinitionId: string; strategyId: string; pair: string; timeframe: string
+  parentSearchRunId: string | null; candidateDisplayName: string | null; randomSeed: number
   requestedAt: string; completedAt: string | null; failureCode: string | null
 }
 type FetchLike = typeof globalThis.fetch
@@ -33,11 +34,11 @@ export class SearchApi {
     if (!response.ok) throw new Error(String(body.message ?? 'Search request failed.'))
     return body.data as T
   }
-  async prepareDataset(pair: string, timeframe: string, signal?: AbortSignal): Promise<string> {
+  async prepareDataset(pair: string, timeframe: string, startDate: string, endDate: string, signal?: AbortSignal): Promise<string> {
     const created = await this.request<{ datasetId: string; status: string }>('/api/v1/market-data/datasets', {
       method: 'POST', signal, body: JSON.stringify({ schemaVersion: '1',
         selection: { provider: 'BINANCE', pair, timeframe },
-        range: { startTime: '2026-08-01T00:00:00.000Z', endTime: '2026-08-02T00:00:00.000Z' } }) })
+        range: { startTime: `${startDate}T00:00:00.000Z`, endTime: `${endDate}T00:00:00.000Z` } }) })
     for (let attempt = 0; attempt < 60; attempt += 1) {
       const dataset = attempt === 0 ? created : await this.request<{ datasetId: string; status: string }>(`/api/v1/market-data/datasets/${created.datasetId}`, { signal })
       if (dataset.status === 'COMPLETE') return dataset.datasetId
@@ -46,14 +47,14 @@ export class SearchApi {
     }
     throw new Error('Dataset preparation timed out.')
   }
-  start(datasetId: string, strategyIds: string[], candidateLimit: number, seed: number, signal?: AbortSignal) {
+  start(input: { datasetId: string; strategyIds: string[]; minimumSize: number; maximumSize: number
+    candidateLimit: number; timeoutSeconds: number; noImprovementLimit: number; seed: number }, signal?: AbortSignal) {
     return this.request<SearchRun>('/api/v1/search-runs', { method: 'POST', signal, body: JSON.stringify({
-      datasetId, strategyIds, minimumSize: 2, maximumSize: Math.min(4, strategyIds.length),
-      candidateLimit, timeoutSeconds: 900, noImprovementLimit: Math.min(100, candidateLimit), seed }) })
+      ...input }) })
   }
   listSearchRuns(signal?: AbortSignal) { return this.request<SearchRun[]>('/api/v1/search-runs', { signal }) }
   cancel(id: string) { return this.request<SearchRun>(`/api/v1/search-runs/${id}/cancel`, { method: 'POST' }) }
-  candidates(id: string, signal?: AbortSignal) { return this.request<SearchCandidate[]>(`/api/v1/search-runs/${id}/candidates?limit=50`, { signal }) }
+  candidates(id: string, sort: 'recent' | 'score' = 'recent', signal?: AbortSignal) { return this.request<SearchCandidate[]>(`/api/v1/search-runs/${id}/candidates?limit=50&sort=${sort}`, { signal }) }
   listBacktestRuns(signal?: AbortSignal) { return this.request<BacktestRunSummary[]>('/api/v1/backtest-runs?limit=100', { signal }) }
   subscribe(id: string, onProgress: (run: SearchRun) => void): () => void {
     const url = new URL(`/ws/v1/search-runs/${id}`, this.baseUrl); url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:'

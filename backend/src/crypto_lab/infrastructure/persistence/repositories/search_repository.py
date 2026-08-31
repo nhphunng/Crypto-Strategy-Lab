@@ -60,18 +60,42 @@ class SqlAlchemySearchRepository:
             )
 
     async def candidates(
-        self, run_id: UUID, limit: int = 50
+        self, run_id: UUID, limit: int = 50, sort: str = "recent"
     ) -> tuple[StrategySearchCandidateRow, ...]:
+        ordering = (
+            (StrategySearchCandidateRow.score.desc().nullslast(),)
+            if sort == "score"
+            else (StrategySearchCandidateRow.sequence.desc(),)
+        )
         async with self._sessions() as session:
             rows = (
                 await session.scalars(
                     select(StrategySearchCandidateRow)
                     .where(StrategySearchCandidateRow.search_run_id == run_id)
-                    .order_by(StrategySearchCandidateRow.sequence.desc())
+                    .order_by(*ordering)
                     .limit(limit)
                 )
             ).all()
         return tuple(rows)
+
+    async def candidate_links(
+        self, backtest_run_ids: tuple[UUID, ...]
+    ) -> dict[UUID, tuple[UUID, str]]:
+        if not backtest_run_ids:
+            return {}
+        async with self._sessions() as session:
+            rows = (
+                await session.scalars(
+                    select(StrategySearchCandidateRow).where(
+                        StrategySearchCandidateRow.backtest_run_id.in_(backtest_run_ids)
+                    )
+                )
+            ).all()
+        return {
+            row.backtest_run_id: (row.search_run_id, row.display_name)
+            for row in rows
+            if row.backtest_run_id is not None
+        }
 
     async def cancel(self, run_id: UUID, now: object) -> bool:
         async with self._sessions() as session, session.begin():
