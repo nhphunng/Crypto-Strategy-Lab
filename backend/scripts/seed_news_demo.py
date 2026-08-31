@@ -32,7 +32,7 @@ DEFAULT_URL = os.getenv(
     "postgresql+asyncpg://crypto_lab:crypto_lab@localhost:55432/crypto_lab",
 )
 
-NOW = datetime(2026, 8, 30, 12, 0, tzinfo=UTC)
+NOW = datetime.now(UTC)
 
 
 def _item(
