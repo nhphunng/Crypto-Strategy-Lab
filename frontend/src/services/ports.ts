@@ -2,8 +2,6 @@ import type {
   LeaderRow,
   MarketInfo,
   OperationsSnapshot,
-  RunRow,
-  SearchRun,
   Strategy,
   Timeframe,
   Trade,
@@ -24,9 +22,6 @@ export type StrategyGateway = {
 }
 
 export type BacktestGateway = {
-  candidateNames: readonly string[]
-  searchRun: SearchRun
-  listRuns: () => RunRow[]
   makeTrades: (seed?: number, count?: number) => Trade[]
 }
 

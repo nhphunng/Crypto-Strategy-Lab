@@ -18,7 +18,7 @@ describe('mock service contracts', () => {
   })
 
   it('exposes provenance-bearing evaluation data behind gateways', () => {
-    expect(services.backtests.listRuns()).not.toHaveLength(0)
+    expect(services.backtests.makeTrades()).not.toHaveLength(0)
     expect(services.leaderboard.listEntries()).not.toHaveLength(0)
     expect(services.strategies.listMethods().every((method) => Boolean(method.version))).toBe(true)
   })

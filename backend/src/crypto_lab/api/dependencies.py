@@ -35,6 +35,7 @@ from crypto_lab.application.market_data.ports import (
 from crypto_lab.application.news.collect_news import CollectNews
 from crypto_lab.application.news.collection_loop import NewsCollectionLoop
 from crypto_lab.application.news.list_news import ListNews
+from crypto_lab.application.search_service import SearchEventHub, StrategySearchService
 from crypto_lab.application.strategies.activate_generated_strategy import ActivateGeneratedStrategy
 from crypto_lab.application.strategies.analyze_strategy import AnalyzeStrategy
 from crypto_lab.application.strategies.combine_configuration import ConfiguredStrategyAnalyzer
@@ -56,6 +57,7 @@ from crypto_lab.domain.evaluation.policy import (
 )
 from crypto_lab.domain.market_data.timeframe import Timeframe
 from crypto_lab.domain.news.coin_resolution import CoinResolver
+from crypto_lab.domain.search import RandomSearchGenerator
 from crypto_lab.domain.strategy.errors import StrategyError
 from crypto_lab.domain.strategy.registry import StrategyRegistry
 from crypto_lab.domain.strategy.signal import StrategyAnalysisResult
@@ -86,6 +88,9 @@ from crypto_lab.infrastructure.persistence.repositories.evaluation_repository im
 )
 from crypto_lab.infrastructure.persistence.repositories.news_repository import (
     SqlAlchemyNewsRepository,
+)
+from crypto_lab.infrastructure.persistence.repositories.search_repository import (
+    SqlAlchemySearchRepository,
 )
 from crypto_lab.infrastructure.persistence.repositories.strategy_configuration_repository import (
     SqlAlchemyStrategyConfigurationRepository,
@@ -242,6 +247,9 @@ class Container:
     list_news: ListNews | None = None
     collect_news: CollectNews | None = None
     news_collection_loop: NewsCollectionLoop | None = None
+    search_repository: SqlAlchemySearchRepository | None = None
+    search_hub: SearchEventHub | None = None
+    strategy_search: StrategySearchService | None = None
 
     async def initialize_backtest_evaluation(self) -> None:
         if self.backtest_repository is None or self.evaluation_repository is None:
@@ -300,6 +308,8 @@ class Container:
     async def close(self) -> None:
         if self.news_collection_loop is not None:
             await self.news_collection_loop.stop()
+        if self.strategy_search is not None:
+            await self.strategy_search.close()
         if self.realtime_hub is not None:
             await self.realtime_hub.close()
         if self.http_client is not None:
@@ -406,9 +416,7 @@ def build_container(settings: Settings | None = None) -> Container:
     storage_configured = source_encryption_key is not None
     if storage_configured:
         assert source_encryption_key is not None
-        master_key = base64.b64decode(
-            source_encryption_key.get_secret_value(), validate=True
-        )
+        master_key = base64.b64decode(source_encryption_key.get_secret_value(), validate=True)
         protector = SourceContentProtector(
             LocalAesKeyProvider(master_key, settings.source_encryption_key_id)
         )
@@ -471,6 +479,24 @@ def build_container(settings: Settings | None = None) -> Container:
     )
     realtime_hub = RealtimeSelectionHub(realtime_provider)
     leaderboard = build_leaderboard_container(database)
+    search_repository = SqlAlchemySearchRepository(database.sessions)
+    search_hub = SearchEventHub()
+    strategy_search = StrategySearchService(
+        repository=search_repository,
+        generator=RandomSearchGenerator(strategy_registry),
+        configurations=save_strategy_configuration,
+        datasets=backtest_datasets,
+        analyzer=backtest_strategy_analyzer,
+        create_backtest=create_backtest,
+        execute_backtest=execute_backtest,
+        evaluate_backtest=evaluate_backtest,
+        leaderboard=leaderboard.ingestion,
+        clock=clock,
+        hub=search_hub,
+        execution_policy=EXECUTION_POLICY,
+        evaluation_policy=EVALUATION_POLICY,
+        scoring_policy=BALANCED_SCORING_POLICY,
+    )
     auto_evaluation = _build_auto_evaluation(
         settings,
         clock,
@@ -518,6 +544,9 @@ def build_container(settings: Settings | None = None) -> Container:
         list_news=list_news,
         collect_news=collect_news,
         news_collection_loop=news_collection_loop,
+        search_repository=search_repository,
+        search_hub=search_hub,
+        strategy_search=strategy_search,
         leaderboard=leaderboard,
         auto_evaluation=auto_evaluation,
     )
