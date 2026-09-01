@@ -19,6 +19,7 @@ from crypto_lab.application.news.errors import (
 )
 from crypto_lab.application.news.list_news import ListNews
 from crypto_lab.application.news.ports import NewsQuery
+from crypto_lab.application.sentiment.ports import SentimentAnalysisRepository
 
 router = APIRouter(prefix="/api/v1/news", tags=["news"])
 
@@ -35,6 +36,21 @@ def _news_service(request: Request) -> ListNews:
     if not isinstance(service, ListNews):
         raise dependency_unavailable()
     return service
+
+
+def _sentiment_repository(request: Request) -> SentimentAnalysisRepository | None:
+    """Resolve the sentiment repository if wired; sentiment is optional here.
+
+    A deployment (or a test's stub container) that has not wired sentiment
+    yet must not fail the news list -- it simply projects `sentiment: null`
+    for every item, which is also the correct contract for a pending or
+    failed analysis.
+    """
+    container = request.app.state.container
+    repository: SentimentAnalysisRepository | None = getattr(
+        container, "sentiment_repository", None
+    )
+    return repository
 
 
 def _published(value: str | None, field: str) -> datetime | None:
@@ -60,6 +76,7 @@ async def list_news(
     page: int = Query(default=1),
     page_size: int = Query(default=50, alias="pageSize"),
     service: ListNews = Depends(_news_service),
+    sentiment_repository: SentimentAnalysisRepository | None = Depends(_sentiment_repository),
 ) -> SuccessEnvelope[NewsPageDto]:
     if coin is not None and not _COIN.fullmatch(coin):
         raise coin_invalid("coin must be an uppercase market symbol.", coin=coin)
@@ -81,7 +98,12 @@ async def list_news(
             page_size=page_size,
         )
     )
-    return success_envelope(page_to_dto(result), "News loaded.", request_id(request))
+    sentiment_map = (
+        await sentiment_repository.latest_for(tuple(item.id for item in result.items))
+        if sentiment_repository is not None
+        else {}
+    )
+    return success_envelope(page_to_dto(result, sentiment_map), "News loaded.", request_id(request))
 
 
 __all__ = ["NewsError", "router"]

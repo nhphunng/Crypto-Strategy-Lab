@@ -115,10 +115,34 @@ async def news_repository() -> AsyncIterator[SqlAlchemyNewsRepository]:
         await database.dispose()
         pytest.skip("PostgreSQL integration database is unavailable")
     async with database.engine.begin() as connection:
-        await connection.execute(text("TRUNCATE news_items"))
+        # CASCADE: news_sentiment_analyses FK-references news_items.
+        await connection.execute(text("TRUNCATE news_items CASCADE"))
     yield SqlAlchemyNewsRepository(database.sessions)
     async with database.engine.begin() as connection:
-        await connection.execute(text("TRUNCATE news_items"))
+        await connection.execute(text("TRUNCATE news_items CASCADE"))
+    await database.dispose()
+
+
+@pytest.fixture
+async def sentiment_fixture() -> AsyncIterator[tuple[SqlAlchemyNewsRepository, object]]:
+    """A clean News + Sentiment schema, sharing one PostgreSQL connection pool."""
+
+    from crypto_lab.infrastructure.persistence.repositories.sentiment_repository import (
+        SqlAlchemySentimentAnalysisRepository,
+    )
+
+    database = Database.create(TEST_DATABASE_URL)
+    if not await database.ping():
+        await database.dispose()
+        pytest.skip("PostgreSQL integration database is unavailable")
+    async with database.engine.begin() as connection:
+        await connection.execute(text("TRUNCATE news_sentiment_analyses, news_items CASCADE"))
+    yield (
+        SqlAlchemyNewsRepository(database.sessions),
+        SqlAlchemySentimentAnalysisRepository(database.sessions),
+    )
+    async with database.engine.begin() as connection:
+        await connection.execute(text("TRUNCATE news_sentiment_analyses, news_items CASCADE"))
     await database.dispose()
 
 

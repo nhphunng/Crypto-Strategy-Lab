@@ -31,11 +31,8 @@ class NewsFeedConfig(PydanticBaseModel):
         if parsed.scheme != "https" or not parsed.hostname:
             raise ValueError("news feed URL must be a server-controlled HTTPS URL")
         if parsed.username or parsed.password or parsed.query or parsed.fragment:
-            raise ValueError(
-                "news feed URL must not contain credentials, query, or fragment"
-            )
+            raise ValueError("news feed URL must not contain credentials, query, or fragment")
         return value.rstrip("/")
-
 
 
 @dataclass(frozen=True, slots=True)
@@ -94,6 +91,11 @@ class Settings(BaseSettings):
     news_feeds: tuple[NewsFeedConfig, ...] = (
         NewsFeedConfig(source="Cointelegraph", url="https://cointelegraph.com/rss"),
     )
+    # Sentiment analysis is off by default so tests and local runs never spin
+    # up the background loop unasked; the shipped Compose deployment turns it on.
+    sentiment_analysis_enabled: bool = False
+    sentiment_analysis_interval_seconds: float = Field(default=900, ge=60, le=86_400)
+    sentiment_analysis_batch_size: int = Field(default=50, ge=1, le=500)
     cors_allowed_origins: tuple[str, ...] = (
         "http://localhost:5173",
         "http://127.0.0.1:5173",
