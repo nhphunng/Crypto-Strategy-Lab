@@ -1,11 +1,16 @@
 """News list DTOs aligned to the TV5 contract.
 
-JSON is camelCase and instants are UTC ISO-8601 millisecond strings. Task 3
-always projects ``sentiment`` as ``null``; the analysis fields are reserved so
-Task 4 can fill them without a contract change.
+JSON is camelCase and instants are UTC ISO-8601 millisecond strings. Task 4
+fills ``sentiment`` with the latest COMPLETED analysis for each item (see
+``domain.sentiment``); an item with no analysis yet, or whose only analysis
+FAILED, still projects ``sentiment: null`` -- a label/score is never
+fabricated for a pending or failed analysis.
 """
 
 from __future__ import annotations
+
+from collections.abc import Mapping
+from uuid import UUID
 
 from pydantic import Field
 
@@ -13,10 +18,12 @@ from crypto_lab.api.common import ApiModel
 from crypto_lab.application.news.ports import NewsPage
 from crypto_lab.domain.market_data.candle import format_utc_millis
 from crypto_lab.domain.news.item import NewsItem
+from crypto_lab.domain.sentiment.analysis import NewsSentimentAnalysis
+from crypto_lab.domain.sentiment.model import SentimentStatus
 
 
 class SentimentAnalysisDto(ApiModel):
-    """Reserved analysis payload; Task 3 always projects ``null``."""
+    """The latest COMPLETED sentiment analysis for a News item, if any."""
 
     label: str
     score: str
@@ -44,8 +51,22 @@ class NewsPageDto(ApiModel):
     total: int
 
 
-def item_to_dto(item: NewsItem) -> NewsItemDto:
-    # The Task 3 mapper always projects the reserved analysis payload as null.
+def item_to_dto(
+    item: NewsItem,
+    sentiment_map: Mapping[UUID, NewsSentimentAnalysis] | None = None,
+) -> NewsItemDto:
+    analysis = (sentiment_map or {}).get(item.id)
+    sentiment = (
+        SentimentAnalysisDto(
+            label=analysis.label.value,
+            score=str(analysis.score),
+            model_id=analysis.model_id,
+            model_version=analysis.model_version,
+            analyzed_at=format_utc_millis(analysis.analyzed_at),
+        )
+        if analysis is not None and analysis.status is SentimentStatus.COMPLETED
+        else None
+    )
     return NewsItemDto(
         news_id=str(item.id),
         title=item.title,
@@ -55,13 +76,16 @@ def item_to_dto(item: NewsItem) -> NewsItemDto:
         crawled_at=format_utc_millis(item.crawled_at),
         related_coins=item.related_coins,
         url=item.url,
-        sentiment=None,
+        sentiment=sentiment,
     )
 
 
-def page_to_dto(page: NewsPage) -> NewsPageDto:
+def page_to_dto(
+    page: NewsPage,
+    sentiment_map: Mapping[UUID, NewsSentimentAnalysis] | None = None,
+) -> NewsPageDto:
     return NewsPageDto(
-        items=tuple(item_to_dto(item) for item in page.items),
+        items=tuple(item_to_dto(item, sentiment_map) for item in page.items),
         page=page.page,
         page_size=page.page_size,
         total=page.total,

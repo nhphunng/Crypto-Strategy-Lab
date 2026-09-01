@@ -47,7 +47,7 @@ def _eth_item() -> CollectedNewsItem:
 
 async def _truncate(database: Database) -> None:
     async with database.engine.begin() as connection:
-        await connection.execute(text("TRUNCATE news_items"))
+        await connection.execute(text("TRUNCATE news_items CASCADE"))
 
 
 async def _build_client() -> tuple[AsyncClient, Database, Container]:
