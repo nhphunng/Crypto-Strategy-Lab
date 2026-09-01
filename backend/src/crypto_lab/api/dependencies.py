@@ -22,6 +22,9 @@ from crypto_lab.application.evaluations.auto_evaluate import (
     AutoEvaluationLoop,
     AutoEvaluationPipeline,
     AutoEvaluationSettings,
+    SearchLoopPipeline,
+    SearchLoopRunner,
+    SearchLoopSettings,
 )
 from crypto_lab.application.evaluations.compare_results import CompareEvaluationResults
 from crypto_lab.application.evaluations.evaluate_result import EvaluateBacktestResult
@@ -304,8 +307,11 @@ class Container:
 
     leaderboard: LeaderboardContainer | None = None
     auto_evaluation: AutoEvaluationLoop | None = None
+    search_loop: SearchLoopRunner | None = None
 
     async def close(self) -> None:
+        if self.search_loop is not None:
+            await self.search_loop.stop()
         if self.news_collection_loop is not None:
             await self.news_collection_loop.stop()
         if self.strategy_search is not None:
@@ -510,6 +516,20 @@ def build_container(settings: Settings | None = None) -> Container:
         evaluate_backtest=evaluate_backtest,
         ingestion=leaderboard.ingestion,
     )
+    search_loop = _build_search_loop(
+        settings,
+        clock,
+        datasets=datasets,
+        dataset_reader=backtest_datasets,
+        discovery=strategy_discovery,
+        generator=RandomSearchGenerator(strategy_registry),
+        configurations=save_strategy_configuration,
+        analyzer=backtest_strategy_analyzer,
+        create_backtest=create_backtest,
+        execute_backtest=execute_backtest,
+        evaluate_backtest=evaluate_backtest,
+        ingestion=leaderboard.ingestion,
+    )
     return Container(
         settings=settings,
         clock=clock,
@@ -549,6 +569,7 @@ def build_container(settings: Settings | None = None) -> Container:
         strategy_search=strategy_search,
         leaderboard=leaderboard,
         auto_evaluation=auto_evaluation,
+        search_loop=search_loop,
     )
 
 
@@ -577,4 +598,37 @@ def _build_auto_evaluation(
     return AutoEvaluationLoop(
         pipeline,
         interval_seconds=settings.auto_evaluation_interval_seconds,
+    )
+
+
+def _build_search_loop(
+    settings: Settings,
+    clock: Clock,
+    **collaborators: Any,
+) -> SearchLoopRunner | None:
+    """Wire the background candidate-search loop only when the deployment asks for it."""
+
+    if not settings.search_loop_enabled:
+        return None
+    pipeline = SearchLoopPipeline(
+        settings=SearchLoopSettings(
+            pair=settings.search_loop_pair,
+            timeframe=Timeframe(settings.search_loop_timeframe),
+            candles=settings.search_loop_candles,
+            candidates_per_cycle=settings.search_loop_candidates_per_cycle,
+            minimum_size=settings.search_loop_minimum_size,
+            maximum_size=settings.search_loop_maximum_size,
+            base_seed=settings.search_loop_base_seed,
+            interval_seconds=settings.search_loop_interval_seconds,
+        ),
+        clock=clock,
+        execution_policy=EXECUTION_POLICY,
+        evaluation_policy=EVALUATION_POLICY,
+        scoring_policy=BALANCED_SCORING_POLICY,
+        **collaborators,
+    )
+    return SearchLoopRunner(
+        pipeline,
+        clock,
+        interval_seconds=settings.search_loop_interval_seconds,
     )

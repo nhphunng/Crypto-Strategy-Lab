@@ -87,6 +87,17 @@ class Settings(BaseSettings):
     auto_evaluation_timeframe: str = "15m"
     auto_evaluation_candles: int = Field(default=500, ge=50, le=5000)
     auto_evaluation_interval_seconds: float = Field(default=3600, ge=60, le=86_400)
+    # Off by default for the same reason: tests and local runs must not spin
+    # up a background candidate search against the provider on startup.
+    search_loop_enabled: bool = False
+    search_loop_pair: str = "BTCUSDT"
+    search_loop_timeframe: str = "15m"
+    search_loop_candles: int = Field(default=500, ge=50, le=5000)
+    search_loop_candidates_per_cycle: int = Field(default=10, ge=1, le=200)
+    search_loop_minimum_size: int = Field(default=2, ge=2, le=4)
+    search_loop_maximum_size: int = Field(default=4, ge=2, le=4)
+    search_loop_base_seed: int = 424242
+    search_loop_interval_seconds: float = Field(default=1800, ge=60, le=86_400)
     # News collection is off by default so tests and local runs never reach a
     # feed on startup; the shipped Compose deployment turns it on.
     news_collection_enabled: bool = False

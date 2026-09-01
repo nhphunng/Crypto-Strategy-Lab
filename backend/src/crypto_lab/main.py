@@ -15,6 +15,7 @@ from crypto_lab.api.routes.evaluations import router as evaluations_router
 from crypto_lab.api.routes.leaderboards import router as leaderboards_router
 from crypto_lab.api.routes.market_data import router as market_data_router
 from crypto_lab.api.routes.news import router as news_router
+from crypto_lab.api.routes.search_loop import router as search_loop_router
 from crypto_lab.api.routes.searches import router as searches_router
 from crypto_lab.api.routes.strategies import router as strategies_router
 from crypto_lab.api.routes.strategy_generation import router as strategy_generation_router
@@ -38,7 +39,11 @@ def create_app(container: Container | None = None) -> FastAPI:
             owned_container.news_collection_loop.start()
         if owned_container.auto_evaluation is not None:
             owned_container.auto_evaluation.start()
+        if owned_container.search_loop is not None:
+            owned_container.search_loop.start()
         yield
+        if owned_container.search_loop is not None:
+            await owned_container.search_loop.stop()
         if owned_container.auto_evaluation is not None:
             await owned_container.auto_evaluation.stop()
         if owned_container.news_collection_loop is not None:
@@ -70,6 +75,7 @@ def create_app(container: Container | None = None) -> FastAPI:
     app.include_router(strategies_router)
     app.include_router(strategy_generation_router)
     app.include_router(searches_router)
+    app.include_router(search_loop_router)
     app.include_router(market_data_websocket_router)
     app.include_router(leaderboards_router)
     app.include_router(leaderboard_ws_router)
