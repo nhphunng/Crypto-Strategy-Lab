@@ -48,6 +48,7 @@ const DETERMINISTIC_SPECS = [
   "tests/e2e/leaderboard-visualization.spec.ts",
   "tests/e2e/realtime-multi-chart.spec.ts",
   "tests/e2e/market-pair-context.spec.ts",
+  "tests/e2e/news-pipeline.spec.ts",
 ];
 
 function run(command, args, options = {}) {
@@ -101,9 +102,15 @@ async function main() {
   run("docker", ["compose", "up", "-d", "postgres"]);
   await waitFor("postgres", async () => postgresReady());
 
+  // The migrate image COOPIES backend/migrations at build time, so a fresh
+  // migration file is only visible after rebuilding the image.
+  run("docker", ["compose", "build", "migrate"]);
   run("docker", ["compose", "run", "--rm", "migrate"]);
 
   run(PYTHON, ["backend/scripts/seed_leaderboard_demo.py"]);
+
+  // Seed deterministic normalized news through the repository (no public feed).
+  run(PYTHON, ["backend/scripts/seed_news_demo.py"]);
 
   run("docker", ["compose", "up", "-d", "--build", "api", "frontend"]);
   await waitFor("api", () => httpOk("http://127.0.0.1:8000/health/ready"));

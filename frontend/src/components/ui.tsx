@@ -126,22 +126,29 @@ export function Segmented<T extends string>({
   onChange,
   size = 'sm',
   ariaLabel = 'Options',
+  disabled = false,
 }: {
   options: { value: T; label: ReactNode }[]
   value: T
   onChange: (v: T) => void
   size?: 'sm' | 'md'
   ariaLabel?: string
+  disabled?: boolean
 }) {
   return (
-    <div role="group" aria-label={ariaLabel} className="inline-flex items-center rounded-[5px] border border-subtle bg-workspace p-0.5">
+    <div role="group" aria-label={ariaLabel} className={cn('inline-flex items-center rounded-[5px] border border-subtle bg-workspace p-0.5', disabled && 'opacity-50')}>
       {options.map((o, index) => (
         <button
           type="button"
           key={o.value}
           aria-pressed={value === o.value}
-          onClick={() => onChange(o.value)}
+          disabled={disabled}
+          onClick={() => {
+            if (disabled) return
+            onChange(o.value)
+          }}
           onKeyDown={(event) => {
+            if (disabled) return
             if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) return
             event.preventDefault()
             const direction = event.key === 'ArrowLeft' || event.key === 'ArrowUp' ? -1 : 1
@@ -151,7 +158,7 @@ export function Segmented<T extends string>({
             buttons?.[nextIndex]?.focus()
           }}
           className={cn(
-            'rounded-[3px] font-medium transition-colors',
+            'rounded-[3px] font-medium transition-colors disabled:cursor-not-allowed',
             size === 'sm' ? 'h-6 px-2 text-[12px]' : 'h-7 px-2.5 text-[13px]',
             value === o.value
               ? 'bg-surface-active text-accent'

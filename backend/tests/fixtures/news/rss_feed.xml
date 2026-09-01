@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Example Crypto RSS</title>
+    <link>https://feeds.example.com/</link>
+    <description>Example crypto news</description>
+    <item>
+      <title>Bitcoin reaches a new high</title>
+      <link>https://feeds.example.com/articles/btc-high</link>
+      <guid isPermaLink="true">https://feeds.example.com/articles/btc-high</guid>
+      <description><![CDATA[<p>Bitcoin climbed above <strong>$100k</strong>.</p>]]></description>
+      <pubDate>Sat, 30 Aug 2026 10:00:00 +0000</pubDate>
+    </item>
+    <item>
+      <title>Ethereum upgrade ships</title>
+      <link>https://feeds.example.com/articles/eth-upgrade</link>
+      <guid>https://feeds.example.com/articles/eth-upgrade</guid>
+      <description><![CDATA[Ether and ETH staking improves.]]></description>
+      <pubDate>2026-08-30T11:30:00Z</pubDate>
+    </item>
+    <item>
+      <title>Bitcoin reaches a new high (duplicate)</title>
+      <link>https://feeds.example.com/articles/btc-high</link>
+      <guid isPermaLink="true">https://feeds.example.com/articles/btc-high</guid>
+      <description><![CDATA[Duplicate entry.]]></description>
+      <pubDate>Sat, 30 Aug 2026 10:00:00 +0000</pubDate>
+    </item>
+    <item>
+      <title>Solana network rally</title>
+      <link>https://feeds.example.com/articles/sol-rally</link>
+      <guid>https://feeds.example.com/articles/sol-rally</guid>
+      <description><![CDATA[SOL gains &amp; network activity.]]></description>
+      <pubDate>Sat, 30 Aug 2026 12:00:00 +0200</pubDate>
+    </item>
+    <item>
+      <title>Relative link must be skipped</title>
+      <link>/articles/relative</link>
+      <guid>https://feeds.example.com/articles/relative</guid>
+      <description><![CDATA[Relative link entry.]]></description>
+      <pubDate>Sat, 30 Aug 2026 12:00:00 +0000</pubDate>
+    </item>
+    <item>
+      <title>Insecure link must be skipped</title>
+      <link>http://insecure.example.com/articles/1</link>
+      <guid>https://feeds.example.com/articles/insecure</guid>
+      <description><![CDATA[Insecure link entry.]]></description>
+      <pubDate>Sat, 30 Aug 2026 12:00:00 +0000</pubDate>
+    </item>
+    <item>
+      <title>Missing date must be skipped</title>
+      <link>https://feeds.example.com/articles/no-date</link>
+      <guid>https://feeds.example.com/articles/no-date</guid>
+      <description><![CDATA[No date entry.]]></description>
+    </item>
+  </channel>
+</rss>

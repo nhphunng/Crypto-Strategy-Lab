@@ -7,7 +7,7 @@ import { ConnectedMarketRoute } from './app/routes/market'
 import { Strategies } from './screens/Strategies'
 import { Backtests } from './screens/Backtests'
 import { LeaderboardRoute } from './app/routes/leaderboard'
-import { News } from './screens/News'
+import { ConnectedNewsRoute } from './app/routes/news'
 import { Operations } from './screens/Operations'
 
 function Router() {
@@ -24,7 +24,7 @@ function Router() {
       {page === 'strategyNew' && <Strategies mode="create" key="strategies-create" />}
       {page === 'backtests' && <Backtests />}
       {page === 'leaderboard' && <LeaderboardRoute />}
-      {page === 'news' && <News />}
+      {page === 'news' && <ConnectedNewsRoute />}
       {page === 'operations' && <Operations />}
     </AppShell>
   )

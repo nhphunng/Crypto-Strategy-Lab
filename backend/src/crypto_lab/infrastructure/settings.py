@@ -3,10 +3,36 @@ from __future__ import annotations
 from dataclasses import dataclass
 from urllib.parse import urlparse
 
+from pydantic import BaseModel as PydanticBaseModel
 from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from crypto_lab.domain.market_data.timeframe import Timeframe
+
+
+class NewsFeedConfig(PydanticBaseModel):
+    """A server-controlled HTTPS RSS/Atom feed to collect from."""
+
+    source: str
+    url: str
+
+    @field_validator("source")
+    @classmethod
+    def validate_source(cls, value: str) -> str:
+        normalized = " ".join(value.split())
+        if not normalized:
+            raise ValueError("news feed source must not be blank")
+        return normalized
+
+    @field_validator("url")
+    @classmethod
+    def validate_url(cls, value: str) -> str:
+        parsed = urlparse(value)
+        if parsed.scheme != "https" or not parsed.hostname:
+            raise ValueError("news feed URL must be a server-controlled HTTPS URL")
+        if parsed.username or parsed.password or parsed.query or parsed.fragment:
+            raise ValueError("news feed URL must not contain credentials, query, or fragment")
+        return value.rstrip("/")
 
 
 @dataclass(frozen=True, slots=True)
@@ -58,6 +84,29 @@ class Settings(BaseSettings):
     auto_evaluation_timeframe: str = "15m"
     auto_evaluation_candles: int = Field(default=500, ge=50, le=5000)
     auto_evaluation_interval_seconds: float = Field(default=3600, ge=60, le=86_400)
+    # Off by default for the same reason: tests and local runs must not spin
+    # up a background candidate search against the provider on startup.
+    search_loop_enabled: bool = False
+    search_loop_pair: str = "BTCUSDT"
+    search_loop_timeframe: str = "15m"
+    search_loop_candles: int = Field(default=500, ge=50, le=5000)
+    search_loop_candidates_per_cycle: int = Field(default=10, ge=1, le=200)
+    search_loop_minimum_size: int = Field(default=2, ge=2, le=4)
+    search_loop_maximum_size: int = Field(default=4, ge=2, le=4)
+    search_loop_base_seed: int = 424242
+    search_loop_interval_seconds: float = Field(default=1800, ge=60, le=86_400)
+    # News collection is off by default so tests and local runs never reach a
+    # feed on startup; the shipped Compose deployment turns it on.
+    news_collection_enabled: bool = False
+    news_collection_interval_seconds: float = Field(default=900, ge=60, le=86_400)
+    news_feeds: tuple[NewsFeedConfig, ...] = (
+        NewsFeedConfig(source="Cointelegraph", url="https://cointelegraph.com/rss"),
+    )
+    # Sentiment analysis is off by default so tests and local runs never spin
+    # up the background loop unasked; the shipped Compose deployment turns it on.
+    sentiment_analysis_enabled: bool = False
+    sentiment_analysis_interval_seconds: float = Field(default=900, ge=60, le=86_400)
+    sentiment_analysis_batch_size: int = Field(default=50, ge=1, le=500)
     cors_allowed_origins: tuple[str, ...] = (
         "http://localhost:5173",
         "http://127.0.0.1:5173",

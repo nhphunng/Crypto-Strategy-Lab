@@ -1,7 +1,6 @@
 import type {
   LeaderRow,
   MarketInfo,
-  NewsItem,
   RunRow,
   Strategy,
   Timeframe,
@@ -71,7 +70,6 @@ export type OperationsSnapshot = {
 export type {
   LeaderRow,
   MarketInfo,
-  NewsItem,
   RunRow,
   Strategy,
   Timeframe,

@@ -22,6 +22,9 @@ from crypto_lab.application.evaluations.auto_evaluate import (
     AutoEvaluationLoop,
     AutoEvaluationPipeline,
     AutoEvaluationSettings,
+    SearchLoopPipeline,
+    SearchLoopRunner,
+    SearchLoopSettings,
 )
 from crypto_lab.application.evaluations.compare_results import CompareEvaluationResults
 from crypto_lab.application.evaluations.evaluate_result import EvaluateBacktestResult
@@ -32,7 +35,12 @@ from crypto_lab.application.market_data.ports import (
     MarketDataRepository,
     RealtimeMarketDataProvider,
 )
+from crypto_lab.application.news.collect_news import CollectNews
+from crypto_lab.application.news.collection_loop import NewsCollectionLoop
+from crypto_lab.application.news.list_news import ListNews
 from crypto_lab.application.search_service import SearchEventHub, StrategySearchService
+from crypto_lab.application.sentiment.analyze_pending_news import AnalyzePendingNews
+from crypto_lab.application.sentiment.sentiment_loop import SentimentAnalysisLoop
 from crypto_lab.application.strategies.activate_generated_strategy import ActivateGeneratedStrategy
 from crypto_lab.application.strategies.analyze_strategy import AnalyzeStrategy
 from crypto_lab.application.strategies.combine_configuration import ConfiguredStrategyAnalyzer
@@ -53,8 +61,11 @@ from crypto_lab.domain.evaluation.policy import (
     ScoringPolicy,
 )
 from crypto_lab.domain.market_data.timeframe import Timeframe
+from crypto_lab.domain.news.coin_resolution import CoinResolver
 from crypto_lab.domain.search import RandomSearchGenerator
+from crypto_lab.domain.sentiment.model import ModelRef
 from crypto_lab.domain.strategy.errors import StrategyError
+from crypto_lab.domain.strategy.implementations.news_sentiment import NewsSentimentStrategy
 from crypto_lab.domain.strategy.registry import StrategyRegistry
 from crypto_lab.domain.strategy.signal import StrategyAnalysisResult
 from crypto_lab.domain.strategy.version import ContractVersionRange, SemanticVersion
@@ -69,6 +80,10 @@ from crypto_lab.infrastructure.market_data.binance_realtime_provider import (
 from crypto_lab.infrastructure.market_data.realtime_selection_hub import (
     RealtimeSelectionHub,
 )
+from crypto_lab.infrastructure.news.rss_provider import (
+    RssFeedDefinition,
+    RssNewsProvider,
+)
 from crypto_lab.infrastructure.persistence.market_data_repository import (
     SqlAlchemyMarketDataRepository,
 )
@@ -78,8 +93,14 @@ from crypto_lab.infrastructure.persistence.repositories.backtest_repository impo
 from crypto_lab.infrastructure.persistence.repositories.evaluation_repository import (
     SqlAlchemyEvaluationRepository,
 )
+from crypto_lab.infrastructure.persistence.repositories.news_repository import (
+    SqlAlchemyNewsRepository,
+)
 from crypto_lab.infrastructure.persistence.repositories.search_repository import (
     SqlAlchemySearchRepository,
+)
+from crypto_lab.infrastructure.persistence.repositories.sentiment_repository import (
+    SqlAlchemySentimentAnalysisRepository,
 )
 from crypto_lab.infrastructure.persistence.repositories.strategy_configuration_repository import (
     SqlAlchemyStrategyConfigurationRepository,
@@ -89,6 +110,9 @@ from crypto_lab.infrastructure.persistence.repositories.strategy_definition_repo
 )
 from crypto_lab.infrastructure.persistence.repositories.strategy_generation_repository import (
     SqlAlchemyStrategyGenerationRepository,
+)
+from crypto_lab.infrastructure.persistence.sentiment_context_reader import (
+    SqlAlchemySentimentContextReader,
 )
 from crypto_lab.infrastructure.persistence.strategy_context_reader import (
     SqlAlchemyStrategyContextReader,
@@ -106,6 +130,7 @@ from crypto_lab.infrastructure.security.source_content_protector import (
     LocalAesKeyProvider,
     SourceContentProtector,
 )
+from crypto_lab.infrastructure.sentiment.lexicon_analyzer import LexiconSentimentAnalyzer
 from crypto_lab.infrastructure.settings import Settings
 from crypto_lab.infrastructure.sources.web_source_adapter import SafeWebSourceAdapter
 
@@ -119,6 +144,9 @@ EVALUATION_POLICY = EvaluationPolicy(
     "standard-metrics",
     "1.0.0",
 )
+# The exact model identity NewsSentimentStrategy reads under -- must match
+# LexiconSentimentAnalyzer's own model_id/model_version.
+SENTIMENT_MODEL = ModelRef(model_id="lexicon-sentiment", model_version="1.0.0")
 BALANCED_SCORING_POLICY = ScoringPolicy(
     uuid5(NAMESPACE_URL, "crypto-lab/scoring/balanced-v1"),
     "balanced",
@@ -232,6 +260,15 @@ class Container:
     evaluation_repository: SqlAlchemyEvaluationRepository | None = None
     evaluate_backtest: EvaluateBacktestResult | None = None
     compare_evaluations: CompareEvaluationResults | None = None
+    news_repository: SqlAlchemyNewsRepository | None = None
+    list_news: ListNews | None = None
+    collect_news: CollectNews | None = None
+    news_collection_loop: NewsCollectionLoop | None = None
+    sentiment_repository: SqlAlchemySentimentAnalysisRepository | None = None
+    sentiment_context_reader: SqlAlchemySentimentContextReader | None = None
+    sentiment_analyzer: LexiconSentimentAnalyzer | None = None
+    analyze_pending_news: AnalyzePendingNews | None = None
+    sentiment_loop: SentimentAnalysisLoop | None = None
     search_repository: SqlAlchemySearchRepository | None = None
     search_hub: SearchEventHub | None = None
     strategy_search: StrategySearchService | None = None
@@ -289,8 +326,15 @@ class Container:
 
     leaderboard: LeaderboardContainer | None = None
     auto_evaluation: AutoEvaluationLoop | None = None
+    search_loop: SearchLoopRunner | None = None
 
     async def close(self) -> None:
+        if self.search_loop is not None:
+            await self.search_loop.stop()
+        if self.news_collection_loop is not None:
+            await self.news_collection_loop.stop()
+        if self.sentiment_loop is not None:
+            await self.sentiment_loop.stop()
         if self.strategy_search is not None:
             await self.strategy_search.close()
         if self.realtime_hub is not None:
@@ -337,6 +381,10 @@ def build_container(settings: Settings | None = None) -> Container:
         max_dataset_candles=settings.max_dataset_candles,
     )
     strategy_registry = build_strategy_registry()
+    sentiment_repository = SqlAlchemySentimentAnalysisRepository(database.sessions)
+    sentiment_context_reader = SqlAlchemySentimentContextReader(database.sessions)
+    sentiment_analyzer = LexiconSentimentAnalyzer()
+    strategy_registry.register(NewsSentimentStrategy(sentiment_context_reader, SENTIMENT_MODEL))
     strategy_discovery = DiscoverStrategies(strategy_registry)
     strategy_definitions = SqlAlchemyStrategyDefinitionRepository(database.sessions)
     strategy_configurations = SqlAlchemyStrategyConfigurationRepository(database.sessions)
@@ -371,6 +419,31 @@ def build_container(settings: Settings | None = None) -> Container:
         clock,
     )
     compare_evaluations = CompareEvaluationResults(evaluation_repository)
+    news_repository = SqlAlchemyNewsRepository(database.sessions)
+    list_news = ListNews(news_repository, clock)
+    collect_news = None
+    news_collection_loop = None
+    if settings.news_collection_enabled:
+        coin_resolver = CoinResolver()
+        rss_feeds = tuple(
+            RssFeedDefinition(source=feed.source, url=feed.url) for feed in settings.news_feeds
+        )
+        rss_provider = RssNewsProvider(client, rss_feeds, clock, coin_resolver)
+        collect_news = CollectNews((rss_provider,), news_repository, clock=clock)
+        news_collection_loop = NewsCollectionLoop(
+            collect_news,
+            interval_seconds=settings.news_collection_interval_seconds,
+        )
+    analyze_pending_news = AnalyzePendingNews(
+        analyzer=sentiment_analyzer, repository=sentiment_repository, clock=clock
+    )
+    sentiment_loop = None
+    if settings.sentiment_analysis_enabled:
+        sentiment_loop = SentimentAnalysisLoop(
+            analyze_pending_news,
+            interval_seconds=settings.sentiment_analysis_interval_seconds,
+            batch_size=settings.sentiment_analysis_batch_size,
+        )
     generation_repository = None
     strategy_generation = None
     strategy_activation = None
@@ -475,6 +548,20 @@ def build_container(settings: Settings | None = None) -> Container:
         evaluate_backtest=evaluate_backtest,
         ingestion=leaderboard.ingestion,
     )
+    search_loop = _build_search_loop(
+        settings,
+        clock,
+        datasets=datasets,
+        dataset_reader=backtest_datasets,
+        discovery=strategy_discovery,
+        generator=RandomSearchGenerator(strategy_registry),
+        configurations=save_strategy_configuration,
+        analyzer=backtest_strategy_analyzer,
+        create_backtest=create_backtest,
+        execute_backtest=execute_backtest,
+        evaluate_backtest=evaluate_backtest,
+        ingestion=leaderboard.ingestion,
+    )
     return Container(
         settings=settings,
         clock=clock,
@@ -505,11 +592,21 @@ def build_container(settings: Settings | None = None) -> Container:
         evaluation_repository=evaluation_repository,
         evaluate_backtest=evaluate_backtest,
         compare_evaluations=compare_evaluations,
+        news_repository=news_repository,
+        list_news=list_news,
+        collect_news=collect_news,
+        news_collection_loop=news_collection_loop,
+        sentiment_repository=sentiment_repository,
+        sentiment_context_reader=sentiment_context_reader,
+        sentiment_analyzer=sentiment_analyzer,
+        analyze_pending_news=analyze_pending_news,
+        sentiment_loop=sentiment_loop,
         search_repository=search_repository,
         search_hub=search_hub,
         strategy_search=strategy_search,
         leaderboard=leaderboard,
         auto_evaluation=auto_evaluation,
+        search_loop=search_loop,
     )
 
 
@@ -538,4 +635,37 @@ def _build_auto_evaluation(
     return AutoEvaluationLoop(
         pipeline,
         interval_seconds=settings.auto_evaluation_interval_seconds,
+    )
+
+
+def _build_search_loop(
+    settings: Settings,
+    clock: Clock,
+    **collaborators: Any,
+) -> SearchLoopRunner | None:
+    """Wire the background candidate-search loop only when the deployment asks for it."""
+
+    if not settings.search_loop_enabled:
+        return None
+    pipeline = SearchLoopPipeline(
+        settings=SearchLoopSettings(
+            pair=settings.search_loop_pair,
+            timeframe=Timeframe(settings.search_loop_timeframe),
+            candles=settings.search_loop_candles,
+            candidates_per_cycle=settings.search_loop_candidates_per_cycle,
+            minimum_size=settings.search_loop_minimum_size,
+            maximum_size=settings.search_loop_maximum_size,
+            base_seed=settings.search_loop_base_seed,
+            interval_seconds=settings.search_loop_interval_seconds,
+        ),
+        clock=clock,
+        execution_policy=EXECUTION_POLICY,
+        evaluation_policy=EVALUATION_POLICY,
+        scoring_policy=BALANCED_SCORING_POLICY,
+        **collaborators,
+    )
+    return SearchLoopRunner(
+        pipeline,
+        clock,
+        interval_seconds=settings.search_loop_interval_seconds,
     )
