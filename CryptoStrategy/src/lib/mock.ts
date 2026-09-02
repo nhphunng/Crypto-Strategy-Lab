@@ -1,15 +1,14 @@
 // Deterministic mock data for Crypto Strategy Lab.
 // Everything is seeded so screens feel like parts of the same live experiment.
 
-import {
-  formatChartPrice,
-  simpleMovingAverage,
-  supportResistance,
-  type Candle,
-  type Marker,
-} from '../components/candleChartModel'
-
-export type { Candle, Marker } from '../components/candleChartModel'
+export type Candle = {
+  t: number // epoch ms
+  o: number
+  h: number
+  l: number
+  c: number
+  v: number
+}
 
 export type Timeframe = '1m' | '5m' | '15m' | '30m' | '1h' | '2h' | '4h' | '1d'
 
@@ -72,8 +71,35 @@ function round2(n: number) {
   return Math.round(n * 100) / 100
 }
 
-export const sma = simpleMovingAverage
-export { supportResistance }
+// Simple moving average of closes; null until enough samples.
+export function sma(candles: Candle[], period: number): (number | null)[] {
+  const out: (number | null)[] = []
+  let sum = 0
+  for (let i = 0; i < candles.length; i++) {
+    sum += candles[i].c
+    if (i >= period) sum -= candles[i - period].c
+    out.push(i >= period - 1 ? round2(sum / period) : null)
+  }
+  return out
+}
+
+// Support / resistance bands derived from the series range (deterministic).
+export function supportResistance(candles: Candle[]) {
+  const highs = candles.map((c) => c.h)
+  const lows = candles.map((c) => c.l)
+  const max = Math.max(...highs)
+  const min = Math.min(...lows)
+  const span = max - min
+  return {
+    resistance: [round2(max - span * 0.08), round2(max - span * 0.02)] as [number, number],
+    support: [round2(min + span * 0.03), round2(min + span * 0.1)] as [number, number],
+  }
+}
+
+export type Marker = {
+  index: number
+  kind: 'buy' | 'sell' | 'entry' | 'exit'
+}
 
 // Deterministic sample signal markers for a series.
 export function signalMarkers(candles: Candle[], seed = 7): Marker[] {
@@ -90,7 +116,8 @@ export function signalMarkers(candles: Candle[], seed = 7): Marker[] {
   return markers
 }
 
-export const fmtPrice = formatChartPrice
+export const fmtPrice = (n: number) =>
+  n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
 export const fmtInt = (n: number) => n.toLocaleString('en-US')
 
@@ -110,8 +137,9 @@ export const MARKET = {
   volume24h: '1.42B',
 }
 
-// Selectable markets. BTC/USDT, ETH/USDT, and SOL/USDT are the supported
-// prototype market contexts; other entries remain visible but unavailable.
+// Selectable markets. Only BTC/USDT has real prototype candle data; the others
+// demonstrate that the architecture supports market selection without pretending
+// they are operational.
 export type MarketInfo = {
   pair: string // 'BTCUSDT'
   display: string // 'BTC / USDT'
@@ -148,7 +176,7 @@ export const MARKETS: MarketInfo[] = [
     change24h: 2.14,
     symbol: 'Ξ',
     color: '#627eea',
-    available: true,
+    available: false,
   },
   {
     pair: 'SOLUSDT',
@@ -160,7 +188,7 @@ export const MARKETS: MarketInfo[] = [
     change24h: -0.61,
     symbol: '◎',
     color: '#14f195',
-    available: true,
+    available: false,
   },
   {
     pair: 'BNBUSDT',
@@ -192,18 +220,11 @@ export const SEARCH_RUN = {
 
 export type Strategy = {
   id: string
-  strategyId?: string
-  strategyType?: string
   name: string
-  category: string
+  category: 'Trend' | 'Momentum' | 'Volatility' | 'Structure' | 'Composite'
   version: string
-  contractVersion?: string
-  origin?: 'BUILT_IN' | 'LLM_GENERATED'
-  capabilities?: string[]
-  generationProvenanceId?: string | null
-  generatedArtifactFingerprint?: string | null
   summary: string
-  status: string
+  status: 'Tested' | 'Draft' | 'Valid'
   params: { key: string; label: string; value: number; min: number; max: number; step: number }[]
   rules: { text: string; side: 'buy' | 'sell' }[]
 }
@@ -383,6 +404,100 @@ export function makeTrades(seed = 3, count = 24): Trade[] {
   }
   return trades
 }
+
+export type NewsItem = {
+  id: string
+  published: string
+  source: string
+  headline: string
+  coin: string
+  sentiment: 'POSITIVE' | 'NEUTRAL' | 'NEGATIVE'
+  score: number
+  excerpt: string
+  model: string
+  analyzed: string
+}
+
+export const NEWS: NewsItem[] = [
+  {
+    id: 'n1',
+    published: '12 min ago',
+    source: 'CoinDesk',
+    headline: 'Bitcoin gains as institutional inflows accelerate',
+    coin: 'BTC',
+    sentiment: 'POSITIVE',
+    score: 0.84,
+    excerpt:
+      'Spot ETF inflows extended a fourth consecutive session as desks reported steady allocation demand, pushing BTC back above the 63k handle.',
+    model: 'FinSent-v2.3',
+    analyzed: '18:24:12',
+  },
+  {
+    id: 'n2',
+    published: '38 min ago',
+    source: 'The Block',
+    headline: 'Derivatives open interest steadies after weekend unwind',
+    coin: 'BTC',
+    sentiment: 'NEUTRAL',
+    score: 0.51,
+    excerpt:
+      'Funding rates normalized across major venues, suggesting positioning has reset without a directional lean into the US session.',
+    model: 'FinSent-v2.3',
+    analyzed: '18:02:44',
+  },
+  {
+    id: 'n3',
+    published: '1h ago',
+    source: 'Reuters',
+    headline: 'Crypto markets face renewed macro volatility',
+    coin: 'BTC',
+    sentiment: 'NEGATIVE',
+    score: 0.71,
+    excerpt:
+      'Stronger-than-expected inflation data revived rate-cut uncertainty, pressuring risk assets and dragging major tokens off intraday highs.',
+    model: 'FinSent-v2.3',
+    analyzed: '17:31:09',
+  },
+  {
+    id: 'n4',
+    published: '2h ago',
+    source: 'Bloomberg',
+    headline: 'Exchange reserves fall to multi-month lows',
+    coin: 'BTC',
+    sentiment: 'POSITIVE',
+    score: 0.68,
+    excerpt:
+      'On-chain data shows continued withdrawal of BTC from centralized venues, a pattern analysts associate with reduced near-term sell pressure.',
+    model: 'FinSent-v2.3',
+    analyzed: '16:48:20',
+  },
+  {
+    id: 'n5',
+    published: '3h ago',
+    source: 'CoinTelegraph',
+    headline: 'Layer-2 activity cools as fees normalize',
+    coin: 'ETH',
+    sentiment: 'NEUTRAL',
+    score: 0.47,
+    excerpt:
+      'Transaction throughput reverted to baseline after a brief spike, with no material change in settlement assurances.',
+    model: 'FinSent-v2.3',
+    analyzed: '15:59:03',
+  },
+  {
+    id: 'n6',
+    published: '5h ago',
+    source: 'Reuters',
+    headline: 'Regulatory clarity bill advances in committee',
+    coin: 'BTC',
+    sentiment: 'POSITIVE',
+    score: 0.77,
+    excerpt:
+      'A market-structure proposal cleared an initial vote, offering firms a clearer path on custody and disclosure requirements.',
+    model: 'FinSent-v2.3',
+    analyzed: '13:22:51',
+  },
+]
 
 export type RunRow = {
   id: string
