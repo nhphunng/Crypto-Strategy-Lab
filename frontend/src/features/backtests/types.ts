@@ -183,6 +183,14 @@ export type DatasetCandle = {
   receivedAt: string
 }
 
+export type DatasetCandlePage = {
+  schemaVersion: '1'
+  datasetId: string
+  items: DatasetCandle[]
+  nextCursor: string | null
+  hasMore: boolean
+}
+
 export type SingleBacktestInput = {
   strategy: BacktestStrategy
   parameters: Record<string, ParameterValue>

@@ -3,10 +3,10 @@ import { ChevronDown, Fingerprint, Play, Square } from 'lucide-react'
 import { useSearchParams } from 'react-router-dom'
 import { useStore } from '../lib/store'
 import type { Trade } from '../domain'
-import type { Candle, Marker } from '../lib/mock'
 import { BACKTEST_DEFAULTS } from '../config'
 import {
   BacktestApiError,
+  createSingleBacktestCandleTimeline,
   createBacktestApi,
   type BacktestStrategy,
   type ParameterValue,
@@ -22,9 +22,8 @@ import {
   getStrategyConfiguration,
   type SavedStrategyConfiguration,
 } from '../services/strategyConfigurations'
-import { useServices } from '../services/registry'
 import { PageHeader } from '../components/Shell'
-import { CandleChart } from '../components/CandleChart'
+import { CandleChart, type Marker } from '../components/CandleChart'
 import {
   Button,
   cn,
@@ -39,7 +38,6 @@ import {
   Metric,
   MetricStrip,
   Modal,
-  RecoBadge,
   Segmented,
   SignalTag,
   StatusBadge,
@@ -114,237 +112,6 @@ export function TradeTable({
 // TAB A — Single Backtest
 // ---------------------------------------------------------------------------
 
-function LegacySingleBacktest() {
-  const { activeStrategy, showExplain, market } = useStore()
-  const services = useServices()
-  const [ran, setRan] = useState(true)
-  const [running, setRunning] = useState(false)
-  const [provenance, setProvenance] = useState(false)
-  const [subView, setSubView] = useState<'equity' | 'drawdown'>('equity')
-  const [selectedTrade, setSelectedTrade] = useState<number | null>(null)
-  const [showAdvanced, setShowAdvanced] = useState(false)
-
-  const candles = useMemo(
-    () => services.market.getCandles(BACKTEST_DEFAULTS.timeframe, 100),
-    [services],
-  )
-  const markers = useMemo(() => services.market.getSignalMarkers(candles, 5), [candles, services])
-  const trades = useMemo(() => services.backtests.makeTrades(3, 20), [services])
-  const sel = trades.find((t) => t.n === selectedTrade)
-
-  const run = () => {
-    setRunning(true)
-    setTimeout(() => {
-      setRunning(false)
-      setRan(true)
-    }, 1200)
-  }
-
-  // equity curve derived from trades (deterministic)
-  const equity = useMemo(() => {
-    let e = 10000
-    const pts = [e]
-    for (const t of trades) {
-      e += (t.pl / 100) * 1600
-      pts.push(Math.round(e))
-    }
-    return pts
-  }, [trades])
-
-  return (
-    <div className="flex h-full flex-col overflow-y-auto">
-      {showExplain && (
-        <div className="shrink-0 border-b border-subtle bg-surface px-4 py-3">
-          <InfoNote>
-            <span className="font-medium text-ink">What am I testing?</span> This replays{' '}
-            <span className="font-medium text-ink">{activeStrategy}</span> over {market.display}{' '}
-            {BACKTEST_DEFAULTS.timeframe} history
-            (Jan–Jul 2026) and records the trades it would have signalled. Results show historical
-            performance only — no real trades will be placed, and past results don't guarantee future
-            outcomes.
-          </InfoNote>
-        </div>
-      )}
-
-      {/* config toolbar */}
-      <div className="flex flex-wrap items-center gap-x-5 gap-y-2 border-b border-subtle bg-surface px-4 py-2.5 text-[12px]">
-        <Field label="Strategy" value={activeStrategy} accent />
-        <Field label="Pair" value={market.pair} />
-        <div className="flex flex-col">
-          <span className="text-[10px] uppercase tracking-wide text-faint">Timeframe</span>
-          <span className="inline-flex items-center gap-1.5 font-mono text-[12px] text-ink">
-            {BACKTEST_DEFAULTS.timeframe} {showExplain && <RecoBadge>Recommended</RecoBadge>}
-          </span>
-        </div>
-        <Field label="Range" value={BACKTEST_DEFAULTS.rangeLabel} />
-        <div className="ml-auto flex items-center gap-2">
-          <IconBtn onClick={() => setProvenance(true)} title="Provenance"><Fingerprint size={15} /></IconBtn>
-          <Button variant="primary" onClick={run} disabled={running}>
-            <Play size={14} /> {running ? 'Running…' : 'Run Backtest'}
-          </Button>
-        </div>
-      </div>
-
-      {/* advanced execution settings */}
-      <div className="shrink-0 border-b border-subtle bg-surface px-4 py-2">
-        <button
-          onClick={() => setShowAdvanced((v) => !v)}
-          className="inline-flex items-center gap-1.5 text-[12px] font-medium text-dim hover:text-ink"
-        >
-          <ChevronDown size={13} className={cn('transition-transform', showAdvanced && 'rotate-180')} />
-          Advanced execution settings
-        </button>
-        {showExplain && !showAdvanced && (
-          <span className="ml-2 text-[11.5px] text-faint">
-            Beginner-friendly defaults are applied. Open to fine-tune fees, slippage and sizing.
-          </span>
-        )}
-        {showAdvanced && (
-          <div className="mt-2.5 flex flex-wrap items-start gap-x-6 gap-y-2">
-            <Field label="Dataset" value={BACKTEST_DEFAULTS.datasetId} />
-            <Field label="Capital" value={`$${BACKTEST_DEFAULTS.capital.toLocaleString('en-US')}`} />
-            <Field label="Fee" value={`${BACKTEST_DEFAULTS.feeRate * 100}%`} />
-            <Field label="Slippage" value={`${BACKTEST_DEFAULTS.slippageRate * 100}%`} />
-            <Field label="Position size" value={BACKTEST_DEFAULTS.positionSizing} />
-            <Field label="Seed" value={String(BACKTEST_DEFAULTS.seed)} />
-          </div>
-        )}
-      </div>
-
-      {!ran ? (
-        <EmptyState
-          title="No backtests yet"
-          hint="Pick a strategy and run your first backtest to see simulated trades and historical performance."
-          action={
-            <Button variant="primary" onClick={run}>
-              <Play size={14} /> Run First Backtest
-            </Button>
-          }
-        />
-      ) : (
-        <>
-          <MetricStrip>
-            <Metric
-              label="Return"
-              value="+24.2%"
-              tone="pos"
-              sub="vs baseline +4.8%"
-              info="Total simulated gain or loss over the test period, after fees. Historical only."
-            />
-            <Metric
-              label="Win Rate"
-              value="62%"
-              sub="50 / 81 trades"
-              info="Share of simulated trades that ended profitably. A high win rate alone does not make a strategy good."
-            />
-            <Metric
-              label="Max Drawdown"
-              value="-7.1%"
-              tone="neg"
-              sub="peak-to-trough"
-              info="The largest drop from a previous high during the test. Lower (closer to 0%) means a smoother ride."
-            />
-            <Metric label="Trades" value="81" sub="simulated" info="How many simulated trades the strategy took. Very few trades makes results less reliable." />
-            <Metric
-              label="Sharpe"
-              value="1.56"
-              sub="annualized"
-              info="Return earned per unit of risk taken. Higher generally means steadier returns."
-            />
-            <Metric label="Profit Factor" value="1.94" info="Gross profit divided by gross loss. Above 1.0 means winners outweighed losers in this test." />
-          </MetricStrip>
-
-          {showExplain && (
-            <div className="border-b border-subtle bg-surface px-4 py-2.5">
-              <p className="text-[12.5px] leading-relaxed text-dim">
-                <span className="font-medium text-ink">What happened?</span> Over this period the
-                strategy produced a positive historical return of{' '}
-                <span className="font-mono text-pos">+24.2%</span> across 81 simulated trades, winning
-                about 62% of them. Along the way it experienced a{' '}
-                <span className="font-mono text-neg">-7.1%</span> maximum drawdown — the worst dip from
-                a prior high. This is one historical test, not a prediction.
-              </p>
-            </div>
-          )}
-
-          <div className="grid min-h-0 flex-1 grid-cols-[1.6fr_1fr] gap-px bg-subtle">
-            {/* left: chart + equity */}
-            <div className="flex min-h-0 flex-col bg-surface">
-              <div className="flex h-8 items-center gap-2 border-b border-subtle px-3 text-[12px]">
-                <span className="font-medium text-ink">Strategy visualization</span>
-                <span className="font-mono text-[11px] text-faint">BTCUSDT · 15m</span>
-                <div className="ml-auto flex items-center gap-2 text-[10px] text-faint">
-                  <SignalTag side="buy" /> <SignalTag side="sell" />
-                  <span className="font-mono">E / X entries</span>
-                </div>
-              </div>
-              <div className="min-h-0 flex-1">
-                <CandleChart
-                  candles={candles}
-                  overlays={{ ma20: true, sr: true }}
-                  markers={markers}
-                  height={300}
-                  selectedInterval={sel ? [sel.entryIndex, sel.exitIndex] : null}
-                />
-              </div>
-              <div className="border-t border-subtle">
-                <div className="flex h-8 items-center gap-2 px-3">
-                  <Segmented
-                    ariaLabel="Result chart"
-                    options={[
-                      { value: 'equity', label: 'Equity Curve' },
-                      { value: 'drawdown', label: 'Drawdown' },
-                    ]}
-                    value={subView}
-                    onChange={(v) => setSubView(v as typeof subView)}
-                  />
-                </div>
-                <Sparkline points={equity} mode={subView} />
-              </div>
-            </div>
-
-            {/* right: trades */}
-            <div className="flex min-h-0 flex-col bg-surface">
-              <div className="flex h-8 items-center justify-between border-b border-subtle px-3 text-[12px]">
-                <span className="font-medium text-ink">Simulated trades</span>
-                <span className="font-mono text-[11px] text-faint">{trades.length} trades</span>
-              </div>
-              <div className="min-h-0 flex-1">
-                <TradeTable trades={trades} selected={selectedTrade} onSelect={setSelectedTrade} />
-              </div>
-            </div>
-          </div>
-        </>
-      )}
-
-      <Drawer open={provenance} onClose={() => setProvenance(false)} title="Provenance" subtitle="BT-1846 · reproducibility record">
-        <DrawerSection title="Strategy">
-          <KV k="Definition" v={activeStrategy} />
-          <KV k="Version" v={<span className="text-ml">v2 (immutable)</span>} />
-          <KV k="Parameters" v="MA 20/50 · RSI 14 · SR 120" />
-        </DrawerSection>
-        <DrawerSection title="Dataset">
-          <KV k="Dataset" v="BINANCE-BTCUSDT-15M-2026H1" />
-          <KV k="Range" v="2026-01-01 → 2026-07-01" />
-          <KV k="Checksum" v="a3f9…c210" />
-        </DrawerSection>
-        <DrawerSection title="Execution">
-          <KV k="Fee" v="0.04%" />
-          <KV k="Slippage" v="0.02%" />
-          <KV k="Position size" v="100% equity" />
-          <KV k="Scoring policy" v="Balanced v2" />
-        </DrawerSection>
-        <DrawerSection title="Run">
-          <KV k="Backtest Run ID" v="BT-1846" />
-          <KV k="Generator" v="—" />
-          <KV k="Seed" v="424242" />
-          <KV k="Timestamp" v="2026-08-16 18:24:05" />
-        </DrawerSection>
-      </Drawer>
-    </div>
-  )
-}
-
 const backtestApi = createBacktestApi()
 
 function SingleBacktest() {
@@ -413,19 +180,15 @@ function SingleBacktest() {
   useEffect(() => () => activeRequest.current?.abort(), [])
 
   const selectedStrategy = strategies.find((item) => item.strategyId === strategyId) ?? null
-  const candles = useMemo<Candle[]>(() => (output?.candles ?? []).map((item) => ({
-    t: Date.parse(item.openTime),
-    o: Number(item.open),
-    h: Number(item.high),
-    l: Number(item.low),
-    c: Number(item.close),
-    v: Number(item.volume),
-  })), [output])
-  const candleIndex = useMemo(
-    () => new Map(candles.map((item, index) => [item.t, index])),
-    [candles],
+  const outputCandles = output?.candles
+  const outputTrades = output?.trades
+  const outputEquity = output?.equity
+  const candleTimeline = useMemo(
+    () => createSingleBacktestCandleTimeline(outputCandles ?? []),
+    [outputCandles],
   )
-  const trades = useMemo<Trade[]>(() => (output?.trades ?? []).map((item) => ({
+  const candles = candleTimeline.candles
+  const trades = useMemo<Trade[]>(() => (outputTrades ?? []).map((item) => ({
     n: item.sequence + 1,
     entryTime: shortBacktestTime(item.entryTime),
     side: 'BUY',
@@ -434,21 +197,21 @@ function SingleBacktest() {
     exitPrice: Number(item.exitPrice),
     pl: Number(item.returnPercent),
     result: Number(item.profitLoss) >= 0 ? 'WIN' : 'LOSS',
-    entryIndex: candleIndex.get(Date.parse(item.entryTime)) ?? 0,
-    exitIndex: candleIndex.get(Date.parse(item.exitTime)) ?? Math.max(0, candles.length - 1),
-  })), [candleIndex, candles.length, output])
+    entryIndex: candleTimeline.findIndex(item.entryTime),
+    exitIndex: candleTimeline.findIndex(item.exitTime),
+  })), [candleTimeline, outputTrades])
   const markers = useMemo<Marker[]>(
     () => trades.flatMap((trade) => [
-      { index: trade.entryIndex, kind: 'entry' as const },
-      { index: trade.exitIndex, kind: 'exit' as const },
+      ...(trade.entryIndex >= 0 ? [{ index: trade.entryIndex, kind: 'entry' as const }] : []),
+      ...(trade.exitIndex >= 0 ? [{ index: trade.exitIndex, kind: 'exit' as const }] : []),
     ]),
     [trades],
   )
   const selected = trades.find((trade) => trade.n === selectedTrade)
   const equity = useMemo(() => {
-    const points = (output?.equity ?? []).map((item) => Number(item.equity))
+    const points = (outputEquity ?? []).map((item) => Number(item.equity))
     return points.length === 1 ? [points[0], points[0]] : points
-  }, [output])
+  }, [outputEquity])
   const metrics = output?.evaluation.metrics
 
   const execute = async () => {
@@ -627,7 +390,7 @@ function SingleBacktest() {
                 <div className="ml-auto flex items-center gap-2 text-[10px] text-faint"><span className="font-mono">E / X persisted fills</span></div>
               </div>
               <div className="min-h-0 flex-1">
-                {candles.length > 0 && <CandleChart candles={candles} overlays={{}} markers={markers} height={300} selectedInterval={selected ? [selected.entryIndex, selected.exitIndex] : null} />}
+                {candles.length > 0 && <CandleChart candles={candles} overlays={{}} markers={markers} height={300} selectedInterval={selected && selected.entryIndex >= 0 && selected.exitIndex >= 0 ? [selected.entryIndex, selected.exitIndex] : null} />}
               </div>
               <div className="border-t border-subtle">
                 <div className="flex h-8 items-center gap-2 px-3">
