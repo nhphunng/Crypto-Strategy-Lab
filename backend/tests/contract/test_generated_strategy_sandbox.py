@@ -95,14 +95,32 @@ async def test_built_sandbox_terminates_unbounded_artifacts_without_leaking_cont
 def _sandbox_image_available() -> bool:
     if shutil.which("docker") is None:
         return False
-    daemon = subprocess.run(["docker", "info"], capture_output=True, check=False, timeout=5)
-    image = subprocess.run(
-        ["docker", "image", "inspect", "crypto-lab-strategy-sandbox:1"],
-        capture_output=True,
-        check=False,
-        timeout=5,
-    )
+    try:
+        daemon = subprocess.run(
+            ["docker", "info"], capture_output=True, check=False, timeout=5
+        )
+        if daemon.returncode != 0:
+            return False
+        image = subprocess.run(
+            ["docker", "image", "inspect", "crypto-lab-strategy-sandbox:1"],
+            capture_output=True,
+            check=False,
+            timeout=5,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return False
     return daemon.returncode == 0 and image.returncode == 0
+
+
+def test_sandbox_availability_timeout_is_treated_as_an_environmental_skip(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def timeout(*args: object, **kwargs: object) -> subprocess.CompletedProcess[str]:
+        raise subprocess.TimeoutExpired(cmd="docker", timeout=5)
+
+    monkeypatch.setattr(subprocess, "run", timeout)
+
+    assert _sandbox_image_available() is False
 
 
 def _containment_probe() -> str:
