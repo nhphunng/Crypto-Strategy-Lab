@@ -12,6 +12,10 @@ on:
       - "playwright.compose.config.ts"
       - "package.json"
       - ".github/workflows/integration.yml"
+      - ".github/workflows/production-cd.yml"
+      - ".github/scripts/**"
+      - "Dockerfile"
+      - "docker-compose.prod.yml"
   push:
     branches: [main]
     paths:
@@ -23,6 +27,10 @@ on:
       - "playwright.compose.config.ts"
       - "package.json"
       - ".github/workflows/integration.yml"
+      - ".github/workflows/production-cd.yml"
+      - ".github/scripts/**"
+      - "Dockerfile"
+      - "docker-compose.prod.yml"
 
 concurrency:
   group: integration-ci-${{ github.workflow }}-${{ github.ref }}
@@ -66,3 +74,13 @@ jobs:
       - name: Tear down the Compose stack
         if: always()
         run: docker compose down -v
+
+  production-cd:
+    needs: compose-e2e
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/production-cd.yml
+    with:
+      head_sha: ${{ github.sha }}
