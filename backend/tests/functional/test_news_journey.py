@@ -51,7 +51,7 @@ async def _truncate(database: Database) -> None:
 
 
 async def _build_client() -> tuple[AsyncClient, Database, Container]:
-    container = build_container(Settings(_env_file=None))
+    container = build_container(Settings(database_url=TEST_DATABASE_URL, _env_file=None))
     database = container.database
     assert database is not None
     if not await database.ping():

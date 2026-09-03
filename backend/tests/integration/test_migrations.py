@@ -6,7 +6,7 @@ import sys
 from pathlib import Path
 
 import pytest
-from sqlalchemy import inspect
+from sqlalchemy import inspect, text
 from sqlalchemy.ext.asyncio import create_async_engine
 
 pytestmark = pytest.mark.integration
@@ -47,6 +47,15 @@ async def table_names() -> set[str]:
                 lambda sync_connection: inspect(sync_connection).get_table_names()
             )
         return set(names)
+    finally:
+        await engine.dispose()
+
+
+async def drop_news_items() -> None:
+    engine = create_async_engine(TEST_DATABASE_URL)
+    try:
+        async with engine.begin() as connection:
+            await connection.execute(text("DROP TABLE news_items"))
     finally:
         await engine.dispose()
 
@@ -97,6 +106,21 @@ async def test_migrations_upgrade_in_dependency_order_and_round_trip() -> None:
     run_alembic("downgrade", "base")
     assert await table_names() == {"alembic_version"}
     run_alembic("upgrade", "head")
+
+
+async def test_head_repairs_legacy_strategy_search_database_without_news_items() -> None:
+    run_alembic("downgrade", "base")
+    run_alembic("upgrade", "20260831_010_strategy_search")
+    await drop_news_items()
+
+    before = await table_names()
+    assert "strategy_search_runs" in before
+    assert "news_items" not in before
+
+    run_alembic("upgrade", "head")
+
+    after = await table_names()
+    assert {"news_items", "news_sentiment_analyses"} <= after
 
 
 def test_alembic_has_one_head() -> None:

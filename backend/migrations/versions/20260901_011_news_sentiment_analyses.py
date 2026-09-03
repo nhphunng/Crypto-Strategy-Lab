@@ -17,7 +17,51 @@ branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
 
+def _ensure_news_items_table() -> None:
+    """Repair databases stamped at strategy-search before News joined its ancestry."""
+
+    if sa.inspect(op.get_bind()).has_table("news_items"):
+        return
+
+    op.create_table(
+        "news_items",
+        sa.Column("id", postgresql.UUID(as_uuid=True), nullable=False),
+        sa.Column("provider", sa.String(length=32), nullable=False),
+        sa.Column("provider_item_id", sa.String(length=256), nullable=False),
+        sa.Column("title", sa.String(length=500), nullable=False),
+        sa.Column("content", sa.Text(), nullable=False),
+        sa.Column("source", sa.String(length=160), nullable=False),
+        sa.Column("published_at", sa.DateTime(timezone=True), nullable=False),
+        sa.Column("crawled_at", sa.DateTime(timezone=True), nullable=False),
+        sa.Column("related_coins", postgresql.ARRAY(sa.String(length=16)), nullable=False),
+        sa.Column("url", sa.Text(), nullable=False),
+        sa.Column("canonical_url", sa.Text(), nullable=False),
+        sa.Column("content_fingerprint", sa.CHAR(length=64), nullable=False),
+        sa.PrimaryKeyConstraint("id", name="pk_news_items"),
+        sa.UniqueConstraint(
+            "provider",
+            "provider_item_id",
+            name="uq_news_items_provider_item",
+        ),
+        sa.UniqueConstraint("canonical_url", name="uq_news_items_canonical_url"),
+    )
+    op.create_index(
+        "ix_news_items_related_coins",
+        "news_items",
+        ["related_coins"],
+        unique=False,
+        postgresql_using="gin",
+    )
+    op.create_index(
+        "ix_news_items_published",
+        "news_items",
+        [sa.text("published_at DESC"), "id"],
+        unique=False,
+    )
+
+
 def upgrade() -> None:
+    _ensure_news_items_table()
     op.create_table(
         "news_sentiment_analyses",
         sa.Column("id", postgresql.UUID(as_uuid=True), nullable=False),
