@@ -151,6 +151,49 @@ def test_cd_uses_single_production_compose_and_checks_generation_readiness() -> 
     assert "prepare-production-secrets.py" in workflow
 
 
+def test_cd_runs_only_after_successful_main_integration_ci() -> None:
+    root = Path(__file__).parents[3]
+    ci = yaml.load(
+        (root / ".github/workflows/integration.yml").read_text(encoding="utf-8"),
+        Loader=yaml.BaseLoader,
+    )
+    cd = yaml.load(
+        (root / ".github/workflows/cd.yml").read_text(encoding="utf-8"),
+        Loader=yaml.BaseLoader,
+    )
+
+    assert ci["name"] == "Integration regression (frontend + backend)"
+    assert ci["on"]["push"]["branches"] == ["main"]
+    assert "push" not in cd["on"]
+    assert "workflow_dispatch" not in cd["on"]
+    assert cd["on"]["workflow_run"] == {
+        "workflows": [ci["name"]],
+        "types": ["completed"],
+        "branches": ["main"],
+    }
+    success_gate = "${{ github.event.workflow_run.conclusion == 'success' }}"
+    assert all(job["if"] == success_gate for job in cd["jobs"].values())
+
+
+def test_cd_build_and_deploy_are_pinned_to_successful_ci_head_sha() -> None:
+    root = Path(__file__).parents[3]
+    workflow_text = (root / ".github/workflows/cd.yml").read_text(encoding="utf-8")
+    workflow = yaml.load(workflow_text, Loader=yaml.BaseLoader)
+    head_sha = "${{ github.event.workflow_run.head_sha }}"
+
+    checkout = next(
+        step
+        for step in workflow["jobs"]["build-and-push"]["steps"]
+        if step.get("uses", "").startswith("actions/checkout@")
+    )
+    assert checkout["with"]["ref"] == head_sha
+    assert workflow["env"]["IMAGE_TAG"] == head_sha
+    assert workflow_text.count(f":{head_sha}") == 2
+    assert "github.sha" not in workflow_text
+    assert f'git reset --hard "{head_sha}"' in workflow_text
+    assert "git reset --hard origin/main" not in workflow_text
+
+
 def test_cd_secret_preparation_migrates_legacy_values_without_leaking_them(
     tmp_path: Path,
 ) -> None:
