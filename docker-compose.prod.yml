@@ -68,6 +68,11 @@ services:
       CSL_DATABASE_URL: ${CSL_DATABASE_URL}
       CSL_BINANCE_BASE_URL: ${CSL_BINANCE_BASE_URL:-https://api.binance.com}
       CSL_ENVIRONMENT: production
+      # News collection must run for the News & Sentiment page to have data;
+      # the settings default is false so tests and E2E stay offline.
+      CSL_NEWS_COLLECTION_ENABLED: ${CSL_NEWS_COLLECTION_ENABLED:-true}
+      CSL_NEWS_COLLECTION_INTERVAL_SECONDS: ${CSL_NEWS_COLLECTION_INTERVAL_SECONDS:-900}
+      CSL_NEWS_FEEDS: ${CSL_NEWS_FEEDS:-[{"source":"Cointelegraph","url":"https://cointelegraph.com/rss"}]}
 
     depends_on:
       migrate:
