@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 
 import { createNewsQueryOptions, type FetchLike } from '../../features/news/api/newsApi'
-import type { NewsQuery } from '../../features/news/types'
+import type { NewsQuery, NewsSentimentLabel } from '../../features/news/types'
 import { NEWS_RANGE_HOURS } from '../../config'
 import { News, type NewsStatus } from '../../screens/News'
 
@@ -21,7 +21,7 @@ export type NewsRouteProps = {
  * the API does not narrow the result set.
  */
 export function buildNewsQuery(
-  input: { coin?: string; range?: string; page?: number; pageSize?: number },
+  input: { coin?: string; sentiment?: NewsSentimentLabel | 'All'; range?: string; page?: number; pageSize?: number },
   now: Date = new Date(),
 ): NewsQuery {
   const query: NewsQuery = {
@@ -30,6 +30,9 @@ export function buildNewsQuery(
   }
   if (input.coin && input.coin !== 'All') {
     query.coin = input.coin
+  }
+  if (input.sentiment && input.sentiment !== 'All') {
+    query.sentiment = input.sentiment
   }
   const hours = input.range ? NEWS_RANGE_HOURS[input.range] : undefined
   if (hours !== undefined) {
@@ -51,12 +54,13 @@ export function ConnectedNewsRoute({
   pageSize = 25,
 }: NewsRouteProps) {
   const [coin, setCoin] = useState(initialCoin)
+  const [sentiment, setSentiment] = useState<NewsSentimentLabel | 'All'>('All')
   const [range, setRange] = useState(initialRange)
   const [page, setPage] = useState(initialPage)
 
   const query = useMemo<NewsQuery>(
-    () => buildNewsQuery({ coin, range, page, pageSize }),
-    [coin, range, page, pageSize],
+    () => buildNewsQuery({ coin, sentiment, range, page, pageSize }),
+    [coin, sentiment, range, page, pageSize],
   )
 
   const { data, error, isError, refetch } = useQuery(createNewsQueryOptions(query, { fetchImpl }))
@@ -80,6 +84,7 @@ export function ConnectedNewsRoute({
       page={page}
       pageSize={pageSize}
       coin={coin}
+      sentiment={sentiment}
       range={range}
       errorMessage={error instanceof Error ? error.message : 'The news request could not be served.'}
       onRetry={() => {
@@ -87,6 +92,10 @@ export function ConnectedNewsRoute({
       }}
       onCoinChange={(next) => {
         setCoin(next)
+        setPage(1)
+      }}
+      onSentimentChange={(next) => {
+        setSentiment(next)
         setPage(1)
       }}
       onRangeChange={(next) => {

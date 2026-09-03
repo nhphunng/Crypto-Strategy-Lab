@@ -54,10 +54,13 @@ class FakeDatasetService:
     status: DatasetStatus = DatasetStatus.COMPLETE
     building: bool = False
     requested: list[Any] = field(default_factory=list)
+    dataset_id: UUID = DATASET_ID
 
     async def materialize(self, selection, time_range, *, request_id=None):
         self.requested.append((selection, time_range))
-        return FakeMaterialization(FakeDataset(status=self.status), building=self.building)
+        return FakeMaterialization(
+            FakeDataset(id=self.dataset_id, status=self.status), building=self.building
+        )
 
 
 @dataclass
@@ -93,7 +96,9 @@ class FakeDatasetReader:
     available: bool = True
 
     async def get_complete(self, dataset_id):
-        return FakeBacktestDataset() if self.available else None
+        return (
+            FakeBacktestDataset(FakeMetadataBundle(id=dataset_id)) if self.available else None
+        )
 
 
 @dataclass
@@ -324,6 +329,19 @@ async def test_a_different_cycle_index_produces_a_different_identity() -> None:
     second = await pipeline.run_cycle(2)
 
     assert first.generated == second.generated == 3
+
+
+async def test_restarting_cycle_zero_on_a_new_dataset_creates_new_runs() -> None:
+    datasets = FakeDatasetService()
+    pipeline, parts = build(datasets=datasets)
+    await pipeline.run_cycle(0)
+    datasets.dataset_id = UUID(int=42)
+    await pipeline.run_cycle(0)
+    configurations = parts["create_backtest"].configurations
+    before = configurations[:3]
+    after = configurations[3:]
+    assert {run.run_id for run in before}.isdisjoint(run.run_id for run in after)
+    assert all(run.dataset_id == UUID(int=42) for run in after)
 
 
 @dataclass

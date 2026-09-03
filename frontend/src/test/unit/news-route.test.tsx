@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { describe, expect, it, vi } from 'vitest'
@@ -60,7 +60,7 @@ function fetchOk(body: unknown) {
 
 function renderRoute(ui: ReactNode) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  return render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>)
+  return { ...render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>), client }
 }
 
 const allCoins = ['BTC', 'ETH', 'All'] as const
@@ -243,17 +243,38 @@ describe('ConnectedNewsRoute', () => {
     expect(await screen.findByText(/Bitcoin gains as institutional inflows/)).toBeInTheDocument()
   })
 
-  it('disables the sentiment controls with a pending-analysis helper', async () => {
+  it('filters by sentiment on the server and resets pagination', async () => {
     const fetchImpl = fetchOk(page([item()], { total: 1 }))
-    renderRoute(<ConnectedNewsRoute fetchImpl={fetchImpl} />)
+    renderRoute(<ConnectedNewsRoute fetchImpl={fetchImpl} initialPage={2} />)
 
     expect(await screen.findByText(/Bitcoin gains as institutional inflows/)).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Positive' })).toBeDisabled()
-    expect(screen.getByRole('button', { name: 'Neutral' })).toBeDisabled()
-    expect(screen.getByRole('button', { name: 'Negative' })).toBeDisabled()
-    expect(
-      screen.getByText('Available after sentiment analysis completes'),
-    ).toBeInTheDocument()
+    const user = userEvent.setup()
+    await user.click(screen.getByRole('button', { name: 'Positive' }))
+    await waitFor(() => {
+      const url = new URL(String(fetchImpl.mock.calls.at(-1)?.[0]))
+      expect(url.searchParams.get('sentiment')).toBe('POSITIVE')
+      expect(url.searchParams.get('page')).toBe('1')
+    })
+    await user.click(within(screen.getByRole('group', { name: 'Sentiment filter' })).getByRole('button', { name: 'All' }))
+    await waitFor(() => {
+      const url = new URL(String(fetchImpl.mock.calls.at(-1)?.[0]))
+      expect(url.searchParams.has('sentiment')).toBe(false)
+    })
+  })
+
+  it('refreshes pending sentiment in both the table and the open drawer', async () => {
+    const fetchImpl = fetchOk(page([item()]))
+    const { client } = renderRoute(<ConnectedNewsRoute fetchImpl={fetchImpl} />)
+    const row = await screen.findByRole('row', { name: `Inspect ${baseItem.title}` })
+    await userEvent.setup().click(row)
+    expect(within(screen.getByRole('dialog')).getByText('Available after sentiment analysis completes')).toBeInTheDocument()
+    fetchImpl.mockImplementation(async () => jsonResponse(successEnvelope(page([item({
+      sentiment: { label: 'POSITIVE', score: '0.912345', modelId: 'ProsusAI/finbert', modelVersion: 'pinned', analyzedAt: '2026-08-30T12:03:00.000Z' },
+    })]))))
+    await act(async () => { await client.invalidateQueries({ queryKey: ['news'] }) })
+    expect(await within(screen.getByRole('dialog')).findByText(/POSITIVE · 0.91/)).toBeInTheDocument()
+    expect(within(row).getByText(/POSITIVE · 0.91/)).toBeInTheDocument()
+    expect(screen.queryByText('Available after sentiment analysis completes')).not.toBeInTheDocument()
   })
 
   it('removes the simulate-degraded affordance', async () => {

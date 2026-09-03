@@ -597,10 +597,13 @@ class SearchLoopPipeline:
             configuration.root_definition_id, dataset_id, request_id
         )
         definition, provenance = analysis.strategy_definition, analysis.context_provenance
-        # Deterministic identity keyed only by (cycle_index, candidate fingerprint),
-        # so re-running the same cycle resolves the same run/job instead of
-        # producing duplicates.
-        job_id = uuid5(SEARCH_LOOP_NAMESPACE, f"cycle|{cycle_index}|{candidate.fingerprint}")
+        # Restarts reset cycle_index. Include immutable execution inputs so a
+        # new dataset or sentiment context cannot collide with a previous run.
+        job_id = uuid5(
+            SEARCH_LOOP_NAMESPACE,
+            f"cycle|{cycle_index}|{candidate.fingerprint}|{dataset_id}|"
+            f"{provenance.context_fingerprint}|{seed + sequence}",
+        )
         metadata = dataset.metadata
         run = await self._create_backtest.execute(
             BacktestConfiguration(

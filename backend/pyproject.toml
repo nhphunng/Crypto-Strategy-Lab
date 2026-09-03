@@ -21,6 +21,10 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+sentiment = [
+  "transformers==4.57.6",
+  "torch==2.10.0",
+]
 dev = [
   "mypy==1.16.0",
   "pytest==8.4.0",

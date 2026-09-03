@@ -7,6 +7,7 @@ from uuid import UUID
 import pytest
 
 from crypto_lab.application.sentiment.analyze_pending_news import AnalyzePendingNews
+from crypto_lab.application.sentiment.errors import SentimentModelUnavailable
 from crypto_lab.domain.news.item import NewsItem
 from crypto_lab.domain.sentiment.analysis import NewsSentimentAnalysis
 from crypto_lab.domain.sentiment.model import ModelRef, SentimentLabel, SentimentStatus
@@ -139,3 +140,17 @@ async def test_list_pending_is_queried_with_the_analyzers_exact_model_identity()
     (model, limit) = repository.list_pending_calls[0]
     assert model == ModelRef(analyzer.model_id, analyzer.model_version)
     assert limit == 25
+
+
+async def test_model_load_failure_leaves_news_pending_for_retry() -> None:
+    class UnavailableAnalyzer(FakeAnalyzer):
+        async def analyze(self, item: NewsItem) -> tuple[SentimentLabel, Decimal]:
+            raise SentimentModelUnavailable("offline")
+
+    repository = FakeRepository((_item(1), _item(2)))
+    service = AnalyzePendingNews(
+        analyzer=UnavailableAnalyzer(), repository=repository, clock=FixedClock(ANALYZED_AT)
+    )
+    with pytest.raises(SentimentModelUnavailable):
+        await service.execute()
+    assert repository.saved == []

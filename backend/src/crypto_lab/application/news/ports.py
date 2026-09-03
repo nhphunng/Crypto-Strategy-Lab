@@ -30,6 +30,7 @@ class NewsQuery:
     published_before: datetime | None = None
     page: int = 1
     page_size: int = 50
+    sentiment: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

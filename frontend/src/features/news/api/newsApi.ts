@@ -28,6 +28,7 @@ export type NewsRequestOptions = {
 function newsParams(query: NewsQuery): URLSearchParams {
   const params = new URLSearchParams()
   if (query.coin !== undefined) params.set('coin', query.coin)
+  if (query.sentiment !== undefined) params.set('sentiment', query.sentiment)
   if (query.publishedAfter !== undefined) params.set('publishedAfter', query.publishedAfter)
   if (query.publishedBefore !== undefined) params.set('publishedBefore', query.publishedBefore)
   if (query.page !== undefined) params.set('page', String(query.page))
@@ -46,6 +47,7 @@ export function createNewsQueryOptions(
   return queryOptions({
     queryKey: newsQueryKey(query),
     queryFn: ({ signal }) => fetchNews(query, { ...options, signal }),
+    refetchInterval: 15_000,
   })
 }
 

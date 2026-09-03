@@ -13,7 +13,7 @@ Repo hiện có backend và frontend chạy được độc lập hoặc cùng n
 | Leaderboard & Visualization backend | `backend/src/crypto_lab/{domain,application}/leaderboard/` | Đã có Top-K projection, REST snapshot/detail/visualization/trades, WebSocket `LEADERBOARD_UPDATED` |
 | Leaderboard & Visualization frontend | `frontend/src/features/leaderboard/` | Đã kết nối API thật: bảng Top-K, live update, chart Buy/Sell + Entry/Exit, trade drill-down |
 | News collection Task 3 | `backend/src/crypto_lab/{domain,application,infrastructure}/news/`, `frontend/src/features/news/` | Provider-neutral RSS-first collect/store/API/TanStack Query; `sentiment: null` và `Pending analysis` là deliberate |
-| News Sentiment Task 4 | `specs/007-news-sentiment/handoff-task-3-to-4.md` | **Chưa hoàn thành**; chưa có model/score/label thật hoặc `NewsSentimentStrategy` |
+| News Sentiment Task 4 | `backend/src/crypto_lab/infrastructure/sentiment/finbert_analyzer.py` | Pinned FinBERT ML inference, versioned analyses, `news_sentiment` strategy, API sentiment filtering and live UI refresh |
 | Web frontend | `frontend/` | `/market`, `/backtests` (Single Backtest) và `/leaderboard` đã dùng API thật; Strategy Search, Runs và các màn hình ngoài phạm vi các feature đã tích hợp vẫn dùng adapter mô phỏng |
 
 `frontend/` là vị trí frontend chính thức. Market dashboard, Single Backtest và Leaderboard đã nối backend; Strategy Search/Runs vẫn thuộc các feature queue/search sau.
@@ -173,7 +173,43 @@ HTTPS RSS/Atom → RSS NewsProvider → CollectNews → NewsRepository
 
 RSS/Atom là adapter đầu tiên. Adapter khác có thể được thêm sau `NewsProvider` mà không sửa repository, API hoặc frontend. Deduplication dùng unique `(provider, provider_item_id)` và `canonical_url`; `related_coins` có GIN index, còn newest-first pagination dùng `(published_at DESC, id)`.
 
-Task 3 không chạy sentiment model. API cố ý trả `sentiment: null` và UI hiển thị `Pending analysis`; không có model/label/score giả. Task 4 vẫn incomplete và phải dùng bảng analysis bất biến/có version cùng `SentimentContextReader`, xem [handoff Task 3 → Task 4](specs/007-news-sentiment/handoff-task-3-to-4.md).
+Collection remains independent of sentiment analysis. The Task 4 worker reads stored articles and writes immutable, versioned `news_sentiment_analyses`. News without a completed analysis of its current content returns `sentiment: null`; completed articles show the actual model label and confidence. The News page refreshes every 15 seconds and supports server-side sentiment filtering, including correct pagination totals.
+
+### Thành's tasks: background search and ML sentiment
+
+Both local and production Compose enable `CSL_SEARCH_LOOP_ENABLED` and
+`CSL_SENTIMENT_ANALYSIS_ENABLED`. Search generates new combinations through the
+registry, evaluates them, and feeds the leaderboard. Its controls are
+`GET /api/v1/search-loop/status`, `POST /api/v1/search-loop/pause`, and
+`POST /api/v1/search-loop/resume`; pause takes effect between cycles.
+
+Sentiment uses [ProsusAI/FinBERT](https://huggingface.co/ProsusAI/finbert), pinned to
+revision `4556d13015211d73dccd3fdd39d39232506f3e43`, with stored release version
+`1.0.0+4556d1301521`. The CPU model and tokenizer are bundled during Docker build,
+so inference works with a read-only filesystem and no runtime model download.
+The first image build requires network access and adds the ML runtime/model size.
+Local Python installs can use `backend/requirements.sentiment.lock` after the
+runtime dependencies. `backend/scripts/cache_sentiment_model.py <directory>`
+downloads the pinned model; `CSL_SENTIMENT_MODEL_PATH` selects that local directory.
+Without a local path, the adapter downloads the same pinned revision on first use.
+
+`GET /api/v1/sentiment/status` reports pending/analyzed/failed counts.
+`GET /api/v1/news?sentiment=POSITIVE` (also `NEUTRAL` or `NEGATIVE`) filters stored
+results. `backend/scripts/analyze_news_once.py` processes one batch immediately.
+The default Compose interval is 60 seconds, with up to 50 articles per batch.
+Model loading and inference run off the API event loop. A model loading failure
+leaves articles pending for retry. The old lexicon scorer remains only for legacy
+tests; application wiring uses FinBERT. `news_sentiment` is registered alongside
+MA and RSI and is available to the search generator.
+
+The collection-only Compose E2E fixture explicitly disables both new workers.
+For the real ML database regression, run from `backend/` with
+`CSL_TEST_FINBERT_PATH` pointing to the cached model and `TEST_DATABASE_URL`
+pointing to a **disposable migrated database** (the fixture clears news tables):
+
+```powershell
+.venv/Scripts/python.exe -m pytest tests/functional/test_news_sentiment_journey.py -q
+```
 
 ### Cấu hình collector
 
@@ -225,7 +261,7 @@ curl.exe http://localhost:8000/health/ready
 curl.exe "http://localhost:8000/api/v1/news?coin=BTC&page=1&pageSize=50"
 ```
 
-Mở API docs tại [http://localhost:8000/docs](http://localhost:8000/docs) và News UI tại [http://localhost:5173/news](http://localhost:5173/news). Xác nhận headline/source/published time/related coins khớp API; ghi lại một `newsId`/headline, nhấn **F5**, và xác nhận item vẫn còn từ PostgreSQL. UI phải hiển thị `Pending analysis`, không hiển thị `FinSent-v2.3`, model, label hoặc score giả.
+Mở API docs tại [http://localhost:8000/docs](http://localhost:8000/docs) và News UI tại [http://localhost:5173/news](http://localhost:5173/news). Xác nhận headline/source/published time/related coins khớp API; ghi lại một `newsId`/headline, nhấn **F5**, và xác nhận item vẫn còn từ PostgreSQL. UI hiển thị `Pending analysis` trước khi worker hoàn thành, sau đó hiển thị label/score thật từ FinBERT; không hiển thị model/score giả.
 
 3. Kiểm tra degraded isolation mà không xóa volume/database:
 

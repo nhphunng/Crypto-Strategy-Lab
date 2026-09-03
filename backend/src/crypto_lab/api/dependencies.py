@@ -130,7 +130,11 @@ from crypto_lab.infrastructure.security.source_content_protector import (
     LocalAesKeyProvider,
     SourceContentProtector,
 )
-from crypto_lab.infrastructure.sentiment.lexicon_analyzer import LexiconSentimentAnalyzer
+from crypto_lab.infrastructure.sentiment.finbert_analyzer import (
+    MODEL_ID,
+    MODEL_VERSION,
+    FinBertSentimentAnalyzer,
+)
 from crypto_lab.infrastructure.settings import Settings
 from crypto_lab.infrastructure.sources.web_source_adapter import SafeWebSourceAdapter
 
@@ -146,7 +150,7 @@ EVALUATION_POLICY = EvaluationPolicy(
 )
 # The exact model identity NewsSentimentStrategy reads under -- must match
 # LexiconSentimentAnalyzer's own model_id/model_version.
-SENTIMENT_MODEL = ModelRef(model_id="lexicon-sentiment", model_version="1.0.0")
+SENTIMENT_MODEL = ModelRef(model_id=MODEL_ID, model_version=MODEL_VERSION)
 BALANCED_SCORING_POLICY = ScoringPolicy(
     uuid5(NAMESPACE_URL, "crypto-lab/scoring/balanced-v1"),
     "balanced",
@@ -266,7 +270,7 @@ class Container:
     news_collection_loop: NewsCollectionLoop | None = None
     sentiment_repository: SqlAlchemySentimentAnalysisRepository | None = None
     sentiment_context_reader: SqlAlchemySentimentContextReader | None = None
-    sentiment_analyzer: LexiconSentimentAnalyzer | None = None
+    sentiment_analyzer: FinBertSentimentAnalyzer | None = None
     analyze_pending_news: AnalyzePendingNews | None = None
     sentiment_loop: SentimentAnalysisLoop | None = None
     search_repository: SqlAlchemySearchRepository | None = None
@@ -383,7 +387,7 @@ def build_container(settings: Settings | None = None) -> Container:
     strategy_registry = build_strategy_registry()
     sentiment_repository = SqlAlchemySentimentAnalysisRepository(database.sessions)
     sentiment_context_reader = SqlAlchemySentimentContextReader(database.sessions)
-    sentiment_analyzer = LexiconSentimentAnalyzer()
+    sentiment_analyzer = FinBertSentimentAnalyzer(settings.sentiment_model_path)
     strategy_registry.register(NewsSentimentStrategy(sentiment_context_reader, SENTIMENT_MODEL))
     strategy_discovery = DiscoverStrategies(strategy_registry)
     strategy_definitions = SqlAlchemyStrategyDefinitionRepository(database.sessions)

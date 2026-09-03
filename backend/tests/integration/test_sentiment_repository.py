@@ -177,7 +177,7 @@ async def test_latest_for_returns_newest_analyzed_at_per_news_id(
         label=SentimentLabel.POSITIVE,
         score=Decimal("0.4"),
         analyzed_at=ANALYZED_AT + timedelta(hours=1),
-        content_fingerprint="b" * 64,
+        content_fingerprint=item.content_fingerprint,
     )
     await sentiment_repository.save(older)
     await sentiment_repository.save(newer)

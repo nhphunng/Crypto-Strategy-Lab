@@ -88,9 +88,14 @@ class SqlAlchemySentimentAnalysisRepository:
             rows = (
                 await session.scalars(
                     select(row)
+                    .join(NewsItemRow, NewsItemRow.id == row.news_id)
                     .distinct(row.news_id)
-                    .where(row.news_id.in_(news_ids), row.status == SentimentStatus.COMPLETED.value)
-                    .order_by(row.news_id, row.analyzed_at.desc())
+                    .where(
+                        row.news_id.in_(news_ids),
+                        row.status == SentimentStatus.COMPLETED.value,
+                        row.content_fingerprint == NewsItemRow.content_fingerprint,
+                    )
+                    .order_by(row.news_id, row.analyzed_at.desc(), row.id.desc())
                 )
             ).all()
         return {analysis.news_id: analysis for analysis in (_analysis_from_row(r) for r in rows)}

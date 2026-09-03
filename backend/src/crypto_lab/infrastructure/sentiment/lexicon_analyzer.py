@@ -1,11 +1,7 @@
-"""A deterministic, dependency-free lexicon-based sentiment scorer.
+"""Legacy keyword baseline retained for comparisons and existing test fixtures.
 
-This project has no ML/NLP dependencies today (see ``backend/pyproject.toml``);
-adding a heavyweight model (transformers/torch/nltk/...) would be a
-disproportionate footprint change made unilaterally by this task. Instead this
-is a small, transparent keyword-scoring model, versioned like any other model
-via ``model_id``/``model_version`` -- it is deliberately simple, not a claim
-to state-of-the-art NLP.
+Production wiring uses FinBertSentimentAnalyzer. This baseline is not an ML
+model and is never used as a silent fallback when FinBERT is unavailable.
 """
 
 from __future__ import annotations

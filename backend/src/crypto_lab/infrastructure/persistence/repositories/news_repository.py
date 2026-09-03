@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from crypto_lab.application.news.ports import NewsPage, NewsQuery, StoreNewsResult
 from crypto_lab.domain.news.item import NewsItem
 from crypto_lab.infrastructure.persistence.news_models import NewsItemRow
+from crypto_lab.infrastructure.persistence.sentiment_models import NewsSentimentAnalysisRow
 
 # Mutable columns refreshed on an identity conflict with changed content. Identity
 # (provider, provider_item_id), the row id, and published_at are never rewritten.
@@ -106,6 +107,21 @@ def _query_conditions(query: NewsQuery) -> tuple[ColumnElement[bool], ...]:
     conditions: list[ColumnElement[bool]] = []
     if query.coin:
         conditions.append(NewsItemRow.related_coins.any(query.coin))  # type: ignore[arg-type]
+    if query.sentiment:
+        analysis = NewsSentimentAnalysisRow
+        latest_label = (
+            select(analysis.label)
+            .where(
+                analysis.news_id == NewsItemRow.id,
+                analysis.content_fingerprint == NewsItemRow.content_fingerprint,
+                analysis.status == "COMPLETED",
+            )
+            .order_by(analysis.analyzed_at.desc(), analysis.id.desc())
+            .limit(1)
+            .correlate(NewsItemRow)
+            .scalar_subquery()
+        )
+        conditions.append(latest_label == query.sentiment)
     if query.published_after is not None:
         conditions.append(NewsItemRow.published_at >= query.published_after)
     if query.published_before is not None:

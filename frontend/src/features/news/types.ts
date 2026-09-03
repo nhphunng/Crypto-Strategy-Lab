@@ -31,6 +31,7 @@ export type NewsPage = {
 
 export type NewsQuery = {
   coin?: string
+  sentiment?: NewsSentimentLabel
   publishedAfter?: string
   publishedBefore?: string
   page?: number
