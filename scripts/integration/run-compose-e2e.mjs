@@ -44,6 +44,16 @@ const PLAYWRIGHT = existsSync(PLAYWRIGHT_CLI)
     ? "npx.cmd"
     : "npx";
 const KEEP_STACK = process.env.KEEP_STACK === "1";
+// These journeys assert seeded data, including news awaiting analysis. Keep
+// background writers off for this stack so model speed and public providers
+// cannot change the fixture between assertions. Normal Compose defaults are unchanged.
+const INTEGRATION_ENV = {
+  ...process.env,
+  CSL_AUTO_EVALUATION_ENABLED: "false",
+  CSL_SEARCH_LOOP_ENABLED: "false",
+  CSL_SENTIMENT_ANALYSIS_ENABLED: "false",
+  CSL_NEWS_COLLECTION_ENABLED: "false",
+};
 const DETERMINISTIC_SPECS = [
   "tests/e2e/leaderboard-visualization.spec.ts",
   "tests/e2e/realtime-multi-chart.spec.ts",
@@ -53,7 +63,9 @@ const DETERMINISTIC_SPECS = [
 
 function run(command, args, options = {}) {
   console.log(`\n> ${command} ${args.join(" ")}`);
-  const result = spawnSync(command, args, { cwd: ROOT, stdio: "inherit", shell: false, ...options });
+  const result = spawnSync(command, args, {
+    cwd: ROOT, stdio: "inherit", shell: false, env: INTEGRATION_ENV, ...options,
+  });
   if (result.error) throw result.error;
   if (result.status !== 0) {
     throw new Error(`${command} ${args.join(" ")} exited with code ${result.status}`);
@@ -63,7 +75,9 @@ function run(command, args, options = {}) {
 function runAsync(command, args, options = {}) {
   console.log(`\n> ${command} ${args.join(" ")}`);
   return new Promise((resolve, reject) => {
-    const child = spawn(command, args, { cwd: ROOT, stdio: "inherit", shell: false, ...options });
+    const child = spawn(command, args, {
+      cwd: ROOT, stdio: "inherit", shell: false, env: INTEGRATION_ENV, ...options,
+    });
     child.on("error", reject);
     child.on("exit", (code) => resolve(code ?? 1));
   });
@@ -93,7 +107,7 @@ function postgresReady() {
   const result = spawnSync(
     "docker",
     ["compose", "exec", "-T", "postgres", "pg_isready", "-U", "crypto_lab", "-d", "crypto_lab"],
-    { cwd: ROOT },
+    { cwd: ROOT, env: INTEGRATION_ENV },
   );
   return result.status === 0;
 }
@@ -124,7 +138,7 @@ async function main() {
       "--config=playwright.compose.config.ts",
       ...DETERMINISTIC_SPECS,
     ],
-    { env: { ...process.env, COMPOSE_E2E: "1" } },
+    { env: { ...INTEGRATION_ENV, COMPOSE_E2E: "1" } },
   );
   if (exitCode !== 0) {
     throw new Error(`playwright test exited with code ${exitCode}`);
@@ -145,5 +159,7 @@ main()
       return;
     }
     console.log("\n> docker compose down");
-    spawnSync("docker", ["compose", "down"], { cwd: ROOT, stdio: "inherit" });
+    spawnSync("docker", ["compose", "down"], {
+      cwd: ROOT, stdio: "inherit", env: INTEGRATION_ENV,
+    });
   });
