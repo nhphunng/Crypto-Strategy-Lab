@@ -300,3 +300,24 @@ describe('ConnectedNewsRoute', () => {
     }
   })
 })
+
+
+it('shows distribution from the entire server result rather than the current page', async () => {
+  const fetchImpl = fetchOk(page([item()], { total: 40,
+    sentimentSummary: { positive: 8, neutral: 6, negative: 6, pending: 20 } }))
+  renderRoute(<ConnectedNewsRoute fetchImpl={fetchImpl} />)
+  const summary = await screen.findByRole('region', { name: 'Sentiment distribution' })
+  expect(within(summary).getByText('Positive 40.0% (8)')).toBeInTheDocument()
+  expect(within(summary).getByText('Neutral 30.0% (6)')).toBeInTheDocument()
+  expect(within(summary).getByText('Negative 30.0% (6)')).toBeInTheDocument()
+  expect(within(summary).getByText('20 analyzed · 20 pending analysis')).toBeInTheDocument()
+})
+
+it('does not invent percentages before any articles are analyzed', async () => {
+  const fetchImpl = fetchOk(page([item()], {
+    sentimentSummary: { positive: 0, neutral: 0, negative: 0, pending: 1 } }))
+  renderRoute(<ConnectedNewsRoute fetchImpl={fetchImpl} />)
+  const summary = await screen.findByRole('region', { name: 'Sentiment distribution' })
+  expect(within(summary).getByText('Positive — (0)')).toBeInTheDocument()
+  expect(summary).not.toHaveTextContent('NaN')
+})

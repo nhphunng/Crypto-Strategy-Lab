@@ -29,9 +29,15 @@ class StrategySearchRunRow(Base):
             name="ck_strategy_search_runs_status",
         ),
         Index("ix_strategy_search_runs_created", "created_at"),
+        Index("ix_search_runs_loop_cycle", "loop_key", "cycle_index"),
     )
     id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
     status: Mapped[str] = mapped_column(String(16), nullable=False)
+    origin: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="MANUAL", server_default="MANUAL"
+    )
+    loop_key: Mapped[str | None] = mapped_column(String(64))
+    cycle_index: Mapped[int | None] = mapped_column(Integer)
     dataset_id: Mapped[UUID] = mapped_column(
         ForeignKey("candle_datasets.id", ondelete="RESTRICT"), nullable=False
     )

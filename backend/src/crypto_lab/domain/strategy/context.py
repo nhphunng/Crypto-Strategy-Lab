@@ -27,6 +27,7 @@ class StrategyContext:
     decision_timestamp: datetime
     completeness: ContextCompleteness
     candles: tuple[Candle, ...]
+    evidence_fingerprint: str | None = None
     _context_fingerprint: str = field(init=False, repr=False)
 
     def __post_init__(self) -> None:
@@ -105,4 +106,6 @@ class StrategyContext:
             )
         )
         body = "\n".join(candle.canonical_line() for candle in self.candles)
+        if self.evidence_fingerprint is not None:
+            body += f"\nevidence:{self.evidence_fingerprint}"
         return hashlib.sha256(f"{header}\n{body}".encode()).hexdigest()

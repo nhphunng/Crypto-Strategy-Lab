@@ -130,6 +130,7 @@ async def create_backtest_run(
         body.fee_rate,
         body.slippage_rate,
         body.random_seed,
+        sentiment_provenance=provenance.sentiment,
     )
     run = await container.create_backtest.execute(configuration)
     return success_envelope(run_to_dto(run), "Backtest run created.", request_id(request))

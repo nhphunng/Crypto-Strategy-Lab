@@ -23,6 +23,7 @@ from crypto_lab.domain.backtest.result import (
 )
 from crypto_lab.domain.backtest.trade import CloseReason, Trade, TradeSide
 from crypto_lab.domain.market_data.timeframe import Timeframe
+from crypto_lab.domain.sentiment.provenance import SentimentProvenance
 from crypto_lab.infrastructure.persistence.backtest_models import (
     BacktestEquityPointRow,
     BacktestResultRow,
@@ -71,9 +72,11 @@ class SqlAlchemyBacktestRepository:
 
     async def list_runs(self, limit: int = 100) -> tuple[BacktestRun, ...]:
         async with self._sessions() as session:
-            rows = (await session.scalars(
-                select(BacktestRunRow).order_by(BacktestRunRow.requested_at.desc()).limit(limit)
-            )).all()
+            rows = (
+                await session.scalars(
+                    select(BacktestRunRow).order_by(BacktestRunRow.requested_at.desc()).limit(limit)
+                )
+            ).all()
         return tuple(_run_domain(row) for row in rows)
 
     async def create_or_resolve_run(self, run: BacktestRun) -> BacktestRun:
@@ -262,6 +265,7 @@ def _run_values(run: BacktestRun) -> dict[str, object]:
         "contract_version": c.contract_version,
         "parameter_fingerprint": c.parameter_fingerprint,
         "context_fingerprint": c.context_fingerprint,
+        "sentiment_provenance": [item.to_payload() for item in c.sentiment_provenance],
         "execution_policy_id": c.execution_policy_id,
         "execution_policy_version": c.execution_policy_version,
         "initial_capital": c.initial_capital,
@@ -299,6 +303,7 @@ def _run_domain(row: BacktestRunRow) -> BacktestRun:
         Decimal(row.fee_rate),
         Decimal(row.slippage_rate),
         row.random_seed,
+        tuple(SentimentProvenance.from_payload(item) for item in row.sentiment_provenance),
     )
     return BacktestRun(
         c,

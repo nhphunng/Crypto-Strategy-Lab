@@ -9,6 +9,8 @@ from decimal import Decimal
 from typing import Any
 from uuid import UUID, uuid4
 
+from tests.fixtures.search_repository import MemoryRepository
+
 from crypto_lab.application.evaluations.auto_evaluate import (
     SearchLoopCycleReport,
     SearchLoopPipeline,
@@ -16,6 +18,7 @@ from crypto_lab.application.evaluations.auto_evaluate import (
     SearchLoopSettings,
     SearchLoopStatus,
 )
+from crypto_lab.application.search_service import SearchEventHub, StrategySearchService
 from crypto_lab.application.strategies.discover_strategies import DiscoverStrategies
 from crypto_lab.application.strategies.save_configuration import SaveStrategyConfiguration
 from crypto_lab.bootstrap.strategies import build_strategy_registry
@@ -96,9 +99,7 @@ class FakeDatasetReader:
     available: bool = True
 
     async def get_complete(self, dataset_id):
-        return (
-            FakeBacktestDataset(FakeMetadataBundle(id=dataset_id)) if self.available else None
-        )
+        return FakeBacktestDataset(FakeMetadataBundle(id=dataset_id)) if self.available else None
 
 
 @dataclass
@@ -141,6 +142,7 @@ class FakeConfigurationRepository:
 @dataclass
 class FakeProvenance:
     context_fingerprint: str = DIGEST
+    sentiment: tuple = ()
 
 
 @dataclass
@@ -191,7 +193,7 @@ class FakeResult:
 class FakeExecuteBacktest:
     runs: list[UUID] = field(default_factory=list)
 
-    async def execute(self, run_id, request_id):
+    async def execute(self, run_id, request_id, *, resume_interrupted=False):
         self.runs.append(run_id)
         return FakeResult(UUID(int=int(str(run_id.int)[-6:]) % 10_000 + 500))
 
@@ -246,13 +248,31 @@ def build(**overrides: Any) -> tuple[SearchLoopPipeline, dict[str, Any]]:
     }
     parts.update(overrides)
     parts["analyzer"] = overrides.get("analyzer", FakeAnalyzer(definitions))
-    pipeline = SearchLoopPipeline(
-        settings=SearchLoopSettings(candles=200, candidates_per_cycle=3),
+    repository = overrides.get("repository", MemoryRepository())
+    search = StrategySearchService(
+        repository=repository,
+        generator=parts["generator"],
+        configurations=parts["configurations"],
+        datasets=parts["dataset_reader"],
+        analyzer=parts["analyzer"],
+        create_backtest=parts["create_backtest"],
+        execute_backtest=parts["execute_backtest"],
+        evaluate_backtest=parts["evaluate_backtest"],
+        leaderboard=parts["ingestion"],
         clock=clock,
+        hub=SearchEventHub(),
         execution_policy=FakePolicy(UUID(int=1), "1.0.0"),
         evaluation_policy=FakePolicy(UUID(int=2), "1.0.0"),
         scoring_policy=FakePolicy(UUID(int=3), "1.0.0"),
-        **parts,
+    )
+    parts["search"] = search
+    parts["repository"] = repository
+    pipeline = SearchLoopPipeline(
+        settings=SearchLoopSettings(candles=200, candidates_per_cycle=3),
+        clock=clock,
+        datasets=parts["datasets"],
+        discovery=parts["discovery"],
+        search=search,
     )
     extras = {"definitions": definitions, "configuration_repo": configurations, **parts}
     return pipeline, extras
@@ -307,19 +327,10 @@ async def test_repeating_a_cycle_is_idempotent() -> None:
     assert first.succeeded == second.succeeded == 3
 
     configurations = parts["create_backtest"].configurations
-    assert len(configurations) == 6
-    first_half, second_half = configurations[:3], configurations[3:]
-    for before, after in zip(first_half, second_half, strict=True):
-        assert before.run_id == after.run_id
-        assert before.job_id == after.job_id
-        assert before.strategy_definition_id == after.strategy_definition_id
-        assert before.parameter_fingerprint == after.parameter_fingerprint
-        assert before.random_seed == after.random_seed
-
-    # The backtest execution layer saw the same run ids resolved twice, which
-    # is exactly the mechanism that keeps the second cycle from duplicating
-    # rows: a real repository resolves by run_id instead of inserting again.
-    assert parts["execute_backtest"].runs[:3] == parts["execute_backtest"].runs[3:]
+    assert len(configurations) == 3
+    assert len(parts["execute_backtest"].runs) == 3
+    assert len(parts["repository"].runs) == 1
+    assert (await pipeline.snapshot()).candidates_succeeded == 3
 
 
 async def test_a_different_cycle_index_produces_a_different_identity() -> None:
@@ -336,7 +347,9 @@ async def test_restarting_cycle_zero_on_a_new_dataset_creates_new_runs() -> None
     pipeline, parts = build(datasets=datasets)
     await pipeline.run_cycle(0)
     datasets.dataset_id = UUID(int=42)
-    await pipeline.run_cycle(0)
+    restarted, _ = build(datasets=datasets, repository=parts["repository"])
+    assert await restarted.restore() == 1
+    await pipeline.run_cycle(await restarted.restore())
     configurations = parts["create_backtest"].configurations
     before = configurations[:3]
     after = configurations[3:]
@@ -392,3 +405,46 @@ async def test_pause_stops_new_cycles_and_resume_restarts_them() -> None:
         await runner.stop()
 
     assert runner.status().status == SearchLoopStatus.STOPPED
+
+
+async def test_generation_failure_is_persisted_and_not_counted_as_a_completed_cycle():
+    class BrokenGenerator:
+        generator_id, version = "broken", "1.0.0"
+
+        def generate(self, *args):
+            raise ValueError("invalid search space")
+
+    pipeline, parts = build(generator=BrokenGenerator())
+    report = await pipeline.run_cycle(0)
+    assert report.completed is False
+    assert report.error == "invalid search space"
+    stats = await pipeline.snapshot()
+    assert stats.cycles_completed == 0
+    assert stats.last_error == report.error
+    assert await pipeline.restore() == 1
+
+
+async def test_restart_consumes_stored_queue_and_reconciles_completed_candidates():
+    pipeline, parts = build()
+    await pipeline.run_cycle(0)
+    repository = parts["repository"]
+    run = next(iter(repository.runs.values()))
+    # Simulate shutdown after candidate 1 was committed but before its counter update.
+    run.status, run.succeeded = "RUNNING", 0
+    for item in repository.items[1:]:
+        item.status = "QUEUED"
+
+    class UnavailableGenerator:
+        generator_id, version = "random-search", "1.0.0"
+
+        def generate(self, *args):
+            raise AssertionError("A durable queue must not be regenerated")
+
+    restarted, fresh = build(repository=repository, generator=UnavailableGenerator())
+    assert await restarted.restore() == 0
+    report = await restarted.run_cycle(0)
+    assert report.succeeded == 3
+    assert len(fresh["execute_backtest"].runs) == 2
+    assert len(repository.runs) == 1
+    assert len(repository.items) == 3
+    assert (await restarted.snapshot()).candidates_succeeded == 3

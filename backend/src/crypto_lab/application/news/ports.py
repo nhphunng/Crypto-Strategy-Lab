@@ -34,11 +34,20 @@ class NewsQuery:
 
 
 @dataclass(frozen=True, slots=True)
+class SentimentSummary:
+    positive: int = 0
+    neutral: int = 0
+    negative: int = 0
+    pending: int = 0
+
+
+@dataclass(frozen=True, slots=True)
 class NewsPage:
     items: tuple[NewsItem, ...]
     page: int
     page_size: int
     total: int
+    sentiment_summary: SentimentSummary | None = None
 
 
 @dataclass(frozen=True, slots=True)

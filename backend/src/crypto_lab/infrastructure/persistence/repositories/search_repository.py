@@ -4,6 +4,7 @@ from collections.abc import Mapping
 from uuid import UUID
 
 from sqlalchemy import select, update
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from crypto_lab.infrastructure.persistence.search_models import (
@@ -18,9 +19,27 @@ class SqlAlchemySearchRepository:
 
     async def create(self, values: Mapping[str, object]) -> StrategySearchRunRow:
         async with self._sessions() as session, session.begin():
-            row = StrategySearchRunRow(**values)
-            session.add(row)
+            run_id = await session.scalar(
+                insert(StrategySearchRunRow)
+                .values(**values)
+                .on_conflict_do_nothing(index_elements=["id"])
+                .returning(StrategySearchRunRow.id)
+            )
+            row = await session.get(StrategySearchRunRow, run_id or values["id"])
+            assert row is not None
         return row
+
+    async def background_runs(self, loop_key: str) -> tuple[StrategySearchRunRow, ...]:
+        async with self._sessions() as session:
+            return tuple(
+                (
+                    await session.scalars(
+                        select(StrategySearchRunRow)
+                        .where(StrategySearchRunRow.loop_key == loop_key)
+                        .order_by(StrategySearchRunRow.cycle_index)
+                    )
+                ).all()
+            )
 
     async def get(self, run_id: UUID) -> StrategySearchRunRow | None:
         async with self._sessions() as session:
@@ -47,8 +66,18 @@ class SqlAlchemySearchRepository:
 
     async def add_candidate(self, values: Mapping[str, object]) -> StrategySearchCandidateRow:
         async with self._sessions() as session, session.begin():
-            row = StrategySearchCandidateRow(**values)
-            session.add(row)
+            await session.execute(
+                insert(StrategySearchCandidateRow)
+                .values(**values)
+                .on_conflict_do_nothing(constraint="uq_strategy_search_candidate_fingerprint")
+            )
+            row = await session.scalar(
+                select(StrategySearchCandidateRow).where(
+                    StrategySearchCandidateRow.search_run_id == values["search_run_id"],
+                    StrategySearchCandidateRow.fingerprint == values["fingerprint"],
+                )
+            )
+            assert row is not None
         return row
 
     async def patch_candidate(self, candidate_id: UUID, **values: object) -> None:

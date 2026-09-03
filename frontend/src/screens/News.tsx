@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { ArrowDownRight, ArrowUpRight, ChevronLeft, ChevronRight, Minus } from 'lucide-react'
-import type { NewsItem, NewsSentimentLabel } from '../features/news/types'
+import type { NewsItem, NewsSentimentLabel, SentimentSummary } from '../features/news/types'
 import { PageHeader } from '../components/Shell'
 import {
   Button,
@@ -19,6 +19,7 @@ export type NewsProps = {
   status: NewsStatus
   items: NewsItem[]
   total: number
+  sentimentSummary?: SentimentSummary | null
   page: number
   pageSize: number
   coin: string
@@ -91,10 +92,26 @@ function ScoreCell({ item }: { item: NewsItem }) {
   return <span className="font-mono text-[11px] text-faint">—</span>
 }
 
+function SentimentDistribution({ summary }: { summary: SentimentSummary }) {
+  const analyzed = summary.positive + summary.neutral + summary.negative
+  return (
+    <section aria-label="Sentiment distribution" className="flex flex-wrap items-center gap-x-6 gap-y-2 border-b border-subtle bg-surface px-4 py-3 text-sm">
+      <span className="text-dim">{analyzed} analyzed · {summary.pending} pending analysis</span>
+      {(['positive', 'neutral', 'negative'] as const).map((label) => (
+        <span key={label} className={SENTIMENT_META[label.toUpperCase() as NewsSentimentLabel].cls}>
+          {label[0].toUpperCase() + label.slice(1)} {analyzed ? `${(summary[label] / analyzed * 100).toFixed(1)}%` : '—'} ({summary[label]})
+        </span>
+      ))}
+      <span className="text-faint">All articles in the selected coin and date range</span>
+    </section>
+  )
+}
+
 export function News({
   status,
   items,
   total,
+  sentimentSummary,
   page,
   pageSize,
   coin,
@@ -133,6 +150,10 @@ export function News({
           <Segmented ariaLabel="Date range" options={RANGE_OPTIONS} value={range} onChange={onRangeChange} />
         </div>
       </div>
+
+      {sentimentSummary && status !== 'loading' && status !== 'error' && (
+        <SentimentDistribution summary={sentimentSummary} />
+      )}
 
       {/* news table */}
       <div className="min-h-0 flex-1 overflow-auto bg-surface">

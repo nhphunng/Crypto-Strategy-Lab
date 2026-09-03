@@ -52,6 +52,7 @@ async def test_real_ml_collect_store_analyze_filter_and_replay() -> None:
 
         page = (await client.get("/api/v1/news")).json()["data"]
         assert page["total"] == 2
+        assert page["sentimentSummary"] == dict(positive=1, neutral=0, negative=1, pending=0)
         assert {item["sentiment"]["label"] for item in page["items"]} == {"POSITIVE", "NEGATIVE"}
         for item in page["items"]:
             assert item["sentiment"]["modelId"] == MODEL_ID
@@ -62,6 +63,7 @@ async def test_real_ml_collect_store_analyze_filter_and_replay() -> None:
             await client.get("/api/v1/news", params={"sentiment": "NEGATIVE", "pageSize": 1})
         ).json()["data"]
         assert filtered["total"] == 1
+        assert filtered["sentimentSummary"] == page["sentimentSummary"]
         assert filtered["items"][0]["relatedCoins"] == ["ETH"]
         second = (
             await client.get(
@@ -70,6 +72,9 @@ async def test_real_ml_collect_store_analyze_filter_and_replay() -> None:
         ).json()["data"]
         assert second["total"] == 1
         assert second["items"] == []
+        assert second["sentimentSummary"] == page["sentimentSummary"]
+        btc = (await client.get("/api/v1/news?coin=BTC")).json()["data"]
+        assert btc["sentimentSummary"] == dict(positive=1, neutral=0, negative=0, pending=0)
         assert (await client.get("/api/v1/news?sentiment=INVALID")).status_code == 400
         status = (await client.get("/api/v1/sentiment/status")).json()["data"]
         assert status == {"pending": 0, "analyzed": 2, "failed": 0}

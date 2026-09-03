@@ -41,12 +41,8 @@ async def test_child_insert_failure_rolls_back_the_entire_result(
     backtest_context: BacktestPersistenceContext,
 ) -> None:
     context = backtest_context
-    broken_trade = replace(
-        context.result.trades[0], exit_signal_snapshot_id=UUID(int=999_999)
-    )
-    broken = replace(
-        context.result, trades=(broken_trade, *context.result.trades[1:])
-    )
+    broken_trade = replace(context.result.trades[0], exit_signal_snapshot_id=UUID(int=999_999))
+    broken = replace(context.result, trades=(broken_trade, *context.result.trades[1:]))
 
     with pytest.raises(IntegrityError):
         await context.repository.save_result(broken)
@@ -68,15 +64,11 @@ async def test_concurrent_duplicate_submission_creates_one_complete_result(
     )
     assert first.id == second.id == context.result.id
     async with context.database.sessions() as session:
-        result_count = await session.scalar(
-            select(func.count()).select_from(BacktestResultRow)
-        )
+        result_count = await session.scalar(select(func.count()).select_from(BacktestResultRow))
         signal_count = await session.scalar(
             select(func.count()).select_from(BacktestSignalSnapshotRow)
         )
-        trade_count = await session.scalar(
-            select(func.count()).select_from(BacktestTradeRow)
-        )
+        trade_count = await session.scalar(select(func.count()).select_from(BacktestTradeRow))
     assert (result_count, signal_count, trade_count) == (
         1,
         len(context.result.signals),
@@ -122,3 +114,49 @@ async def test_dependency_failure_is_terminal_safe_and_has_no_partial_result(
     assert stored.status is RunStatus.FAILED
     assert stored.failure_code == "BACKTEST_DATASET_INELIGIBLE"
     assert await context.repository.get_result_for_run(context.run.configuration.run_id) is None
+
+
+async def test_search_can_recover_an_interrupted_execution(backtest_context):
+    from types import SimpleNamespace
+
+    from crypto_lab.domain.strategy.signal import SignalAction
+    from tests.fixtures.backtest_evaluation.cross_feature import deterministic_inputs
+
+    context = backtest_context
+    _, values, analysis, _ = deterministic_inputs(
+        (
+            SignalAction.BUY,
+            SignalAction.SELL,
+            SignalAction.BUY,
+            SignalAction.SELL,
+            SignalAction.HOLD,
+        ),
+        ("100", "100", "120", "100", "130"),
+    )
+
+    class Dataset:
+        async def get_complete(self, _id):
+            from crypto_lab.domain.market_data.dataset import DatasetStatus
+
+            return SimpleNamespace(
+                metadata=SimpleNamespace(status=DatasetStatus.COMPLETE), candles=values
+            )
+
+    class Analyzer:
+        async def analyze(self, *_args):
+            return analysis
+
+    await context.repository.update_run(context.run.running(NOW))
+    executor = ExecuteBacktestRun(
+        context.repository, Dataset(), Analyzer(), context.repository, _Clock()
+    )
+    with pytest.raises(BacktestError) as caught:
+        await executor.execute(context.run.configuration.run_id, "ordinary")
+    assert caught.value.code is BacktestErrorCode.JOB_CONFLICT
+    result = await executor.execute(
+        context.run.configuration.run_id, "recover", resume_interrupted=True
+    )
+    assert result.result_checksum == context.result.result_checksum
+    assert (
+        await context.repository.get_run(context.run.configuration.run_id)
+    ).status is RunStatus.COMPLETED

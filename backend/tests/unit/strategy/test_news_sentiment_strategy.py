@@ -189,3 +189,74 @@ async def test_relationship_rule_rejects_sell_threshold_not_below_buy_threshold(
 
     with pytest.raises(StrategyError):
         strategy.validate_parameters({"buyThreshold": "0.2", "sellThreshold": "0.3"})
+
+
+async def test_evidence_and_model_are_part_of_signal_and_context_identity() -> None:
+    from dataclasses import replace
+
+    supplied = _context(2)
+    point = SentimentDataPoint(
+        supplied.range_start,
+        supplied.range_start,
+        Decimal("0.8"),
+        news_id="news",
+        analysis_id="analysis",
+        content_fingerprint="a" * 64,
+    )
+    reader = FakeSentimentContextReader((point,))
+    strategy = NewsSentimentStrategy(reader, MODEL)
+    selected = _definition(strategy, minEvidenceCount=1)
+    first = await strategy.analyze(selected, supplied)
+    reader.points = (replace(point, signed_score=Decimal("-0.8")),)
+    changed = await strategy.analyze(selected, supplied)
+    assert first.signals[0].action != changed.signals[0].action
+    assert first.signals[0].id != changed.signals[0].id
+    assert (
+        first.context_provenance.context_fingerprint
+        != changed.context_provenance.context_fingerprint
+    )
+    provenance = first.context_provenance.sentiment[0]
+    assert provenance.model_id == MODEL.model_id
+    assert provenance.window_end == supplied.decision_timestamp
+    reader.points = (point,)
+    other_model = NewsSentimentStrategy(reader, ModelRef(MODEL.model_id, "2.0.0"))
+    assert (await other_model.analyze(selected, supplied)).signals[0].id != first.signals[0].id
+    reader.points += (
+        replace(point, analyzed_at=supplied.decision_timestamp + timedelta(seconds=1)),
+    )
+    assert (await strategy.analyze(selected, supplied)) == first
+
+
+async def test_revisions_are_selected_as_of_each_candle_without_double_counting() -> None:
+    from dataclasses import replace
+
+    supplied = _context(3)
+    old = SentimentDataPoint(
+        supplied.range_start,
+        supplied.range_start,
+        Decimal("0.8"),
+        news_id="news",
+        analysis_id="old",
+    )
+    new = replace(
+        old,
+        analyzed_at=supplied.candles[1].open_time,
+        signed_score=Decimal("-0.8"),
+        analysis_id="new",
+    )
+    reader = FakeSentimentContextReader((new, old))
+    strategy = NewsSentimentStrategy(reader, MODEL)
+    selected = _definition(strategy, minEvidenceCount=1)
+    result = await strategy.analyze(selected, supplied)
+    assert [signal.action for signal in result.signals] == [
+        SignalAction.BUY,
+        SignalAction.SELL,
+        SignalAction.SELL,
+    ]
+    reader.points = (old, new)
+    assert await strategy.analyze(selected, supplied) == result
+    selected = _definition(strategy, minEvidenceCount=2)
+    assert all(
+        signal.phase is SignalPhase.WARMUP
+        for signal in (await strategy.analyze(selected, supplied)).signals
+    )

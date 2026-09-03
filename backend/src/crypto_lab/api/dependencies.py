@@ -149,7 +149,7 @@ EVALUATION_POLICY = EvaluationPolicy(
     "1.0.0",
 )
 # The exact model identity NewsSentimentStrategy reads under -- must match
-# LexiconSentimentAnalyzer's own model_id/model_version.
+# FinBertSentimentAnalyzer's own model_id/model_version.
 SENTIMENT_MODEL = ModelRef(model_id=MODEL_ID, model_version=MODEL_VERSION)
 BALANCED_SCORING_POLICY = ScoringPolicy(
     uuid5(NAMESPACE_URL, "crypto-lab/scoring/balanced-v1"),
@@ -556,15 +556,8 @@ def build_container(settings: Settings | None = None) -> Container:
         settings,
         clock,
         datasets=datasets,
-        dataset_reader=backtest_datasets,
         discovery=strategy_discovery,
-        generator=RandomSearchGenerator(strategy_registry),
-        configurations=save_strategy_configuration,
-        analyzer=backtest_strategy_analyzer,
-        create_backtest=create_backtest,
-        execute_backtest=execute_backtest,
-        evaluate_backtest=evaluate_backtest,
-        ingestion=leaderboard.ingestion,
+        search=strategy_search,
     )
     return Container(
         settings=settings,
@@ -663,9 +656,6 @@ def _build_search_loop(
             interval_seconds=settings.search_loop_interval_seconds,
         ),
         clock=clock,
-        execution_policy=EXECUTION_POLICY,
-        evaluation_policy=EVALUATION_POLICY,
-        scoring_policy=BALANCED_SCORING_POLICY,
         **collaborators,
     )
     return SearchLoopRunner(

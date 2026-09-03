@@ -27,6 +27,8 @@ class CreateSearchRunRequest(ApiModel):
 class SearchRunDto(ApiModel):
     id: UUID
     type: str
+    origin: str = "MANUAL"
+    cycle_index: int | None = Field(default=None, alias="cycleIndex")
     status: str
     dataset_id: UUID = Field(alias="datasetId")
     strategy_ids: list[str] = Field(alias="strategyIds")

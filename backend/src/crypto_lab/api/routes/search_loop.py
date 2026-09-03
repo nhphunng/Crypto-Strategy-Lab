@@ -30,7 +30,7 @@ def _runner(request: Request) -> SearchLoopRunner:
 async def get_search_loop_status(request: Request) -> SuccessEnvelope[SearchLoopStatusDto]:
     runner = _runner(request)
     return success_envelope(
-        stats_to_dto(runner.status()), "Search loop status loaded.", request_id(request)
+        stats_to_dto(await runner.snapshot()), "Search loop status loaded.", request_id(request)
     )
 
 
@@ -39,7 +39,7 @@ async def pause_search_loop(request: Request) -> SuccessEnvelope[SearchLoopStatu
     runner = _runner(request)
     runner.pause()
     return success_envelope(
-        stats_to_dto(runner.status()), "Search loop paused.", request_id(request)
+        stats_to_dto(await runner.snapshot()), "Search loop paused.", request_id(request)
     )
 
 
@@ -48,7 +48,7 @@ async def resume_search_loop(request: Request) -> SuccessEnvelope[SearchLoopStat
     runner = _runner(request)
     runner.resume()
     return success_envelope(
-        stats_to_dto(runner.status()), "Search loop resumed.", request_id(request)
+        stats_to_dto(await runner.snapshot()), "Search loop resumed.", request_id(request)
     )
 
 

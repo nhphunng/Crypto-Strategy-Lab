@@ -9,6 +9,7 @@ from uuid import UUID
 
 from crypto_lab.domain.market_data.candle import format_utc_millis
 from crypto_lab.domain.market_data.timeframe import Timeframe, require_utc
+from crypto_lab.domain.sentiment.provenance import SentimentProvenance
 from crypto_lab.domain.strategy.definition import StrategyDefinition
 from crypto_lab.domain.strategy.parameters import ValidatedParameterSet
 from crypto_lab.domain.strategy.version import SemanticVersion
@@ -79,6 +80,7 @@ class ContextProvenance:
     range_start: datetime
     range_end: datetime
     decision_timestamp: datetime
+    sentiment: tuple[SentimentProvenance, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)

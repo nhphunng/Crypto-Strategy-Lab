@@ -179,7 +179,12 @@ Collection remains independent of sentiment analysis. The Task 4 worker reads st
 
 Both local and production Compose enable `CSL_SEARCH_LOOP_ENABLED` and
 `CSL_SENTIMENT_ANALYSIS_ENABLED`. Search generates new combinations through the
-registry, evaluates them, and feeds the leaderboard. Its controls are
+registry and persists them in the same search runs/candidate queue used by manual
+Search. One coordinator per configured loop consumes queued candidates, evaluates
+them, and feeds the leaderboard. Completed candidates are reused after restart;
+the next cycle and progress totals come from stored runs. Background runs appear
+in Search/Runs with their backtest and evaluation links. Generation errors remain
+visible as failed runs. Its controls are
 `GET /api/v1/search-loop/status`, `POST /api/v1/search-loop/pause`, and
 `POST /api/v1/search-loop/resume`; pause takes effect between cycles.
 
@@ -195,21 +200,37 @@ Without a local path, the adapter downloads the same pinned revision on first us
 
 `GET /api/v1/sentiment/status` reports pending/analyzed/failed counts.
 `GET /api/v1/news?sentiment=POSITIVE` (also `NEUTRAL` or `NEGATIVE`) filters stored
-results. `backend/scripts/analyze_news_once.py` processes one batch immediately.
+results. The response also includes `sentimentSummary` counts for all articles
+matching the coin/date range, independently of pagination and the sentiment filter.
+The UI computes positive/neutral/negative percentages among analyzed articles and
+shows the pending count separately.
+`backend/scripts/analyze_news_once.py` processes one batch immediately.
 The default Compose interval is 60 seconds, with up to 50 articles per batch.
 Model loading and inference run off the API event loop. A model loading failure
 leaves articles pending for retry. The old lexicon scorer remains only for legacy
 tests; application wiring uses FinBERT. `news_sentiment` is registered alongside
 MA and RSI and is available to the search generator.
 
+Historical sentiment uses the latest analysis available at each candle's close,
+so a later article revision cannot hide the earlier evidence. Model identity,
+evidence window and evidence fingerprint participate in signal/context identity
+and are stored in each backtest's `sentiment_provenance`; result API responses
+expose them as `provenance.sentiment`. Apply Alembic head
+`20260903_012_sentiment_search` before running this version; it adds provenance
+and background-cycle metadata without rewriting existing runs.
+
 The collection-only Compose E2E fixture explicitly disables both new workers.
 For the real ML database regression, run from `backend/` with
 `CSL_TEST_FINBERT_PATH` pointing to the cached model and `TEST_DATABASE_URL`
-pointing to a **disposable migrated database** (the fixture clears news tables):
+pointing to a **disposable migrated database** (the fixtures clear news, strategy, backtest and leaderboard tables):
 
 ```powershell
-.venv/Scripts/python.exe -m pytest tests/functional/test_news_sentiment_journey.py -q
+.venv/Scripts/python.exe -m pytest tests/functional/test_news_sentiment_journey.py tests/functional/test_sentiment_search_journey.py -q
 ```
+
+The full acceptance test uses actual FinBERT inference and a generated MA + RSI +
+Sentiment combination, asserts trades and a ranked evaluation, checks replay
+checksums, and exercises background-cycle idempotency through the durable queue.
 
 ### Cấu hình collector
 

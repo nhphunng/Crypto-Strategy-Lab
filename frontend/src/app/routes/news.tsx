@@ -81,6 +81,7 @@ export function ConnectedNewsRoute({
       status={status}
       items={data?.items ?? []}
       total={data?.total ?? 0}
+      sentimentSummary={data?.sentimentSummary}
       page={page}
       pageSize={pageSize}
       coin={coin}
