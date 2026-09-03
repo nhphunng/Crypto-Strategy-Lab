@@ -3,6 +3,7 @@ import {
   type NewsItem,
   type NewsPage,
   type NewsSentiment,
+  type SentimentSummary,
 } from './types'
 
 export class ContractError extends Error {
@@ -89,6 +90,17 @@ function parseNewsItem(value: unknown, path: string): NewsItem {
   }
 }
 
+function parseSummary(value: unknown): SentimentSummary | null {
+  if (value == null) return null
+  const raw = record(value, 'news.sentimentSummary')
+  const count = (key: string) => {
+    const value = int(raw[key], `news.sentimentSummary.${key}`)
+    if (value < 0) throw new ContractError(`news.sentimentSummary.${key}`, 'expected a nonnegative count')
+    return value
+  }
+  return { positive: count('positive'), neutral: count('neutral'), negative: count('negative'), pending: count('pending') }
+}
+
 export function parseNewsPage(value: unknown): NewsPage {
   const path = 'news'
   const raw = record(value, path)
@@ -99,5 +111,6 @@ export function parseNewsPage(value: unknown): NewsPage {
     page: int(raw.page, `${path}.page`),
     pageSize: int(raw.pageSize, `${path}.pageSize`),
     total: int(raw.total, `${path}.total`),
+    sentimentSummary: parseSummary(raw.sentimentSummary),
   }
 }

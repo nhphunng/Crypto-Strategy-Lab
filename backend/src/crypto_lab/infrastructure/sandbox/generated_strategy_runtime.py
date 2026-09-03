@@ -49,6 +49,16 @@ class DockerGeneratedStrategyRuntime:
         if self._engine is not None:
             await self._engine.aclose()
 
+    async def ready(self) -> bool:
+        """Report whether the configured isolated execution engine is reachable."""
+        if self._engine is None:
+            return False
+        try:
+            response = await self._engine.get("/_ping")
+            return response.status_code == 200 and response.text.strip() == "OK"
+        except httpx.HTTPError:
+            return False
+
     async def validate(self, artifact: GeneratedStrategyArtifact) -> StrategyValidationReport:
         started = datetime.now(UTC)
         checks, findings = _static_checks(artifact.source_code, artifact.declared_imports)

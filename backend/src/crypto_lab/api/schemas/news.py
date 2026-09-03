@@ -44,11 +44,19 @@ class NewsItemDto(ApiModel):
     sentiment: SentimentAnalysisDto | None = None
 
 
+class SentimentSummaryDto(ApiModel):
+    positive: int
+    neutral: int
+    negative: int
+    pending: int
+
+
 class NewsPageDto(ApiModel):
     items: tuple[NewsItemDto, ...]
     page: int
     page_size: int = Field(alias="pageSize")
     total: int
+    sentiment_summary: SentimentSummaryDto | None = Field(default=None, alias="sentimentSummary")
 
 
 def item_to_dto(
@@ -89,4 +97,12 @@ def page_to_dto(
         page=page.page,
         page_size=page.page_size,
         total=page.total,
+        sentiment_summary=SentimentSummaryDto(
+            positive=page.sentiment_summary.positive,
+            neutral=page.sentiment_summary.neutral,
+            negative=page.sentiment_summary.negative,
+            pending=page.sentiment_summary.pending,
+        )
+        if page.sentiment_summary is not None
+        else None,
     )

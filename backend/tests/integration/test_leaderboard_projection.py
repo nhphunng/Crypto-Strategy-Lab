@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
+from uuid import uuid4
 
 import pytest
 from sqlalchemy import func, select
@@ -27,6 +28,7 @@ from crypto_lab.domain.leaderboard.policy import (
 )
 from crypto_lab.domain.market_data.timeframe import Timeframe
 from crypto_lab.infrastructure.database import Database
+from crypto_lab.infrastructure.persistence.evaluation_models import EvaluationResultRow
 from crypto_lab.infrastructure.persistence.leaderboard_models import (
     LeaderboardEntryRow,
     LeaderboardRow,
@@ -34,7 +36,12 @@ from crypto_lab.infrastructure.persistence.leaderboard_models import (
 )
 from crypto_lab.infrastructure.persistence.repositories.leaderboard_repository import (
     SqlAlchemyLeaderboardRepository,
+    SqlAlchemyRankedResultReader,
 )
+from crypto_lab.infrastructure.persistence.strategy_configuration_models import (
+    SavedStrategyConfigurationRow,
+)
+from crypto_lab.infrastructure.persistence.strategy_models import StrategyDefinitionRow
 from tests.fixtures.leaderboard import LeaderboardFixture, add_qualifying_candidate
 
 pytestmark = pytest.mark.integration
@@ -87,6 +94,63 @@ async def test_projection_materializes_deterministic_top_k(
     assert tuple(
         entry.candidate.evaluation_result_id for entry in snapshot.entries
     ) == seeded_leaderboard.expected_top_ten
+
+
+async def test_existing_projection_resolves_saved_composite_names_in_table_and_detail(
+    leaderboard_database: Database,
+    seeded_leaderboard: LeaderboardFixture,
+) -> None:
+    repository = SqlAlchemyLeaderboardRepository(leaderboard_database.sessions)
+    use_case = UpdateLeaderboard(repository, FixedClock())
+    await use_case.for_identity(identity(seeded_leaderboard))
+    original = await repository.read_snapshot(identity(seeded_leaderboard))
+    assert original is not None
+
+    async with leaderboard_database.sessions() as session, session.begin():
+        evaluation = await session.get(
+            EvaluationResultRow, seeded_leaderboard.top_one_evaluation_id
+        )
+        assert evaluation is not None
+        definition = await session.get(StrategyDefinitionRow, evaluation.strategy_definition_id)
+        assert definition is not None
+        definition.parameters = {}
+        definition.strategy_type = "COMPOSITE"
+        definition.strategy_id = evaluation.strategy_id = "composite-" + "a" * 54
+        for index, name in enumerate(("Bollinger Bands + RSI", "Later saved alias")):
+            session.add(
+                SavedStrategyConfigurationRow(
+                    id=uuid4(),
+                    configuration_key=str(index) * 64,
+                    configuration_version=1,
+                    display_name=name,
+                    kind="COMPOSITE",
+                    root_definition_id=definition.id,
+                    provider="BINANCE",
+                    pair=seeded_leaderboard.pair,
+                    timeframe=seeded_leaderboard.timeframe,
+                    combination=None,
+                    content_fingerprint=str(index) * 64,
+                    created_at=FixedClock().now() + timedelta(seconds=index),
+                )
+            )
+
+    # Read the already-materialized ranking: no recomputation or backtest is needed.
+    snapshot = await repository.read_snapshot(identity(seeded_leaderboard))
+    assert snapshot is not None
+    assert snapshot.projection_version == original.projection_version
+    assert len(snapshot.entries) == len(original.entries)
+    assert snapshot.entries[0].candidate.strategy.display_name == "Bollinger Bands + RSI"
+    assert snapshot.entries[0].candidate.strategy.strategy_id == "composite-" + "a" * 54
+    detail = await SqlAlchemyRankedResultReader(leaderboard_database.sessions).read_detail(
+        snapshot.leaderboard_id, seeded_leaderboard.top_one_evaluation_id
+    )
+    assert detail is not None
+    assert detail.entry.candidate.strategy == snapshot.entries[0].candidate.strategy
+
+    # The candidate path used during updates must resolve the same name.
+    refreshed = await use_case.for_identity(identity(seeded_leaderboard, k=3))
+    assert refreshed.top_one is not None
+    assert refreshed.top_one.candidate.strategy.display_name == "Bollinger Bands + RSI"
 
 
 async def test_ineligible_candidate_never_enters_the_projection(

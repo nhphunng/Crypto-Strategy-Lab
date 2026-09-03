@@ -177,7 +177,7 @@ async def test_latest_for_returns_newest_analyzed_at_per_news_id(
         label=SentimentLabel.POSITIVE,
         score=Decimal("0.4"),
         analyzed_at=ANALYZED_AT + timedelta(hours=1),
-        content_fingerprint="b" * 64,
+        content_fingerprint=item.content_fingerprint,
     )
     await sentiment_repository.save(older)
     await sentiment_repository.save(newer)
@@ -228,3 +228,34 @@ async def test_count_by_status_reports_pending_analyzed_and_failed(
     # fingerprint (so neither is "pending" -- a FAILED row still counts as
     # attempted); only pending_item has no row at all.
     assert counts == {"pending": 1, "analyzed": 1, "failed": 1}
+
+
+async def test_historical_reader_preserves_earlier_evidence_after_article_revision(
+    sentiment_fixture,
+):
+    from dataclasses import replace
+
+    from crypto_lab.domain.strategy.implementations.news_sentiment import _evidence_within
+    from crypto_lab.infrastructure.persistence.sentiment_context_reader import (
+        SqlAlchemySentimentContextReader,
+    )
+
+    news, analyses = sentiment_fixture
+    original = _make_item()
+    await news.upsert_many((original,))
+    await analyses.save(_completed(original))
+    revised = replace(original, title="Bitcoin losses", content="Losses increased.")
+    await news.upsert_many((revised,))
+    later = ANALYZED_AT + timedelta(hours=1)
+    await analyses.save(
+        _completed(revised, label=SentimentLabel.NEGATIVE, analyzed_at=later, score=Decimal("0.8"))
+    )
+    reader = SqlAlchemySentimentContextReader(news._sessions)
+    history = await reader.series("BTCUSDT", PUBLISHED_AT, later, MODEL)
+    assert len(history) == 2
+    before = _evidence_within(history, PUBLISHED_AT, ANALYZED_AT)
+    after = _evidence_within(history, PUBLISHED_AT, later)
+    assert len(before) == len(after) == 1
+    assert before[0].signed_score == Decimal("0.5")
+    assert after[0].signed_score == Decimal("-0.8")
+    assert await reader.series("BTCUSDT", PUBLISHED_AT, ANALYZED_AT, MODEL) == before

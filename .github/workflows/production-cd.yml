@@ -1,11 +1,13 @@
-name: Build and Publish Docker Images
+name: Production CD
 
 on:
-  push:
+  workflow_run:
+    workflows:
+      - Integration regression (frontend + backend)
+    types:
+      - completed
     branches:
       - main
-
-  workflow_dispatch:
 
 permissions:
   contents: read
@@ -13,14 +15,18 @@ permissions:
 
 env:
   REGISTRY: ghcr.io
+  IMAGE_TAG: ${{ github.event.workflow_run.head_sha }}
 
 jobs:
   build-and-push:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
@@ -40,7 +46,7 @@ jobs:
           push: true
           tags: |
             ghcr.io/nhphunng/crypto-strategy-lab-api:latest
-            ghcr.io/nhphunng/crypto-strategy-lab-api:${{ github.sha }}
+            ghcr.io/nhphunng/crypto-strategy-lab-api:${{ github.event.workflow_run.head_sha }}
 
       - name: Build and push Frontend image
         uses: docker/build-push-action@v7
@@ -50,10 +56,11 @@ jobs:
           push: true
           tags: |
             ghcr.io/nhphunng/crypto-strategy-lab-frontend:latest
-            ghcr.io/nhphunng/crypto-strategy-lab-frontend:${{ github.sha }}
+            ghcr.io/nhphunng/crypto-strategy-lab-frontend:${{ github.event.workflow_run.head_sha }}
 
   deploy:
     needs: build-and-push
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
 
     runs-on:
       - self-hosted
@@ -65,8 +72,15 @@ jobs:
         run: |
           cd /home/trahoang/app/Crypto-Strategy-Lab
 
-          git fetch origin main
-          git reset --hard origin/main
+          git fetch --no-tags origin main
+          git cat-file -e "${{ github.event.workflow_run.head_sha }}^{commit}"
+          git reset --hard "${{ github.event.workflow_run.head_sha }}"
+
+          # Materialize the two runtime-only files before Compose can recreate
+          # the API. Existing files win; legacy .env.production values are
+          # migrated without being printed or exported to the service.
+          python3 .github/scripts/prepare-production-secrets.py \
+            --env-file .env.production
 
           docker compose \
             --env-file .env.production \
@@ -105,6 +119,31 @@ jobs:
             --env-file .env.production \
             -f docker-compose.prod.yml \
             logs --tail=100 api
+
+          exit 1
+
+      - name: Verify strategy generation
+        run: |
+          if curl --fail --silent \
+            http://127.0.0.1:8000/health/ready/strategy-generation; then
+            echo
+            echo "Strategy generation is ready."
+            exit 0
+          fi
+
+          echo "Strategy generation readiness check failed."
+
+          cd /home/trahoang/app/Crypto-Strategy-Lab
+
+          docker compose \
+            --env-file .env.production \
+            -f docker-compose.prod.yml \
+            ps
+
+          docker compose \
+            --env-file .env.production \
+            -f docker-compose.prod.yml \
+            logs --tail=100 api sandbox-docker artifact-init
 
           exit 1
 

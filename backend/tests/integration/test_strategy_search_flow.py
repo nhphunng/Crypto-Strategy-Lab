@@ -11,56 +11,9 @@ import pytest
 from crypto_lab.application.search_service import SearchEventHub, StrategySearchService
 from crypto_lab.bootstrap.strategies import build_strategy_registry
 from crypto_lab.domain.search import RandomSearchGenerator
+from tests.fixtures.search_repository import MemoryRepository
 
 pytestmark = pytest.mark.integration
-
-
-class MemoryRepository:
-    def __init__(self) -> None:
-        self.run: SimpleNamespace | None = None
-        self.items: list[SimpleNamespace] = []
-
-    async def create(self, values):
-        self.run = SimpleNamespace(
-            id=uuid4(),
-            top_score=None,
-            top_candidate=None,
-            current_candidate=None,
-            stop_reason=None,
-            failure_detail=None,
-            started_at=None,
-            completed_at=None,
-            **values,
-        )
-        return self.run
-
-    async def get(self, _run_id):
-        return self.run
-
-    async def patch(self, _run_id, **values):
-        for key, value in values.items():
-            setattr(self.run, key, value)
-
-    async def add_candidate(self, values):
-        item = SimpleNamespace(
-            id=uuid4(),
-            score=None,
-            backtest_run_id=None,
-            evaluation_result_id=None,
-            failure_code=None,
-            completed_at=None,
-            **values,
-        )
-        self.items.append(item)
-        return item
-
-    async def patch_candidate(self, candidate_id, **values):
-        item = next(value for value in self.items if value.id == candidate_id)
-        for key, value in values.items():
-            setattr(item, key, value)
-
-    async def cancel(self, _run_id, _now):
-        return False
 
 
 class Clock:

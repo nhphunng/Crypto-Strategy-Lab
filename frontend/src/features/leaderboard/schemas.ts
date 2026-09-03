@@ -286,6 +286,7 @@ export function parseMarker(value: unknown, path = 'marker'): Marker {
     id: str(raw.id, `${path}.id`),
     type: member(raw.type, MARKER_TYPES, `${path}.type`) as Marker['type'],
     time: instant(raw.time, `${path}.time`),
+    candleTime: raw.candleTime == null ? null : instant(raw.candleTime, `${path}.candleTime`),
     price: optionalDecimal(raw.price, `${path}.price`),
     label: str(raw.label, `${path}.label`),
     shape: member(raw.shape, MARKER_SHAPES, `${path}.shape`) as Marker['shape'],

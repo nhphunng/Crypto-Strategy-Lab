@@ -79,6 +79,7 @@ class BacktestRunDto(ApiModel):
 
 
 class ProvenanceDto(ApiModel):
+    sentiment: tuple[dict[str, str], ...] = ()
     dataset_id: UUID = Field(alias="datasetId")
     dataset_schema_version: str = Field(alias="datasetSchemaVersion")
     dataset_checksum: str = Field(alias="datasetChecksum")
@@ -264,6 +265,7 @@ def policy_bundle_to_dto(
 def result_to_dto(result: BacktestResult) -> BacktestResultDto:
     c = result.configuration
     provenance = ProvenanceDto(
+        sentiment=tuple(item.to_payload() for item in c.sentiment_provenance),
         dataset_id=c.dataset_id,
         dataset_schema_version=c.dataset_schema_version,
         dataset_checksum=c.dataset_checksum,

@@ -20,6 +20,7 @@ from crypto_lab.application.news.errors import (
 from crypto_lab.application.news.list_news import ListNews
 from crypto_lab.application.news.ports import NewsQuery
 from crypto_lab.application.sentiment.ports import SentimentAnalysisRepository
+from crypto_lab.domain.sentiment.model import SentimentLabel
 
 router = APIRouter(prefix="/api/v1/news", tags=["news"])
 
@@ -71,6 +72,7 @@ def _published(value: str | None, field: str) -> datetime | None:
 async def list_news(
     request: Request,
     coin: str | None = Query(default=None),
+    sentiment: SentimentLabel | None = Query(default=None),
     published_after: str | None = Query(default=None, alias="publishedAfter"),
     published_before: str | None = Query(default=None, alias="publishedBefore"),
     page: int = Query(default=1),
@@ -96,6 +98,7 @@ async def list_news(
             published_before=before,
             page=page,
             page_size=page_size,
+            sentiment=sentiment.value if sentiment else None,
         )
     )
     sentiment_map = (

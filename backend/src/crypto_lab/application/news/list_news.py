@@ -23,5 +23,6 @@ class ListNews:
             published_before=query.published_before or now,
             page=query.page,
             page_size=query.page_size,
+            sentiment=query.sentiment,
         )
         return await self._repository.list(resolved)

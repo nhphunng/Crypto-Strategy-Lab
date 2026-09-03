@@ -13,7 +13,7 @@ Repo hiện có backend và frontend chạy được độc lập hoặc cùng n
 | Leaderboard & Visualization backend | `backend/src/crypto_lab/{domain,application}/leaderboard/` | Đã có Top-K projection, REST snapshot/detail/visualization/trades, WebSocket `LEADERBOARD_UPDATED` |
 | Leaderboard & Visualization frontend | `frontend/src/features/leaderboard/` | Đã kết nối API thật: bảng Top-K, live update, chart Buy/Sell + Entry/Exit, trade drill-down |
 | News collection Task 3 | `backend/src/crypto_lab/{domain,application,infrastructure}/news/`, `frontend/src/features/news/` | Provider-neutral RSS-first collect/store/API/TanStack Query; `sentiment: null` và `Pending analysis` là deliberate |
-| News Sentiment Task 4 | `specs/007-news-sentiment/handoff-task-3-to-4.md` | **Chưa hoàn thành**; chưa có model/score/label thật hoặc `NewsSentimentStrategy` |
+| News Sentiment Task 4 | `backend/src/crypto_lab/infrastructure/sentiment/finbert_analyzer.py` | Pinned FinBERT ML inference, versioned analyses, `news_sentiment` strategy, API sentiment filtering and live UI refresh |
 | Web frontend | `frontend/` | `/market`, `/backtests` (Single Backtest) và `/leaderboard` đã dùng API thật; Strategy Search, Runs và các màn hình ngoài phạm vi các feature đã tích hợp vẫn dùng adapter mô phỏng |
 
 `frontend/` là vị trí frontend chính thức. Market dashboard, Single Backtest và Leaderboard đã nối backend; Strategy Search/Runs vẫn thuộc các feature queue/search sau.
@@ -119,23 +119,26 @@ docker compose down
 ### 5. Bật Generated Strategy an toàn
 
 Profile mặc định không nhận LLM secret và vì vậy fail closed. Để bật User Stories 5–7, lấy
-credential thật của provider và tạo một wrapping key 256-bit:
+credential thật của provider và tạo một wrapping key 256-bit. Lưu hai giá trị nhạy cảm trong
+thư mục `.runtime-secrets/` đã được Git ignore; không đặt giá trị secret trực tiếp trong `.env`:
 
 ```bash
-openssl rand -base64 32
+mkdir -p .runtime-secrets
+openssl rand -base64 32 > .runtime-secrets/source_encryption_key
+# Lưu provider API key vào .runtime-secrets/llm_api_key bằng secret manager/editor an toàn.
 ```
 
-Thêm credential và output của lệnh trên trực tiếp vào file `.env` local đã được Git ignore. Không
-commit, log, đưa các giá trị này xuống browser, hoặc sao chép chúng vào source/test fixture:
+File `.env` chỉ chứa cấu hình không nhạy cảm và đường dẫn tới hai secret file. Không commit, log,
+đưa secret xuống browser, hoặc sao chép chúng vào source/test fixture:
 
 ```dotenv
 CSL_LLM_ENDPOINT=https://provider.example/v1/strategy-generation
 CSL_LLM_PROVIDER=approved-provider
 CSL_LLM_MODEL_ID=approved-model
 CSL_LLM_MODEL_VERSION=provider-version
-CSL_LLM_API_KEY=<provider-api-key>
+CSL_LLM_API_KEY_HOST_FILE=.runtime-secrets/llm_api_key
 CSL_LLM_DATA_POLICY_CONFIRMED=true
-CSL_SOURCE_ENCRYPTION_KEY_BASE64=<base64-output-of-openssl-rand>
+CSL_SOURCE_ENCRYPTION_KEY_HOST_FILE=.runtime-secrets/source_encryption_key
 CSL_SOURCE_ENCRYPTION_KEY_ID=deployment-key-v1
 ```
 
@@ -149,10 +152,25 @@ docker compose \
   up --build -d
 ```
 
-Compose chỉ truyền hai secret từ `.env` vào trusted API process. Profile vẫn dùng volume artifact mã
+Compose mount hai secret thành file chỉ đọc trong trusted API process. Profile vẫn dùng volume artifact mã
 hóa mode `0700` và một Docker daemon chuyên biệt không chứa application secrets. API không mount
 Docker socket của host; mỗi sandbox invocation nhận `Env: []` và vẫn là ephemeral, non-root,
 networkless, read-only, capability-free, resource-bounded theo ADR-006.
+
+Production dùng duy nhất file Compose production; startup và CD sẽ fail nếu thiếu secret file,
+cấu hình LLM, migration, artifact storage, hoặc sandbox readiness:
+
+```bash
+docker compose \
+  --env-file .env.production \
+  -f docker-compose.prod.yml \
+  up -d --wait --wait-timeout 60
+```
+
+Trong lần deploy chuyển đổi, CD tạo các file trên từ hai biến legacy
+`CSL_LLM_API_KEY` và `CSL_SOURCE_ENCRYPTION_KEY_BASE64` trong `.env.production` nếu file chưa tồn
+tại; giá trị không được in hoặc truyền vào environment của API. Sau lần deploy thành công đầu tiên,
+xóa hai biến legacy khỏi `.env.production`; các lần deploy tiếp theo chỉ dùng secret file.
 
 `CSL_LLM_PROVIDER` chọn dialect: chứa `openai`/`gpt` sẽ nói contract OpenAI Chat Completions,
 chứa `gemini`/`google` sẽ nói contract Gemini `generateContent`, giá trị khác dùng contract
@@ -173,7 +191,64 @@ HTTPS RSS/Atom → RSS NewsProvider → CollectNews → NewsRepository
 
 RSS/Atom là adapter đầu tiên. Adapter khác có thể được thêm sau `NewsProvider` mà không sửa repository, API hoặc frontend. Deduplication dùng unique `(provider, provider_item_id)` và `canonical_url`; `related_coins` có GIN index, còn newest-first pagination dùng `(published_at DESC, id)`.
 
-Task 3 không chạy sentiment model. API cố ý trả `sentiment: null` và UI hiển thị `Pending analysis`; không có model/label/score giả. Task 4 vẫn incomplete và phải dùng bảng analysis bất biến/có version cùng `SentimentContextReader`, xem [handoff Task 3 → Task 4](specs/007-news-sentiment/handoff-task-3-to-4.md).
+Collection remains independent of sentiment analysis. The Task 4 worker reads stored articles and writes immutable, versioned `news_sentiment_analyses`. News without a completed analysis of its current content returns `sentiment: null`; completed articles show the actual model label and confidence. The News page refreshes every 15 seconds and supports server-side sentiment filtering, including correct pagination totals.
+
+### Thành's tasks: background search and ML sentiment
+
+Both local and production Compose enable `CSL_SEARCH_LOOP_ENABLED` and
+`CSL_SENTIMENT_ANALYSIS_ENABLED`. Search generates new combinations through the
+registry and persists them in the same search runs/candidate queue used by manual
+Search. One coordinator per configured loop consumes queued candidates, evaluates
+them, and feeds the leaderboard. Completed candidates are reused after restart;
+the next cycle and progress totals come from stored runs. Background runs appear
+in Search/Runs with their backtest and evaluation links. Generation errors remain
+visible as failed runs. Its controls are
+`GET /api/v1/search-loop/status`, `POST /api/v1/search-loop/pause`, and
+`POST /api/v1/search-loop/resume`; pause takes effect between cycles.
+
+Sentiment uses [ProsusAI/FinBERT](https://huggingface.co/ProsusAI/finbert), pinned to
+revision `4556d13015211d73dccd3fdd39d39232506f3e43`, with stored release version
+`1.0.0+4556d1301521`. The CPU model and tokenizer are bundled during Docker build,
+so inference works with a read-only filesystem and no runtime model download.
+The first image build requires network access and adds the ML runtime/model size.
+Local Python installs can use `backend/requirements.sentiment.lock` after the
+runtime dependencies. `backend/scripts/cache_sentiment_model.py <directory>`
+downloads the pinned model; `CSL_SENTIMENT_MODEL_PATH` selects that local directory.
+Without a local path, the adapter downloads the same pinned revision on first use.
+
+`GET /api/v1/sentiment/status` reports pending/analyzed/failed counts.
+`GET /api/v1/news?sentiment=POSITIVE` (also `NEUTRAL` or `NEGATIVE`) filters stored
+results. The response also includes `sentimentSummary` counts for all articles
+matching the coin/date range, independently of pagination and the sentiment filter.
+The UI computes positive/neutral/negative percentages among analyzed articles and
+shows the pending count separately.
+`backend/scripts/analyze_news_once.py` processes one batch immediately.
+The default Compose interval is 60 seconds, with up to 50 articles per batch.
+Model loading and inference run off the API event loop. A model loading failure
+leaves articles pending for retry. The old lexicon scorer remains only for legacy
+tests; application wiring uses FinBERT. `news_sentiment` is registered alongside
+MA and RSI and is available to the search generator.
+
+Historical sentiment uses the latest analysis available at each candle's close,
+so a later article revision cannot hide the earlier evidence. Model identity,
+evidence window and evidence fingerprint participate in signal/context identity
+and are stored in each backtest's `sentiment_provenance`; result API responses
+expose them as `provenance.sentiment`. Apply Alembic head
+`20260903_012_sentiment_search` before running this version; it adds provenance
+and background-cycle metadata without rewriting existing runs.
+
+The collection-only Compose E2E fixture explicitly disables both new workers.
+For the real ML database regression, run from `backend/` with
+`CSL_TEST_FINBERT_PATH` pointing to the cached model and `TEST_DATABASE_URL`
+pointing to a **disposable migrated database** (the fixtures clear news, strategy, backtest and leaderboard tables):
+
+```powershell
+.venv/Scripts/python.exe -m pytest tests/functional/test_news_sentiment_journey.py tests/functional/test_sentiment_search_journey.py -q
+```
+
+The full acceptance test uses actual FinBERT inference and a generated MA + RSI +
+Sentiment combination, asserts trades and a ranked evaluation, checks replay
+checksums, and exercises background-cycle idempotency through the durable queue.
 
 ### Cấu hình collector
 
@@ -225,7 +300,7 @@ curl.exe http://localhost:8000/health/ready
 curl.exe "http://localhost:8000/api/v1/news?coin=BTC&page=1&pageSize=50"
 ```
 
-Mở API docs tại [http://localhost:8000/docs](http://localhost:8000/docs) và News UI tại [http://localhost:5173/news](http://localhost:5173/news). Xác nhận headline/source/published time/related coins khớp API; ghi lại một `newsId`/headline, nhấn **F5**, và xác nhận item vẫn còn từ PostgreSQL. UI phải hiển thị `Pending analysis`, không hiển thị `FinSent-v2.3`, model, label hoặc score giả.
+Mở API docs tại [http://localhost:8000/docs](http://localhost:8000/docs) và News UI tại [http://localhost:5173/news](http://localhost:5173/news). Xác nhận headline/source/published time/related coins khớp API; ghi lại một `newsId`/headline, nhấn **F5**, và xác nhận item vẫn còn từ PostgreSQL. UI hiển thị `Pending analysis` trước khi worker hoàn thành, sau đó hiển thị label/score thật từ FinBERT; không hiển thị model/score giả.
 
 3. Kiểm tra degraded isolation mà không xóa volume/database:
 
@@ -379,6 +454,8 @@ npm run test:integration
 ```
 
 Lệnh này tự động hoá đúng chuỗi bước thủ công ở mục "Chạy demo" phía trên: `docker compose up -d postgres` → chờ healthy → `docker compose run --rm migrate` → `python backend/scripts/seed_leaderboard_demo.py` → `docker compose up -d --build api frontend` → chờ `/health/ready` và frontend sẵn sàng → `playwright test --config=playwright.compose.config.ts` (chạy `leaderboard-visualization.spec.ts` và `realtime-multi-chart.spec.ts`). Stack luôn được tắt bằng `docker compose down` sau khi chạy xong, kể cả khi có lỗi; đặt `KEEP_STACK=1` nếu muốn giữ lại để debug local. Yêu cầu Python `3.12.x` với `backend[dev]` đã cài (xem mục Backend phía trên) và Google Chrome cài trên máy (Playwright dùng `channel: "chrome"`).
+
+Runner tắt các worker nền auto-evaluation, strategy search, sentiment analysis và news collection trong stack kiểm thử để dữ liệu seed không thay đổi giữa các bước. News demo giữ trạng thái `Pending analysis`; cấu hình Compose dùng để chạy ứng dụng bình thường không bị thay đổi.
 
 `realtime-multi-chart-compose.spec.ts` không nằm trong lệnh trên: test này đi qua kết nối WebSocket/REST thật của API tới Binance, và nhiều mạng CI (bao gồm GitHub-hosted runner) không kết nối ổn định tới endpoint công khai của Binance, nên không phù hợp làm cổng regression bắt buộc. Chạy thủ công khi có mạng kết nối được tới Binance:
 

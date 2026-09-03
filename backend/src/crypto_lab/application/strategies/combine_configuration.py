@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from decimal import Decimal
 from typing import Protocol
 from uuid import UUID
@@ -9,6 +10,7 @@ from crypto_lab.application.strategies.analyze_strategy import (
     AnalyzeStrategyCommand,
 )
 from crypto_lab.application.strategies.ports import StrategyDefinitionRepository
+from crypto_lab.domain.backtest.configuration import canonical_hash
 from crypto_lab.domain.strategy.configuration import (
     CombinationMethod,
     SavedStrategyConfiguration,
@@ -56,6 +58,18 @@ class ConfiguredStrategyAnalyzer:
         if root is None:
             raise ValueError("composite root strategy definition is unavailable")
         first = results[0]
+        provenance = first.context_provenance
+        sentiment = tuple(
+            item for result in results for item in result.context_provenance.sentiment
+        )
+        if sentiment:
+            provenance = replace(
+                provenance,
+                context_fingerprint=canonical_hash(
+                    [result.context_provenance.context_fingerprint for result in results]
+                ),
+                sentiment=sentiment,
+            )
         signals: list[Signal] = []
         aligned = zip(*(result.signals for result in results), strict=True)
         for sequence, children in enumerate(aligned):
@@ -76,7 +90,7 @@ class ConfiguredStrategyAnalyzer:
                 phase = SignalPhase.EVALUATED
             signals.append(
                 Signal.create(
-                    context_fingerprint=first.context_provenance.context_fingerprint,
+                    context_fingerprint=provenance.context_fingerprint,
                     strategy_definition_id=root.id,
                     strategy_id=root.strategy_id,
                     strategy_type=root.strategy_type,
@@ -90,8 +104,7 @@ class ConfiguredStrategyAnalyzer:
                     phase=phase,
                     strength=strength,
                     reason=(
-                        "Composite members: "
-                        + ", ".join(child.action.value for child in children)
+                        "Composite members: " + ", ".join(child.action.value for child in children)
                     ),
                 )
             )
@@ -105,7 +118,7 @@ class ConfiguredStrategyAnalyzer:
         return StrategyAnalysisResult(
             strategy_definition=root,
             validated_parameters=root.parameters,
-            context_provenance=first.context_provenance,
+            context_provenance=provenance,
             contract_version=root.contract_version,
             history_state=history,
             signals=tuple(signals),
@@ -155,8 +168,5 @@ def combine_actions(
     highest = max(counts.values())
     winners = tuple(action for action, count in counts.items() if count == highest)
     action = winners[0] if len(winners) == 1 else tie_action
-    margin = (
-        Decimal(counts[SignalAction.BUY] - counts[SignalAction.SELL])
-        / Decimal(len(actions))
-    )
+    margin = Decimal(counts[SignalAction.BUY] - counts[SignalAction.SELL]) / Decimal(len(actions))
     return action, margin

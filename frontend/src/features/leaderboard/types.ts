@@ -182,6 +182,8 @@ export type Marker = {
   id: string
   type: MarkerType
   time: string
+  /** Candle opening time for placement; time remains the recorded execution instant. */
+  candleTime?: string | null
   price: string | null
   label: string
   shape: MarkerShape

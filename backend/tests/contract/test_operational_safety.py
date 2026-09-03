@@ -1,5 +1,6 @@
 import json
 import logging
+from typing import Any, cast
 
 import httpx
 import pytest
@@ -9,6 +10,11 @@ from crypto_lab.infrastructure.logging import JsonFormatter, configure_logging, 
 from crypto_lab.infrastructure.settings import Settings
 from crypto_lab.main import create_app
 from tests.contract.test_market_data_api import build_test_container
+
+
+class ReadyGeneratedRuntime:
+    async def ready(self) -> bool:
+        return True
 
 
 def test_provider_url_requires_server_controlled_https_shape() -> None:
@@ -45,6 +51,13 @@ async def test_health_and_oversized_range_are_bounded() -> None:
     ) as client:
         live = await client.get("/health/live")
         ready = await client.get("/health/ready")
+        generation_unavailable = await client.get("/health/ready/strategy-generation")
+        container.strategy_generation_repository = cast(Any, object())
+        container.strategy_generation = cast(Any, object())
+        container.strategy_activation = cast(Any, object())
+        container.generated_artifacts = cast(Any, object())
+        container.generated_runtime = cast(Any, ReadyGeneratedRuntime())
+        generation_ready = await client.get("/health/ready/strategy-generation")
         oversized = await client.get(
             "/api/v1/market-data/candles",
             params={
@@ -57,6 +70,10 @@ async def test_health_and_oversized_range_are_bounded() -> None:
             },
         )
     assert live.status_code == ready.status_code == 200
+    assert generation_unavailable.status_code == 503
+    assert generation_unavailable.json() == {"status": "DOWN"}
+    assert generation_ready.status_code == 200
+    assert generation_ready.json() == {"status": "UP"}
     assert oversized.status_code == 422
     assert oversized.json()["error"]["code"] == "MARKET_RANGE_TOO_LARGE"
     assert provider.calls == []

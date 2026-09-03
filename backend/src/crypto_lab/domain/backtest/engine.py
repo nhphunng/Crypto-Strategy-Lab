@@ -191,6 +191,7 @@ def _validate_inputs(
         or str(definition.strategy_version) != configuration.strategy_version
         or str(analysis.contract_version) != configuration.contract_version
         or definition.parameters.canonical_fingerprint != configuration.parameter_fingerprint
+        or provenance.sentiment != configuration.sentiment_provenance
         or provenance.context_fingerprint != configuration.context_fingerprint
         or provenance.dataset_id != str(configuration.dataset_id)
         or provenance.dataset_version != configuration.dataset_checksum

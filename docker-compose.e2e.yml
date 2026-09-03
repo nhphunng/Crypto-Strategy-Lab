@@ -15,6 +15,9 @@ services:
 
   api:
     environment:
+      # Task 3 fixtures deliberately remain pending; ML has a separate opt-in test.
+      CSL_SENTIMENT_ANALYSIS_ENABLED: "false"
+      CSL_SEARCH_LOOP_ENABLED: "false"
       CSL_LLM_ENDPOINT: http://llm-fixture:8081/generate
       CSL_LLM_PROVIDER: deterministic-e2e-fixture
       CSL_LLM_MODEL_ID: strategy-fixture

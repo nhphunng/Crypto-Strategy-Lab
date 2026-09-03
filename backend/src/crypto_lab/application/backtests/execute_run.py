@@ -29,7 +29,9 @@ class ExecuteBacktestRun:
     policies: ExecutionPolicyReader
     clock: Clock
 
-    async def execute(self, run_id: UUID, request_id: str) -> BacktestResult:
+    async def execute(
+        self, run_id: UUID, request_id: str, *, resume_interrupted: bool = False
+    ) -> BacktestResult:
         run = await self.repository.get_run(run_id)
         if run is None:
             raise BacktestError(
@@ -37,15 +39,18 @@ class ExecuteBacktestRun:
             )
         existing = await self.repository.get_result_for_run(run_id)
         if existing is not None:
-            if run.status is RunStatus.REQUESTED:
-                reused = run.running(self.clock.now())
-                await self.repository.update_run(reused)
+            if run.status in (RunStatus.REQUESTED, RunStatus.RUNNING):
+                reused = run.running(self.clock.now()) if run.status is RunStatus.REQUESTED else run
+                if run.status is RunStatus.REQUESTED:
+                    await self.repository.update_run(reused)
                 await self.repository.update_run(reused.completed(self.clock.now()))
             return existing
-        if run.status is not RunStatus.REQUESTED:
+        recovering = resume_interrupted and run.status is RunStatus.RUNNING
+        if run.status is not RunStatus.REQUESTED and not recovering:
             raise BacktestError(BacktestErrorCode.JOB_CONFLICT, "backtest run cannot be started")
-        running = run.running(self.clock.now())
-        await self.repository.update_run(running)
+        running = run if recovering else run.running(self.clock.now())
+        if not recovering:
+            await self.repository.update_run(running)
         started = perf_counter()
         try:
             dataset = await self.datasets.get_complete(run.configuration.dataset_id)

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from dataclasses import replace
 from datetime import datetime, timedelta
 from decimal import Decimal
 
@@ -8,7 +9,10 @@ from crypto_lab.application.sentiment.context_reader import (
     SentimentContextReader,
     SentimentDataPoint,
 )
+from crypto_lab.domain.backtest.configuration import canonical_hash
+from crypto_lab.domain.market_data.candle import canonical_decimal
 from crypto_lab.domain.sentiment.model import ModelRef
+from crypto_lab.domain.sentiment.provenance import SentimentProvenance
 from crypto_lab.domain.strategy.context import StrategyContext
 from crypto_lab.domain.strategy.definition import StrategyDefinition
 from crypto_lab.domain.strategy.implementations.moving_average import _result, _signal
@@ -116,6 +120,34 @@ class NewsSentimentStrategy:
             self._model,
         )
 
+        # Identity covers only evidence available by the decision time; adding
+        # future analysis must not change an already reproducible backtest.
+        points = tuple(
+            point
+            for point in points
+            if context.range_start - lookback <= point.published_at <= context.decision_timestamp
+            and point.analyzed_at <= context.decision_timestamp
+        )
+        evidence_records = sorted(
+            (
+                point.news_id or "",
+                point.analysis_id or "",
+                point.content_fingerprint or "",
+                point.published_at.isoformat(),
+                point.analyzed_at.isoformat(),
+                canonical_decimal(point.signed_score),
+            )
+            for point in points
+        )
+        provenance = SentimentProvenance(
+            self._model.model_id,
+            self._model.model_version,
+            context.range_start - lookback,
+            context.decision_timestamp,
+            canonical_hash(evidence_records),
+        )
+        context = replace(context, evidence_fingerprint=canonical_hash(provenance.to_payload()))
+
         signals = []
         for index, candle in enumerate(context.candles):
             window_end = candle.close_time
@@ -146,7 +178,10 @@ class NewsSentimentStrategy:
                 else HistoryState.EVALUABLE
             )
         )
-        return _result(definition, context, tuple(signals), state)
+        result = _result(definition, context, tuple(signals), state)
+        return replace(
+            result, context_provenance=replace(result.context_provenance, sentiment=(provenance,))
+        )
 
 
 def _evidence_within(
@@ -154,10 +189,23 @@ def _evidence_within(
     window_start: datetime,
     window_end: datetime,
 ) -> tuple[SentimentDataPoint, ...]:
-    return tuple(
+    eligible = tuple(
         point
         for point in points
         # Self-enforced no-look-ahead: both dimensions must be no later than
         # this candle's own close (see class docstring).
         if window_start <= point.published_at <= window_end and point.analyzed_at <= window_end
     )
+    latest: dict[str, SentimentDataPoint] = {}
+    independent = []
+    for point in eligible:
+        if point.news_id is None:
+            independent.append(point)
+            continue
+        previous = latest.get(point.news_id)
+        if previous is None or (point.analyzed_at, point.analysis_id or "") > (
+            previous.analyzed_at,
+            previous.analysis_id or "",
+        ):
+            latest[point.news_id] = point
+    return tuple(independent) + tuple(latest[key] for key in sorted(latest))

@@ -117,6 +117,18 @@ export function RankedResultDetail({
     () => trades?.items.find((item) => item.tradeId === selectedTradeId) ?? null,
     [trades, selectedTradeId],
   )
+  const selectedTradeRange = useMemo(() => {
+    if (!selectedTrade) return null
+    const endpoints = visualization?.markers.filter(
+      (marker) => marker.tradeId === selectedTrade.tradeId,
+    )
+    return {
+      startTime:
+        endpoints?.find((marker) => marker.type === 'ENTRY')?.candleTime ?? selectedTrade.entryTime,
+      endTime:
+        endpoints?.find((marker) => marker.type === 'EXIT')?.candleTime ?? selectedTrade.exitTime,
+    }
+  }, [selectedTrade, visualization])
 
   const onSort = useCallback((field: TradeSortField) => {
     setSortBy((current) => {
@@ -216,11 +228,7 @@ export function RankedResultDetail({
         <RankedResultChart
           candles={visualization?.candles ?? []}
           height={260}
-          highlightRange={
-            selectedTrade
-              ? { startTime: selectedTrade.entryTime, endTime: selectedTrade.exitTime }
-              : null
-          }
+          highlightRange={selectedTradeRange}
           overlays={(scale) => (
             <StrategyOverlayLayer overlays={visualization?.overlays ?? []} scale={scale} />
           )}
