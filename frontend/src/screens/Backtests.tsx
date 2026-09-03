@@ -12,7 +12,6 @@ import {
   type ParameterValue,
   type PolicyBundle,
   type SingleBacktestOutput,
-  type StrategyDefinition,
   createSearchApi,
   type SearchCandidate,
   type SearchRun,
@@ -22,6 +21,10 @@ import {
   getStrategyConfiguration,
   type SavedStrategyConfiguration,
 } from '../services/strategyConfigurations'
+import {
+  configurationDefinition,
+  configurationStrategy,
+} from '../features/backtests/savedConfiguration'
 import { PageHeader } from '../components/Shell'
 import { CandleChart, type Marker } from '../components/CandleChart'
 import {
@@ -437,36 +440,6 @@ function defaultParameters(strategy: BacktestStrategy): Record<string, Parameter
       .filter((parameter) => parameter.defaultValue !== null)
       .map((parameter) => [parameter.name, parameter.defaultValue as ParameterValue]),
   )
-}
-
-function configurationStrategy(configuration: SavedStrategyConfiguration): BacktestStrategy {
-  const single = configuration.kind === 'SINGLE' ? configuration.members[0] : null
-  return {
-    strategyId: `saved:${configuration.configurationId}`,
-    strategyType: configuration.kind,
-    displayName: `${configuration.displayName} · config v${configuration.configurationVersion}`,
-    strategyVersion: single?.strategyVersion ?? '1.0.0',
-    contractVersion: '1.0.0',
-    status: 'AVAILABLE',
-    origin: 'SAVED_CONFIGURATION',
-    parameters: [],
-  }
-}
-
-function configurationDefinition(configuration: SavedStrategyConfiguration): StrategyDefinition {
-  const single = configuration.kind === 'SINGLE' ? configuration.members[0] : null
-  return {
-    definitionId: configuration.rootDefinitionId,
-    strategyId: single?.strategyId ?? configuration.configurationKey,
-    strategyType: configuration.kind,
-    strategyVersion: single?.strategyVersion ?? '1.0.0',
-    contractVersion: '1.0.0',
-    parameters: single?.parameters ?? {},
-    parameterSchemaFingerprint: configuration.contentFingerprint,
-    contentFingerprint: configuration.contentFingerprint,
-    createdAt: configuration.createdAt,
-    origin: 'BUILT_IN',
-  }
 }
 
 function backtestErrorMessage(reason: unknown): string {
