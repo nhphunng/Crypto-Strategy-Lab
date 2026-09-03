@@ -143,7 +143,9 @@ def test_production_compose_uses_file_secrets_storage_and_dedicated_engine() -> 
 
 def test_cd_uses_single_production_compose_and_checks_generation_readiness() -> None:
     root = Path(__file__).parents[3]
-    workflow = (root / ".github/workflows/cd.yml").read_text(encoding="utf-8")
+    workflow = (root / ".github/workflows/production-cd.yml").read_text(
+        encoding="utf-8"
+    )
 
     assert "docker-compose.generated.yml" not in workflow
     assert workflow.count("-f docker-compose.prod.yml") >= 4
@@ -153,16 +155,18 @@ def test_cd_uses_single_production_compose_and_checks_generation_readiness() -> 
 
 def test_cd_runs_only_after_successful_main_integration_ci() -> None:
     root = Path(__file__).parents[3]
+    assert not (root / ".github/workflows/cd.yml").exists()
     ci = yaml.load(
         (root / ".github/workflows/integration.yml").read_text(encoding="utf-8"),
         Loader=yaml.BaseLoader,
     )
     cd = yaml.load(
-        (root / ".github/workflows/cd.yml").read_text(encoding="utf-8"),
+        (root / ".github/workflows/production-cd.yml").read_text(encoding="utf-8"),
         Loader=yaml.BaseLoader,
     )
 
     assert ci["name"] == "Integration regression (frontend + backend)"
+    assert cd["name"] == "Production CD"
     assert ci["on"]["push"]["branches"] == ["main"]
     assert "push" not in cd["on"]
     assert "workflow_dispatch" not in cd["on"]
@@ -177,7 +181,9 @@ def test_cd_runs_only_after_successful_main_integration_ci() -> None:
 
 def test_cd_build_and_deploy_are_pinned_to_successful_ci_head_sha() -> None:
     root = Path(__file__).parents[3]
-    workflow_text = (root / ".github/workflows/cd.yml").read_text(encoding="utf-8")
+    workflow_text = (root / ".github/workflows/production-cd.yml").read_text(
+        encoding="utf-8"
+    )
     workflow = yaml.load(workflow_text, Loader=yaml.BaseLoader)
     head_sha = "${{ github.event.workflow_run.head_sha }}"
 
