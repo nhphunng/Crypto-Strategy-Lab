@@ -131,7 +131,7 @@ test("changes one timeframe without accepting late old-generation work", async (
   const generations = new Map<string, number>();
   const historyOpenTimes = new Map<string, string>();
   const liveOpenTimes = new Map<string, string>();
-  let socket: WebSocketRoute | undefined;
+  const sockets = new Set<WebSocketRoute>();
   let eventSequence = 0;
   let releaseOneHourHistory!: () => void;
   let markOneHourRequested!: () => void;
@@ -167,8 +167,7 @@ test("changes one timeframe without accepting late old-generation work", async (
       .filter(([, value]) => value === timeframe)
       .map(([slotId]) => slotId)
       .sort();
-    socket?.send(
-      JSON.stringify({
+    const message = JSON.stringify({
         eventType: "SUBSCRIPTION_STATE_CHANGED",
         version: "1",
         eventId: `e2e-state-${++eventSequence}`,
@@ -180,8 +179,8 @@ test("changes one timeframe without accepting late old-generation work", async (
           state,
           attempt: 0,
         },
-      }),
-    );
+      });
+    for (const activeSocket of sockets) activeSocket.send(message);
   };
   const sendCandle = (
     timeframe: string,
@@ -189,8 +188,7 @@ test("changes one timeframe without accepting late old-generation work", async (
     openTime: string,
     revision: number,
   ) => {
-    socket?.send(
-      JSON.stringify({
+    const message = JSON.stringify({
         eventType: "CANDLE_UPDATED",
         version: "1",
         eventId: `e2e-candle-${++eventSequence}`,
@@ -201,8 +199,8 @@ test("changes one timeframe without accepting late old-generation work", async (
           revision,
           candle: candle(timeframe, close, openTime),
         },
-      }),
-    );
+      });
+    for (const activeSocket of sockets) activeSocket.send(message);
   };
 
   await page.route("**/api/v1/market-data/candles?**", async (route) => {
@@ -247,7 +245,7 @@ test("changes one timeframe without accepting late old-generation work", async (
   });
 
   await page.routeWebSocket("**/ws/v1/market-data", (webSocket) => {
-    socket = webSocket;
+    sockets.add(webSocket);
     webSocket.onMessage((message) => {
       const command = JSON.parse(String(message)) as Record<string, unknown>;
       commands.push(command);
@@ -276,7 +274,7 @@ test("changes one timeframe without accepting late old-generation work", async (
   });
 
   await page.goto("/market");
-  await expect.poll(() => (socket === undefined ? 0 : 1)).toBe(1);
+  await expect.poll(() => sockets.size).toBe(2);
   await expect(page.locator("#status-chart-slot-1")).toContainText("Live");
   await expect(
     page.locator("#chart-btcusdt-5m-slot-1 [aria-label='Latest Candle summary']"),
@@ -324,6 +322,7 @@ test("changes one timeframe without accepting late old-generation work", async (
   expect([...bindings.entries()].sort()).toEqual([
     ["slot-1", "1h"],
     ["slot-2", "5m"],
+    ["topbar-market", "5m"],
   ]);
   expect(
     commands.filter((command) => {
