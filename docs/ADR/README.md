@@ -2,6 +2,11 @@
 
 Thư mục này lưu các quyết định kiến trúc có ảnh hưởng đến nhiều feature của Crypto Strategy Lab.
 
+## Báo cáo tổng hợp
+
+- [Báo cáo kiến trúc phần mềm](../ARCHITECTURE.md) trình bày cấu trúc, luồng xử lý và khả năng mở rộng của hệ thống.
+- [Báo cáo các quyết định kiến trúc](../ARCHITECTURAL_DECISIONS.md) giải thích lý do lựa chọn, phương án thay thế và sự đánh đổi trong thiết kế.
+
 ## Trạng thái
 
 - `Proposed`: đang chờ nhóm review.
