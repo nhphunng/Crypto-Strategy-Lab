@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from datetime import datetime
 from typing import Any
 from uuid import UUID, uuid4
@@ -53,6 +54,7 @@ from crypto_lab.domain.leaderboard.policy import (
 )
 from crypto_lab.domain.leaderboard.ranking import diff_projection
 from crypto_lab.domain.market_data.timeframe import Timeframe
+from crypto_lab.domain.strategy.registry import StrategyRegistry
 from crypto_lab.infrastructure.persistence.backtest_models import (
     BacktestResultRow,
     BacktestRunRow,
@@ -69,6 +71,13 @@ from crypto_lab.infrastructure.persistence.leaderboard_models import (
     LeaderboardUpdateRecordRow,
 )
 from crypto_lab.infrastructure.persistence.models import CandleRow
+from crypto_lab.infrastructure.persistence.strategy_configuration_models import (
+    SavedStrategyConfigurationRow,
+)
+from crypto_lab.infrastructure.persistence.strategy_generation_models import (
+    GeneratedStrategyArtifactRow,
+    GeneratedStrategyDraftRow,
+)
 from crypto_lab.infrastructure.persistence.strategy_models import StrategyDefinitionRow
 
 _RUN_STATE_BY_STATUS = {
@@ -98,14 +107,77 @@ def parse_scope_key(scope_key: str) -> LeaderboardScope:
     )
 
 
+async def _strategy_names(
+    session: AsyncSession,
+    definitions: Sequence[StrategyDefinitionRow | None],
+    registry: StrategyRegistry | None,
+) -> dict[UUID, str]:
+    """Resolve presentation metadata in batches without altering immutable definitions."""
+
+    catalog = (
+        {
+            (entry.strategy_id, str(entry.strategy_version)): entry.metadata.display_name
+            for entry in registry.discover()
+        }
+        if registry is not None
+        else {}
+    )
+    names: dict[UUID, str] = {}
+    composites: set[UUID] = set()
+    generated: set[UUID] = set()
+    for definition in definitions:
+        if definition is None:
+            continue
+        name = definition.parameters.get("displayName") or catalog.get(
+            (definition.strategy_id, definition.strategy_version)
+        )
+        if name:
+            names[definition.id] = str(name)
+        elif definition.strategy_type == "COMPOSITE":
+            composites.add(definition.id)
+        elif definition.generated_artifact_id is not None:
+            generated.add(definition.id)
+
+    if composites:
+        rows = await session.execute(
+            select(
+                SavedStrategyConfigurationRow.root_definition_id,
+                SavedStrategyConfigurationRow.display_name,
+            )
+            .where(SavedStrategyConfigurationRow.root_definition_id.in_(composites))
+            .order_by(SavedStrategyConfigurationRow.created_at, SavedStrategyConfigurationRow.id)
+        )
+        for definition_id, name in rows:
+            # Multiple saved configurations can reuse a definition. Keep the first
+            # recorded name deterministically instead of duplicating ranked rows.
+            if name:
+                names.setdefault(definition_id, name)
+    if generated:
+        rows = await session.execute(
+            select(StrategyDefinitionRow.id, GeneratedStrategyDraftRow.display_name)
+            .join(
+                GeneratedStrategyArtifactRow,
+                GeneratedStrategyArtifactRow.id == StrategyDefinitionRow.generated_artifact_id,
+            )
+            .join(
+                GeneratedStrategyDraftRow,
+                GeneratedStrategyDraftRow.id == GeneratedStrategyArtifactRow.draft_id,
+            )
+            .where(StrategyDefinitionRow.id.in_(generated))
+        )
+        names.update((definition_id, name) for definition_id, name in rows if name)
+    return names
+
+
 def _strategy_summary(
     evaluation: EvaluationResultRow,
     definition: StrategyDefinitionRow | None,
+    resolved_name: str | None = None,
 ) -> StrategySummary:
-    """Read composition from the immutable definition without naming a strategy."""
+    """Combine resolved presentation metadata with immutable strategy identity."""
 
     parameters: dict[str, Any] = dict(definition.parameters) if definition else {}
-    display_name = str(parameters.get("displayName") or evaluation.strategy_id)
+    display_name = str(resolved_name or parameters.get("displayName") or evaluation.strategy_id)
     members: list[StrategyMember] = []
     for raw in parameters.get("members") or ():
         if not isinstance(raw, dict):
@@ -133,6 +205,7 @@ def _candidate(
     evaluation: EvaluationResultRow,
     definition: StrategyDefinitionRow | None,
     policy: ScoringPolicyRef,
+    strategy_name: str | None = None,
 ) -> RankableCandidate:
     return RankableCandidate(
         evaluation_result_id=evaluation.id,
@@ -144,7 +217,7 @@ def _candidate(
         timeframe=Timeframe(evaluation.timeframe),
         start_time=evaluation.start_time,
         end_time=evaluation.end_time,
-        strategy=_strategy_summary(evaluation, definition),
+        strategy=_strategy_summary(evaluation, definition, strategy_name),
         metrics=MetricSet(
             total_return=evaluation.total_return,
             win_rate=evaluation.win_rate,
@@ -163,8 +236,13 @@ def _candidate(
 class SqlAlchemyLeaderboardRepository:
     """Owns the transaction, locking, and durable update record for a projection."""
 
-    def __init__(self, sessions: async_sessionmaker[AsyncSession]) -> None:
+    def __init__(
+        self,
+        sessions: async_sessionmaker[AsyncSession],
+        registry: StrategyRegistry | None = None,
+    ) -> None:
         self._sessions = sessions
+        self._registry = registry
 
     async def ping(self) -> bool:
         try:
@@ -534,8 +612,17 @@ class SqlAlchemyLeaderboardRepository:
         if scope.run_id is not None:
             query = query.where(EvaluationResultRow.run_id == scope.run_id)
         rows = (await session.execute(query)).all()
+        names = await _strategy_names(
+            session, [definition for _, definition in rows], self._registry
+        )
         return tuple(
-            _candidate(evaluation, definition, identity.policy) for evaluation, definition in rows
+            _candidate(
+                evaluation,
+                definition,
+                identity.policy,
+                names.get(evaluation.strategy_definition_id),
+            )
+            for evaluation, definition in rows
         )
 
     async def _current_entries(
@@ -582,9 +669,14 @@ class SqlAlchemyLeaderboardRepository:
                 .order_by(LeaderboardEntryRow.rank)
             )
         ).all()
+        names = await _strategy_names(
+            session, [definition for _, _, definition in rows], self._registry
+        )
         entries = tuple(
             EntryView(
-                candidate=_candidate(evaluation, definition, ref),
+                candidate=_candidate(
+                    evaluation, definition, ref, names.get(evaluation.strategy_definition_id)
+                ),
                 rank=entry.rank,
                 projection_version=entry.projection_version,
                 updated_at=entry.updated_at,
@@ -653,8 +745,13 @@ def _top_one_payload(entry: EntryView | None) -> dict[str, str] | None:
 class SqlAlchemyRankedResultReader:
     """Immutable provenance joins and bounded visualization/trade reads."""
 
-    def __init__(self, sessions: async_sessionmaker[AsyncSession]) -> None:
+    def __init__(
+        self,
+        sessions: async_sessionmaker[AsyncSession],
+        registry: StrategyRegistry | None = None,
+    ) -> None:
         self._sessions = sessions
+        self._registry = registry
 
     async def read_detail(
         self,
@@ -695,9 +792,12 @@ class SqlAlchemyRankedResultReader:
                 signals=_availability(signal_count or 0, "The result recorded no Signal."),
                 trades=_availability(trade_count or 0, "The result produced no simulated Trade."),
             )
+            names = await _strategy_names(session, [definition], self._registry)
             return RankedResultView(
                 entry=EntryView(
-                    candidate=_candidate(evaluation, definition, ref),
+                    candidate=_candidate(
+                        evaluation, definition, ref, names.get(evaluation.strategy_definition_id)
+                    ),
                     rank=entry_row.rank,
                     projection_version=entry_row.projection_version,
                     updated_at=entry_row.updated_at,
@@ -732,6 +832,7 @@ class SqlAlchemyRankedResultReader:
             _, evaluation, _, _ = context
             candles = await self._candles(session, evaluation, start_time, end_time)
             by_time = {candle.open_time: candle for candle in candles}
+            by_close_time = {candle.close_time: candle for candle in candles}
             markers: list[MarkerView] = []
             unaligned: list[UnalignedMarker] = []
 
@@ -789,7 +890,10 @@ class SqlAlchemyRankedResultReader:
                     (MarkerType.ENTRY, trade.entry_time, trade.entry_price),
                     (MarkerType.EXIT, trade.exit_time, trade.exit_price),
                 ):
-                    aligned = moment in by_time
+                    # End-of-range liquidation executes at the last Candle's
+                    # close, while the chart indexes Candles by their open time.
+                    candle = by_time.get(moment) or by_close_time.get(moment)
+                    aligned = candle is not None
                     marker = MarkerView(
                         id=f"trade-{trade.id}-{marker_type.value.lower()}",
                         type=marker_type,
@@ -801,6 +905,7 @@ class SqlAlchemyRankedResultReader:
                         source_strategy_id=evaluation.strategy_id,
                         source_strategy_version=evaluation.strategy_version,
                         trade_id=trade.id,
+                        candle_time=candle.open_time if candle else None,
                     )
                     if aligned:
                         markers.append(marker)

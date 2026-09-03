@@ -418,6 +418,10 @@ components:
       type: object
       required: [id, type, time, price, label, shape, sourceStrategyId, sourceStrategyVersion]
       properties:
+        candleTime:
+          type: [string, 'null']
+          format: date-time
+          description: Matching Candle opening time for placement; time preserves the recorded execution timestamp.
         id: { type: string }
         type: { type: string, enum: [BUY, SELL, HOLD, ENTRY, EXIT] }
         time: { type: string, format: date-time }

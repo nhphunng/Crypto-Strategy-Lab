@@ -520,7 +520,7 @@ def build_container(settings: Settings | None = None) -> Container:
         stale_after_seconds=settings.provider_stale_after_seconds,
     )
     realtime_hub = RealtimeSelectionHub(realtime_provider)
-    leaderboard = build_leaderboard_container(database)
+    leaderboard = build_leaderboard_container(database, strategy_registry)
     search_repository = SqlAlchemySearchRepository(database.sessions)
     search_hub = SearchEventHub()
     strategy_search = StrategySearchService(

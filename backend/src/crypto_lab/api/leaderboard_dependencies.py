@@ -23,6 +23,7 @@ from crypto_lab.application.leaderboard.publish_leaderboard_updates import (
 )
 from crypto_lab.application.leaderboard.query_leaderboard import QueryLeaderboard
 from crypto_lab.application.leaderboard.update_leaderboard import UpdateLeaderboard
+from crypto_lab.domain.strategy.registry import StrategyRegistry
 from crypto_lab.infrastructure.database import Database
 from crypto_lab.infrastructure.observability.leaderboard import LeaderboardMetrics
 from crypto_lab.infrastructure.persistence.repositories.leaderboard_repository import (
@@ -50,11 +51,13 @@ class LeaderboardContainer:
     ingestion: LeaderboardIngestion
 
 
-def build_leaderboard_container(database: Database) -> LeaderboardContainer:
+def build_leaderboard_container(
+    database: Database, registry: StrategyRegistry | None = None
+) -> LeaderboardContainer:
     clock = SystemClock()
     metrics = LeaderboardMetrics()
-    repository = SqlAlchemyLeaderboardRepository(database.sessions)
-    reader = SqlAlchemyRankedResultReader(database.sessions)
+    repository = SqlAlchemyLeaderboardRepository(database.sessions, registry)
+    reader = SqlAlchemyRankedResultReader(database.sessions, registry)
     updater = UpdateLeaderboard(repository, clock, metrics)
     hub = LeaderboardEventHub()
     dispatcher = PublishLeaderboardUpdates(repository, hub, clock, observer=metrics)

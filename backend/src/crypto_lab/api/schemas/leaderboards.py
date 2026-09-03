@@ -195,6 +195,7 @@ class MarkerDto(ApiModel):
     source_strategy_version: str = Field(alias="sourceStrategyVersion")
     signal_id: str | None = Field(default=None, alias="signalId")
     trade_id: str | None = Field(default=None, alias="tradeId")
+    candle_time: str | None = Field(default=None, alias="candleTime")
 
 
 class UnalignedMarkerDto(ApiModel):
@@ -451,6 +452,7 @@ def marker_to_dto(marker: MarkerView) -> MarkerDto:
         source_strategy_version=marker.source_strategy_version,
         signal_id=str(marker.signal_id) if marker.signal_id else None,
         trade_id=str(marker.trade_id) if marker.trade_id else None,
+        candle_time=_instant(marker.candle_time) if marker.candle_time else None,
     )
 
 
