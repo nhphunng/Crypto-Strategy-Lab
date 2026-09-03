@@ -51,7 +51,7 @@ class FinBertSentimentAnalyzer:
                         options["local_files_only"] = True
                     else:
                         options["revision"] = MODEL_REVISION
-                    tokenizer = AutoTokenizer.from_pretrained(source, **options)  # type: ignore[no-untyped-call]
+                    tokenizer = AutoTokenizer.from_pretrained(source, **options)
                     model = AutoModelForSequenceClassification.from_pretrained(source, **options)
                     self._pipeline = pipeline(
                         "text-classification", model=model, tokenizer=tokenizer, device=-1

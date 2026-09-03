@@ -75,3 +75,9 @@ exclude = ["migrations"]
 [[tool.mypy.overrides]]
 module = ["asyncpg.*"]
 ignore_missing_imports = true
+
+# Keep typing consistent with and without the optional sentiment dependencies.
+[[tool.mypy.overrides]]
+module = ["transformers.*"]
+ignore_missing_imports = true
+follow_imports = "skip"
