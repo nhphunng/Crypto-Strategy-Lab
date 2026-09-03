@@ -59,6 +59,78 @@ services:
       - crypto_lab_network
 
 
+  artifact-init:
+    image: ghcr.io/nhphunng/crypto-strategy-lab-api:${IMAGE_TAG:-latest}
+
+    user: "0:0"
+
+    command:
+      - install
+      - -d
+      - -o
+      - "65532"
+      - -g
+      - "65532"
+      - -m
+      - "0700"
+      - /artifacts
+
+    volumes:
+      - generated_strategy_artifacts:/artifacts
+
+    restart: "no"
+
+    read_only: true
+
+    network_mode: none
+
+    cap_drop:
+      - ALL
+
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+
+    security_opt:
+      - no-new-privileges:true
+
+
+  sandbox-docker:
+    image: docker:27.5.1-dind@sha256:aa3df78ecf320f5fafdce71c659f1629e96e9de0968305fe1de670e0ca9176ce
+
+    restart: unless-stopped
+
+    privileged: true
+
+    environment:
+      DOCKER_TLS_CERTDIR: ""
+
+    command:
+      - --host=tcp://0.0.0.0:2375
+      - --log-level=error
+
+    expose:
+      - "2375"
+
+    networks:
+      - sandbox-control
+      - sandbox-egress
+
+    healthcheck:
+      test:
+        - CMD
+        - docker
+        - --host=tcp://127.0.0.1:2375
+        - info
+      interval: 3s
+      timeout: 3s
+      retries: 30
+
+    volumes:
+      - sandbox_docker_data:/var/lib/docker
+
+
   api:
     image: ghcr.io/nhphunng/crypto-strategy-lab-api:${IMAGE_TAG:-latest}
 
@@ -68,6 +140,19 @@ services:
       CSL_DATABASE_URL: ${CSL_DATABASE_URL}
       CSL_BINANCE_BASE_URL: ${CSL_BINANCE_BASE_URL:-https://api.binance.com}
       CSL_ENVIRONMENT: production
+      CSL_LLM_ENDPOINT: "${CSL_LLM_ENDPOINT:?Set the approved LLM endpoint in .env.production}"
+      CSL_LLM_PROVIDER: ${CSL_LLM_PROVIDER:-configured-provider}
+      CSL_LLM_MODEL_ID: "${CSL_LLM_MODEL_ID:?Set the approved LLM model ID in .env.production}"
+      CSL_LLM_MODEL_VERSION: "${CSL_LLM_MODEL_VERSION:?Set the approved LLM model version in .env.production}"
+      CSL_LLM_DATA_POLICY_CONFIRMED: "${CSL_LLM_DATA_POLICY_CONFIRMED:?Acknowledge the provider data policy in .env.production}"
+      CSL_LLM_CONNECT_TIMEOUT_SECONDS: ${CSL_LLM_CONNECT_TIMEOUT_SECONDS:-5}
+      CSL_LLM_READ_TIMEOUT_SECONDS: ${CSL_LLM_READ_TIMEOUT_SECONDS:-30}
+      CSL_LLM_MAX_ATTEMPTS: ${CSL_LLM_MAX_ATTEMPTS:-3}
+      CSL_LLM_MAX_RETRY_DELAY_SECONDS: ${CSL_LLM_MAX_RETRY_DELAY_SECONDS:-30}
+      CSL_SOURCE_ENCRYPTION_KEY_ID: ${CSL_SOURCE_ENCRYPTION_KEY_ID:-deployment-key-v1}
+      CSL_GENERATED_ARTIFACT_ROOT: /var/lib/crypto-lab/generated-strategies
+      CSL_STRATEGY_SANDBOX_IMAGE: ${CSL_STRATEGY_SANDBOX_IMAGE:-crypto-lab-strategy-sandbox:1}
+      CSL_STRATEGY_SANDBOX_ENGINE_URL: http://sandbox-docker:2375
       # News collection must run for the News & Sentiment page to have data;
       # the settings default is false so tests and E2E stay offline.
       CSL_NEWS_COLLECTION_ENABLED: ${CSL_NEWS_COLLECTION_ENABLED:-true}
@@ -75,10 +160,29 @@ services:
       CSL_NEWS_FEEDS: ${CSL_NEWS_FEEDS:-[{"source":"Cointelegraph","url":"https://cointelegraph.com/rss"}]}
 
     depends_on:
+      artifact-init:
+        condition: service_completed_successfully
       migrate:
         condition: service_completed_successfully
       postgres:
         condition: service_healthy
+      sandbox-docker:
+        condition: service_healthy
+
+    secrets:
+      - source: llm_api_key
+        target: CSL_LLM_API_KEY
+        uid: "65532"
+        gid: "65532"
+        mode: 0400
+      - source: source_encryption_key
+        target: CSL_SOURCE_ENCRYPTION_KEY_BASE64
+        uid: "65532"
+        gid: "65532"
+        mode: 0400
+
+    volumes:
+      - generated_strategy_artifacts:/var/lib/crypto-lab/generated-strategies
 
     ports:
       - "127.0.0.1:8000:8000"
@@ -96,6 +200,18 @@ services:
 
     networks:
       - crypto_lab_network
+      - sandbox-control
+
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=2); urllib.request.urlopen('http://127.0.0.1:8000/health/ready/strategy-generation', timeout=2)"
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
 
 
   frontend:
@@ -117,8 +233,22 @@ services:
 networks:
   crypto_lab_network:
     driver: bridge
+  sandbox-control:
+    internal: true
+  sandbox-egress:
 
 
 volumes:
   crypto_lab_postgres:
     name: crypto-strategy-lab_crypto_lab_postgres
+  generated_strategy_artifacts:
+    name: crypto-strategy-lab_generated_strategy_artifacts
+  sandbox_docker_data:
+    name: crypto-strategy-lab_sandbox_docker_data
+
+
+secrets:
+  llm_api_key:
+    file: ${CSL_LLM_API_KEY_HOST_FILE:-.runtime-secrets/llm_api_key}
+  source_encryption_key:
+    file: ${CSL_SOURCE_ENCRYPTION_KEY_HOST_FILE:-.runtime-secrets/source_encryption_key}

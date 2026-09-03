@@ -4,6 +4,7 @@ import base64
 from pathlib import Path
 
 import pytest
+import yaml
 from pydantic import ValidationError
 
 from crypto_lab.infrastructure.settings import Settings
@@ -25,6 +26,31 @@ def test_generation_secrets_load_directly_from_dotenv(tmp_path: Path) -> None:
         encoding="utf-8",
     )
     settings = Settings(_env_file=dotenv)
+
+    assert settings.llm_api_key is not None
+    assert settings.source_encryption_key_base64 is not None
+    assert settings.llm_api_key.get_secret_value() == "not-a-real-provider-key"
+    assert base64.b64decode(
+        settings.source_encryption_key_base64.get_secret_value(), validate=True
+    ) == b"k" * 32
+
+
+def test_generation_secrets_load_from_docker_secret_files(tmp_path: Path) -> None:
+    (tmp_path / "CSL_LLM_API_KEY").write_text(
+        "not-a-real-provider-key\n", encoding="utf-8"
+    )
+    (tmp_path / "CSL_SOURCE_ENCRYPTION_KEY_BASE64").write_text(
+        base64.b64encode(b"k" * 32).decode(), encoding="utf-8"
+    )
+
+    settings = Settings(
+        llm_endpoint="https://provider.example/generate",
+        llm_model_id="fixture-model",
+        llm_model_version="1",
+        llm_data_policy_confirmed=True,
+        _env_file=None,
+        _secrets_dir=tmp_path,
+    )
 
     assert settings.llm_api_key is not None
     assert settings.source_encryption_key_base64 is not None
@@ -86,19 +112,39 @@ def test_encryption_key_without_llm_configuration_supports_restart_only_reuse() 
     assert settings.llm_api_key is None
 
 
-def test_generated_compose_uses_required_dotenv_secrets_and_dedicated_engine() -> None:
+def test_production_compose_uses_file_secrets_storage_and_dedicated_engine() -> None:
     root = Path(__file__).parents[3]
-    compose = (root / "docker-compose.generated.yml").read_text(encoding="utf-8")
-    assert "/var/run/docker.sock" not in compose
-    assert "CSL_LLM_API_KEY: \"${CSL_LLM_API_KEY:?" in compose
-    assert "CSL_SOURCE_ENCRYPTION_KEY_BASE64: \"${CSL_SOURCE_ENCRYPTION_KEY_BASE64:?" in compose
-    assert "CSL_LLM_DATA_POLICY_CONFIRMED: \"${CSL_LLM_DATA_POLICY_CONFIRMED:?" in compose
-    assert "/run/secrets" not in compose
-    assert "_FILE" not in compose
-    assert "generated_strategy_artifacts:" in compose
-    assert "sandbox-docker:" in compose
-    assert "internal: true" in compose
-    assert "sandbox-egress:" in compose
+    compose_text = (root / "docker-compose.prod.yml").read_text(encoding="utf-8")
+    compose = yaml.safe_load(compose_text)
+    api = compose["services"]["api"]
+
+    assert "/var/run/docker.sock" not in compose_text
+    assert "CSL_LLM_API_KEY" not in api["environment"]
+    assert "CSL_SOURCE_ENCRYPTION_KEY_BASE64" not in api["environment"]
+    assert {secret["target"] for secret in api["secrets"]} == {
+        "CSL_LLM_API_KEY",
+        "CSL_SOURCE_ENCRYPTION_KEY_BASE64",
+    }
+    assert all(secret["mode"] == 0o400 for secret in api["secrets"])
+    assert api["volumes"] == [
+        "generated_strategy_artifacts:/var/lib/crypto-lab/generated-strategies"
+    ]
+    assert api["depends_on"]["migrate"]["condition"] == "service_completed_successfully"
+    assert api["depends_on"]["artifact-init"]["condition"] == "service_completed_successfully"
+    assert api["depends_on"]["sandbox-docker"]["condition"] == "service_healthy"
+    assert "strategy-generation" in " ".join(api["healthcheck"]["test"])
+    assert compose["networks"]["sandbox-control"]["internal"] is True
+    assert "sandbox-egress" in compose["services"]["sandbox-docker"]["networks"]
+    assert set(compose["secrets"]) == {"llm_api_key", "source_encryption_key"}
+
+
+def test_cd_uses_single_production_compose_and_checks_generation_readiness() -> None:
+    root = Path(__file__).parents[3]
+    workflow = (root / ".github/workflows/cd.yml").read_text(encoding="utf-8")
+
+    assert "docker-compose.generated.yml" not in workflow
+    assert workflow.count("-f docker-compose.prod.yml") >= 4
+    assert "/health/ready/strategy-generation" in workflow
 
 
 def test_dotenv_secrets_and_artifacts_are_excluded_from_git_and_image_context() -> None:

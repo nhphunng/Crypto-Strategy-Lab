@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 from urllib.parse import urlparse
 
 from pydantic import BaseModel as PydanticBaseModel
@@ -8,6 +9,8 @@ from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from crypto_lab.domain.market_data.timeframe import Timeframe
+
+_DOCKER_SECRETS_DIR = Path("/run/secrets")
 
 
 class NewsFeedConfig(PydanticBaseModel):
@@ -54,6 +57,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_prefix="CSL_",
         env_file=".env",
+        secrets_dir=_DOCKER_SECRETS_DIR if _DOCKER_SECRETS_DIR.is_dir() else None,
         extra="ignore",
         case_sensitive=False,
     )
