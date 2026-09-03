@@ -145,8 +145,8 @@ export class BacktestApi {
     expectIdentity('run.executionPolicyId', run.executionPolicyId, input.policies.executionPolicy.id)
     expectIdentity('run.executionPolicyVersion', run.executionPolicyVersion, input.policies.executionPolicy.version)
     const result = await this.request(`/api/v1/backtest-runs/${run.id}/start`, parseResult, { method: 'POST', signal: input.signal })
-    expectIdentity('result.runId', result.runId, run.id)
-    expectIdentity('result.jobId', result.jobId, run.jobId)
+    // An identical input is idempotent: the backend may return the original
+    // immutable result, whose runId/jobId predate this request run.
     expectIdentity('result.provenance.datasetId', result.provenance.datasetId, completeDataset.datasetId)
     expectIdentity('result.provenance.datasetSchemaVersion', result.provenance.datasetSchemaVersion, completeDataset.schemaVersion)
     expectIdentity('result.provenance.datasetChecksum', result.provenance.datasetChecksum, completeDataset.checksum)
@@ -159,8 +159,8 @@ export class BacktestApi {
       scoringPolicyId: input.policies.scoringPolicy.id, scoringPolicyVersion: input.policies.scoringPolicy.version }),
     })
     expectIdentity('evaluation.backtestResultId', evaluation.backtestResultId, result.id)
-    expectIdentity('evaluation.runId', evaluation.runId, run.id)
-    expectIdentity('evaluation.jobId', evaluation.jobId, run.jobId)
+    expectIdentity('evaluation.runId', evaluation.runId, result.runId)
+    expectIdentity('evaluation.jobId', evaluation.jobId, result.jobId)
     expectIdentity('evaluation.datasetId', evaluation.datasetId, completeDataset.datasetId)
     expectIdentity('evaluation.strategyId', evaluation.strategyId, definition.strategyId)
     expectIdentity('evaluation.strategyVersion', evaluation.strategyVersion, definition.strategyVersion)
