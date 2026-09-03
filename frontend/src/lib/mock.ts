@@ -1,14 +1,15 @@
 // Deterministic mock data for Crypto Strategy Lab.
 // Everything is seeded so screens feel like parts of the same live experiment.
 
-export type Candle = {
-  t: number // epoch ms
-  o: number
-  h: number
-  l: number
-  c: number
-  v: number
-}
+import {
+  formatChartPrice,
+  simpleMovingAverage,
+  supportResistance,
+  type Candle,
+  type Marker,
+} from '../components/candleChartModel'
+
+export type { Candle, Marker } from '../components/candleChartModel'
 
 export type Timeframe = '1m' | '5m' | '15m' | '30m' | '1h' | '2h' | '4h' | '1d'
 
@@ -71,35 +72,8 @@ function round2(n: number) {
   return Math.round(n * 100) / 100
 }
 
-// Simple moving average of closes; null until enough samples.
-export function sma(candles: Candle[], period: number): (number | null)[] {
-  const out: (number | null)[] = []
-  let sum = 0
-  for (let i = 0; i < candles.length; i++) {
-    sum += candles[i].c
-    if (i >= period) sum -= candles[i - period].c
-    out.push(i >= period - 1 ? round2(sum / period) : null)
-  }
-  return out
-}
-
-// Support / resistance bands derived from the series range (deterministic).
-export function supportResistance(candles: Candle[]) {
-  const highs = candles.map((c) => c.h)
-  const lows = candles.map((c) => c.l)
-  const max = Math.max(...highs)
-  const min = Math.min(...lows)
-  const span = max - min
-  return {
-    resistance: [round2(max - span * 0.08), round2(max - span * 0.02)] as [number, number],
-    support: [round2(min + span * 0.03), round2(min + span * 0.1)] as [number, number],
-  }
-}
-
-export type Marker = {
-  index: number
-  kind: 'buy' | 'sell' | 'entry' | 'exit'
-}
+export const sma = simpleMovingAverage
+export { supportResistance }
 
 // Deterministic sample signal markers for a series.
 export function signalMarkers(candles: Candle[], seed = 7): Marker[] {
@@ -116,8 +90,7 @@ export function signalMarkers(candles: Candle[], seed = 7): Marker[] {
   return markers
 }
 
-export const fmtPrice = (n: number) =>
-  n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+export const fmtPrice = formatChartPrice
 
 export const fmtInt = (n: number) => n.toLocaleString('en-US')
 

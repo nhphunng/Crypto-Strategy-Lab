@@ -1,6 +1,6 @@
 import type {
   BacktestResult, BacktestRun, BacktestStrategy, BacktestTrade, CandleDataset,
-  DatasetCandle, EquityPoint, EvaluationResult, ParameterValue, PolicyBundle,
+  DatasetCandlePage, EquityPoint, EvaluationResult, ParameterValue, PolicyBundle,
   StrategyDefinition,
 } from './types'
 
@@ -23,6 +23,18 @@ function record(value: unknown, path: string): Record<string, unknown> {
 function str(value: unknown, path: string): string {
   if (typeof value !== 'string') throw new BacktestContractError(path, 'expected a string')
   return value
+}
+function instant(value: unknown, path: string): string {
+  const result = str(value, path)
+  if (!/(?:Z|[+-][0-9]{2}:[0-9]{2})$/.test(result) || Number.isNaN(Date.parse(result))) {
+    throw new BacktestContractError(path, 'expected an ISO 8601 instant with an explicit timezone')
+  }
+  return result
+}
+function schemaVersion(value: unknown, path: string): '1' {
+  const result = str(value, path)
+  if (result !== '1') throw new BacktestContractError(path, 'expected schema version 1')
+  return result
 }
 function nullableStr(value: unknown, path: string): string | null {
   return value === null ? null : str(value, path)
@@ -90,9 +102,9 @@ export function parsePolicies(value: unknown): PolicyBundle {
 
 export function parseDataset(value: unknown): CandleDataset {
   const r = record(value, 'dataset'); const selection = record(r.selection, 'dataset.selection'); const range = record(r.range, 'dataset.range')
-  return { schemaVersion: str(r.schemaVersion, 'dataset.schemaVersion') as '1', datasetId: uuid(r.datasetId, 'dataset.datasetId'),
+  return { schemaVersion: schemaVersion(r.schemaVersion, 'dataset.schemaVersion'), datasetId: uuid(r.datasetId, 'dataset.datasetId'),
     selection: { provider: str(selection.provider, 'dataset.selection.provider'), pair: str(selection.pair, 'dataset.selection.pair'), timeframe: str(selection.timeframe, 'dataset.selection.timeframe') },
-    range: { startTime: str(range.startTime, 'dataset.range.startTime'), endTime: str(range.endTime, 'dataset.range.endTime') }, status: str(r.status, 'dataset.status'),
+    range: { startTime: instant(range.startTime, 'dataset.range.startTime'), endTime: instant(range.endTime, 'dataset.range.endTime') }, status: str(r.status, 'dataset.status'),
     candleCount: r.candleCount === null ? null : int(r.candleCount, 'dataset.candleCount'), checksum: nullableStr(r.checksum, 'dataset.checksum'), failureCode: nullableStr(r.failureCode, 'dataset.failureCode'),
     createdAt: str(r.createdAt, 'dataset.createdAt'), updatedAt: str(r.updatedAt, 'dataset.updatedAt'), completedAt: nullableStr(r.completedAt, 'dataset.completedAt') }
 }
@@ -142,7 +154,7 @@ export function parseEquityPage(value: unknown): { items: EquityPoint[]; nextCur
   return { items: r.items.map((item, index) => { const p = `equity.items[${index}]`; const e = record(item, p); return { position: int(e.position, `${p}.position`), candleOpenTime: str(e.candleOpenTime, `${p}.candleOpenTime`), valuedAt: str(e.valuedAt, `${p}.valuedAt`), closePrice: decimal(e.closePrice, `${p}.closePrice`), cash: decimal(e.cash, `${p}.cash`), quantity: decimal(e.quantity, `${p}.quantity`), positionValue: decimal(e.positionValue, `${p}.positionValue`), equity: decimal(e.equity, `${p}.equity`) } }), nextCursor: nullableStr(r.nextCursor, 'equity.nextCursor') }
 }
 
-export function parseCandlePage(value: unknown): { items: DatasetCandle[]; nextCursor: string | null; hasMore: boolean } {
+export function parseCandlePage(value: unknown): DatasetCandlePage {
   const r = record(value, 'candles'); if (!Array.isArray(r.candles)) throw new BacktestContractError('candles.candles', 'expected an array')
-  return { items: r.candles.map((item, index) => { const p = `candles.candles[${index}]`; const c = record(item, p); return { provider: str(c.provider, `${p}.provider`), pair: str(c.pair, `${p}.pair`), timeframe: str(c.timeframe, `${p}.timeframe`), openTime: str(c.openTime, `${p}.openTime`), closeTime: str(c.closeTime, `${p}.closeTime`), open: decimal(c.open, `${p}.open`), high: decimal(c.high, `${p}.high`), low: decimal(c.low, `${p}.low`), close: decimal(c.close, `${p}.close`), volume: decimal(c.volume, `${p}.volume`), closed: bool(c.closed, `${p}.closed`), receivedAt: str(c.receivedAt, `${p}.receivedAt`) } }), nextCursor: nullableStr(r.nextCursor, 'candles.nextCursor'), hasMore: bool(r.hasMore, 'candles.hasMore') }
+  return { schemaVersion: schemaVersion(r.schemaVersion, 'candles.schemaVersion'), datasetId: uuid(r.datasetId, 'candles.datasetId'), items: r.candles.map((item, index) => { const p = `candles.candles[${index}]`; const c = record(item, p); return { provider: str(c.provider, `${p}.provider`), pair: str(c.pair, `${p}.pair`), timeframe: str(c.timeframe, `${p}.timeframe`), openTime: instant(c.openTime, `${p}.openTime`), closeTime: instant(c.closeTime, `${p}.closeTime`), open: decimal(c.open, `${p}.open`), high: decimal(c.high, `${p}.high`), low: decimal(c.low, `${p}.low`), close: decimal(c.close, `${p}.close`), volume: decimal(c.volume, `${p}.volume`), closed: bool(c.closed, `${p}.closed`), receivedAt: instant(c.receivedAt, `${p}.receivedAt`) } }), nextCursor: nullableStr(r.nextCursor, 'candles.nextCursor'), hasMore: bool(r.hasMore, 'candles.hasMore') }
 }

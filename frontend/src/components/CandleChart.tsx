@@ -1,6 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { fmtPrice, sma, supportResistance, type Candle, type Marker } from '../lib/mock'
+import {
+  formatChartPrice,
+  simpleMovingAverage,
+  supportResistance,
+  type Candle,
+  type Marker,
+} from './candleChartModel'
 import { cn } from './ui'
+
+export type { Candle, Marker } from './candleChartModel'
 
 type Overlays = {
   ma20?: boolean
@@ -50,23 +58,24 @@ export function CandleChart({
   const plotW = Math.max(120, w - PAD_R)
 
   const { min, max } = useMemo(() => {
+    if (candles.length === 0) return { min: 0, max: 1 }
     let lo = Infinity
     let hi = -Infinity
     for (const c of candles) {
       lo = Math.min(lo, c.l)
       hi = Math.max(hi, c.h)
     }
-    const pad = (hi - lo) * 0.08
+    const pad = Math.max((hi - lo) * 0.08, Math.abs(hi) * 0.0001, 0.01)
     return { min: lo - pad, max: hi + pad }
   }, [candles])
 
   const maxVol = useMemo(() => Math.max(...candles.map((c) => c.v), 1), [candles])
-  const ma20 = useMemo(() => (overlays.ma20 ? sma(candles, 20) : null), [candles, overlays.ma20])
-  const ma50 = useMemo(() => (overlays.ma50 ? sma(candles, 50) : null), [candles, overlays.ma50])
+  const ma20 = useMemo(() => (overlays.ma20 ? simpleMovingAverage(candles, 20) : null), [candles, overlays.ma20])
+  const ma50 = useMemo(() => (overlays.ma50 ? simpleMovingAverage(candles, 50) : null), [candles, overlays.ma50])
   const bb = useMemo(() => {
     if (!overlays.bb) return null
     const period = 20
-    const mid = sma(candles, period)
+    const mid = simpleMovingAverage(candles, period)
     const upper: (number | null)[] = []
     const lower: (number | null)[] = []
     for (let i = 0; i < candles.length; i++) {
@@ -83,10 +92,10 @@ export function CandleChart({
     }
     return { mid, upper, lower }
   }, [candles, overlays.bb])
-  const sr = useMemo(() => (overlays.sr ? supportResistance(candles) : null), [candles, overlays.sr])
+  const sr = useMemo(() => (overlays.sr && candles.length > 0 ? supportResistance(candles) : null), [candles, overlays.sr])
 
   const n = candles.length
-  const slot = plotW / n
+  const slot = plotW / Math.max(n, 1)
   const cw = Math.max(1.5, slot * 0.62)
 
   const x = (i: number) => i * slot + slot / 2
@@ -106,6 +115,7 @@ export function CandleChart({
         height={height}
         className="block"
         onMouseMove={(e) => {
+          if (n === 0) return
           const rect = e.currentTarget.getBoundingClientRect()
           const px = e.clientX - rect.left
           const i = Math.max(0, Math.min(n - 1, Math.floor(px / slot)))
@@ -113,6 +123,11 @@ export function CandleChart({
         }}
         onMouseLeave={() => setHover(null)}
       >
+        {n === 0 && (
+          <text x={plotW / 2} y={priceH / 2} textAnchor="middle" fill="var(--color-faint)" fontSize={12}>
+            No Candles
+          </text>
+        )}
         {/* grid */}
         {[0, 0.25, 0.5, 0.75, 1].map((g) => (
           <line
@@ -136,7 +151,7 @@ export function CandleChart({
               fontSize={10}
               className="font-mono"
             >
-              {fmtPrice(p)}
+              {formatChartPrice(p)}
             </text>
           )
         })}
@@ -261,7 +276,7 @@ export function CandleChart({
           })}
 
         {/* crosshair */}
-        {hover != null && (
+        {hover != null && candles[hover] && (
           <>
             <line
               x1={x(hover)}
@@ -280,19 +295,19 @@ export function CandleChart({
               fontSize={10}
               className="font-mono"
             >
-              {fmtPrice(candles[hover].c)}
+              {formatChartPrice(candles[hover].c)}
             </text>
           </>
         )}
       </svg>
 
       {/* OHLC readout */}
-      {!compact && (
+      {!compact && hoverC && (
         <div className="pointer-events-none absolute left-2 top-2 flex gap-3 font-mono text-[10px] tabular-nums">
           {(['o', 'h', 'l', 'c'] as const).map((k) => (
             <span key={k} className="text-faint">
               {k.toUpperCase()}{' '}
-              <span className={hoverC.c >= hoverC.o ? 'text-pos' : 'text-neg'}>{fmtPrice(hoverC[k])}</span>
+              <span className={hoverC.c >= hoverC.o ? 'text-pos' : 'text-neg'}>{formatChartPrice(hoverC[k])}</span>
             </span>
           ))}
         </div>
