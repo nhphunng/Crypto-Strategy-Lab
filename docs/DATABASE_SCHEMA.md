@@ -63,7 +63,7 @@ cross-row ordering, or checksum recomputation.
 | 004 Backtest and Evaluation | Execution policies, runs/results, snapshots, trades, equity, evaluation and scoring | Nine tables listed below | `IMPLEMENTED` |
 | 005 Leaderboard and Visualization | Durable Top-K projection and publication outbox | `leaderboards`, `leaderboard_entries`, `leaderboard_update_records` | `IMPLEMENTED` |
 | News collection Task 3 — Nguyễn Hoàng Phi Hùng | Provider-neutral normalized News persistence | `news_items` | `IMPLEMENTED IN FEATURE BRANCH`; acceptance evidence pending |
-| Sentiment Task 4 — Gia Thành | Immutable/versioned model analyses and Strategy context | `news_sentiment_analyses` | `PLANNED / INCOMPLETE` |
+| Sentiment Task 4 — Gia Thành | Immutable/versioned model analyses and Strategy context | `news_sentiment_analyses` | `IMPLEMENTED` |
 
 Required migration order:
 
@@ -77,6 +77,9 @@ Required migration order:
             -> 20260828_008_failure_reason
               -> 20260828_009_strategy_configs
                 -> 20260830_010_news
+                  -> 20260831_010_strategy_search
+                    -> 20260901_011_news_sentiment
+                      -> 20260903_012_sentiment_search
 ```
 
 Feature 002 introduces no PostgreSQL dependency. A feature must not create or
@@ -360,19 +363,36 @@ Identity, conflict and query rules:
 - Same provider identity may refresh mutable content while keeping `id`; a canonical-URL conflict from another provider must not rewrite source attribution.
 - GIN index `ix_news_items_related_coins` supports exact array membership.
 - B-tree index `ix_news_items_published` on `(published_at DESC, id)` supports deterministic newest-first pagination.
-- The table intentionally has no sentiment/model/score columns. Task 3 API projects `sentiment: null`.
+- Model output remains in versioned analysis rows. The News API joins the latest completed analysis matching current content, or returns `sentiment: null` when none exists.
 
-### 7.5 `news_sentiment_analyses` — owner Sentiment Task 4 (Gia Thành), `PLANNED / INCOMPLETE`
+### 7.5 `news_sentiment_analyses` — owner Sentiment Task 4 (Gia Thành), `IMPLEMENTED`
 
-Task 4 must add a separate forward migration after `20260830_010_news`. Target
-shape: UUID primary key; `news_id` FK to `news_items.id`; model id/version;
-`POSITIVE|NEUTRAL|NEGATIVE` label; exact numeric score; analyzed time; article
-content fingerprint; `COMPLETED|FAILED` status; nullable failure code; and unique
-`(news_id, model_id, model_version, content_fingerprint)`.
+Migration `20260901_011_news_sentiment` creates UUID identity, a `news_id` FK to
+`news_items`, model id/version, label, `NUMERIC(7,6)` confidence, UTC analysis time,
+article content fingerprint, `COMPLETED|FAILED` status and optional failure code.
+Unique `(news_id, model_id, model_version, content_fingerprint)` makes processing
+idempotent. Analysis history is preserved across content/model revisions; the
+collector never writes model output. Strategy reads are model-specific and choose
+the latest eligible article analysis separately for every candle's decision time.
 
-Analyses are append-only across model/content revisions. Task 4 must not add
-mutable sentiment columns to `news_items`. See
-[`specs/007-news-sentiment/handoff-task-3-to-4.md`](../specs/007-news-sentiment/handoff-task-3-to-4.md).
+### 7.6 Search recovery and sentiment provenance
+
+Migration `20260903_012_sentiment_search` adds:
+
+- `backtest_runs.sentiment_provenance`: non-null JSONB array, default `[]` for legacy
+  and price-only runs. Each entry records `modelId`, `modelVersion`, `windowStart`,
+  `windowEnd`, and `evidenceFingerprint`. These inputs contribute to context and
+  signal identity, including when sentiment is a child of a composite strategy.
+- `strategy_search_runs.origin`: `VARCHAR(16)`, default `MANUAL`; background runs
+  use `BACKGROUND`.
+- `strategy_search_runs.loop_key`: nullable `VARCHAR(64)` hash of worker settings.
+- `strategy_search_runs.cycle_index`: nullable integer, indexed with `loop_key`.
+
+A background run ID is deterministic from its loop key and cycle. Candidate rows
+are queued before evaluation and reused by fingerprint within the run. Completed
+candidates and committed backtest results are reused after restart. Status totals
+are read from persisted runs; pause stops scheduling after the in-flight cycle.
+A coordinator must have a single owner per loop configuration.
 
 ## 8. Cross-feature integration rules
 
@@ -415,19 +435,14 @@ Any future change must use a new forward migration. Follow
 
 ## 10. Verification status
 
-At this document revision:
+The integrated migration head is `20260903_012_sentiment_search`. News collection,
+versioned FinBERT sentiment, historical evidence selection, and shared search
+execution have PostgreSQL coverage. The opt-in
+`test_sentiment_search_journey.py` performs real offline inference, generates an
+MA + RSI + Sentiment candidate, persists trades and evaluation, verifies its
+leaderboard entry and replay checksum, and repeats a background cycle without
+duplicate runs. See README for the disposable database and cached-model setup.
 
-- The News migration declares the next/head revision `20260830_010_news` after
-  `20260828_009_strategy_configs`.
-- `news_items` is the Task 3 physical schema in the feature branch; acceptance
-  still requires actual Alembic head and downgrade/upgrade evidence.
-- `news_sentiment_analyses` does not exist yet and remains Task 4
-  `PLANNED / INCOMPLETE`.
-- Feature 002 continues to own ephemeral state and adds no table.
-
-Các dòng trên mô tả contract/source hiện tại, không tuyên bố test đã chạy. Chỉ
-đánh dấu Task 3/Task 4 hoàn thành sau khi các command trong README và handoff có
-output thực tế.
-
-Update the status and affected table sections in the same pull request that
-adds or changes a merged migration.
+Feature 002 continues to own ephemeral state and adds no table. Future schema
+changes must remain forward migrations with ORM mappings and this contract
+updated together.

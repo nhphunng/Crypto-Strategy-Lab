@@ -90,6 +90,9 @@ class BacktestRunRow(Base):
     contract_version: Mapped[str] = mapped_column(String(32), nullable=False)
     parameter_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
     context_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+    sentiment_provenance: Mapped[list[dict[str, str]]] = mapped_column(
+        JSONB, nullable=False, default=list, server_default="[]"
+    )
     execution_policy_id: Mapped[UUID] = mapped_column(
         ForeignKey("execution_policies.id", ondelete="RESTRICT"), nullable=False
     )

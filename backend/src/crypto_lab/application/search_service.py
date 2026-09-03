@@ -5,7 +5,7 @@ from datetime import datetime
 from decimal import Decimal
 from time import monotonic
 from typing import Any
-from uuid import NAMESPACE_URL, UUID, uuid5
+from uuid import NAMESPACE_URL, UUID, uuid4, uuid5
 
 from crypto_lab.application.strategies.save_configuration import (
     SaveStrategyConfigurationCommand,
@@ -13,7 +13,7 @@ from crypto_lab.application.strategies.save_configuration import (
     StrategyConfigurationMemberInput,
 )
 from crypto_lab.domain.backtest.configuration import BacktestConfiguration
-from crypto_lab.domain.search import RandomSearchGenerator
+from crypto_lab.domain.search import CandidateMember, StrategyCandidate, StrategyGenerator
 from crypto_lab.domain.strategy.configuration import CombinationMethod
 from crypto_lab.domain.strategy.signal import SignalAction
 
@@ -47,7 +47,7 @@ class StrategySearchService:
         self,
         *,
         repository: Any,
-        generator: RandomSearchGenerator,
+        generator: StrategyGenerator,
         configurations: Any,
         datasets: Any,
         analyzer: Any,
@@ -88,6 +88,10 @@ class StrategySearchService:
         timeout_seconds: int,
         no_improvement_limit: int,
         seed: int,
+        run_id: UUID | None = None,
+        origin: str = "MANUAL",
+        loop_key: str | None = None,
+        cycle_index: int | None = None,
     ) -> Any:
         dataset = await self.datasets.get_complete(dataset_id)
         if dataset is None:
@@ -95,6 +99,10 @@ class StrategySearchService:
         now = self.clock.now()
         run = await self.repository.create(
             {
+                "id": run_id or uuid4(),
+                "origin": origin,
+                "loop_key": loop_key,
+                "cycle_index": cycle_index,
                 "status": "QUEUED",
                 "dataset_id": dataset_id,
                 "strategy_ids": list(strategy_ids),
@@ -113,10 +121,17 @@ class StrategySearchService:
                 "created_at": now,
             }
         )
-        self._tasks[run.id] = asyncio.create_task(
-            self._run(run.id), name=f"strategy-search-{run.id}"
-        )
+        if run.status in ("QUEUED", "RUNNING") and run.id not in self._tasks:
+            self._tasks[run.id] = asyncio.create_task(
+                self._run(run.id), name=f"strategy-search-{run.id}"
+            )
         return run
+
+    async def wait(self, run_id: UUID) -> Any:
+        task = self._tasks.get(run_id)
+        if task is not None:
+            await task
+        return await self.repository.get(run_id)
 
     async def cancel(self, run_id: UUID) -> bool:
         changed = await self.repository.cancel(run_id, self.clock.now())
@@ -134,97 +149,135 @@ class StrategySearchService:
 
     async def _run(self, run_id: UUID) -> None:
         started_at, started = self.clock.now(), monotonic()
-        await self.repository.patch(run_id, status="RUNNING", started_at=started_at)
         best: Decimal | None = None
         stale = 0
         try:
             row = await self.repository.get(run_id)
             assert row is not None
+            if row.status == "CANCELLED":
+                return
+            await self.repository.patch(
+                run_id, status="RUNNING", started_at=row.started_at or started_at
+            )
             dataset = await self.datasets.get_complete(row.dataset_id)
             if dataset is None:
                 raise ValueError("complete dataset is unavailable")
-            candidates = self.generator.generate(
-                tuple(row.strategy_ids),
-                row.minimum_size,
-                row.maximum_size,
-                row.candidate_limit,
-                row.seed,
-                dataset.metadata.candle_count,
-            )
+            # Generation is a durable producer phase. Once generated is set,
+            # recovery consumes the stored queue without consulting the registry.
+            if row.generated == 0:
+                candidates = self.generator.generate(
+                    tuple(row.strategy_ids),
+                    row.minimum_size,
+                    row.maximum_size,
+                    row.candidate_limit,
+                    row.seed,
+                    dataset.metadata.candle_count,
+                )
+                generated = 0
+                for sequence, candidate in enumerate(candidates, 1):
+                    await self.repository.add_candidate(
+                        {
+                            "search_run_id": run_id,
+                            "sequence": sequence,
+                            "fingerprint": candidate.fingerprint,
+                            "display_name": candidate.display_name,
+                            "members": [
+                                {
+                                    "strategyId": member.strategy_id,
+                                    "strategyVersion": member.strategy_version,
+                                    "parameters": member.parameters,
+                                }
+                                for member in candidate.members
+                            ],
+                            "status": "QUEUED",
+                            "created_at": self.clock.now(),
+                        }
+                    )
+                    generated = sequence
+                await self.repository.patch(run_id, generated=generated)
+            items = await self.repository.candidates(run_id, limit=row.candidate_limit)
+            queue = [
+                (
+                    StrategyCandidate(
+                        item.fingerprint,
+                        item.display_name,
+                        tuple(
+                            CandidateMember(
+                                member["strategyId"],
+                                member["strategyVersion"],
+                                member["parameters"],
+                            )
+                            for member in item.members
+                        ),
+                    ),
+                    item,
+                )
+                for item in sorted(items, key=lambda item: item.sequence)
+            ]
             reason = "SEARCH_SPACE_EXHAUSTED"
-            for sequence, candidate in enumerate(candidates, 1):
+            succeeded = failed = 0
+            for sequence, (candidate, item) in enumerate(queue, 1):
                 current = await self.repository.get(run_id)
                 if current is None or current.status == "CANCELLED":
                     return
-                if monotonic() - started >= row.timeout_seconds:
-                    reason = "TIMEOUT"
-                    break
-                if stale >= row.no_improvement_limit:
-                    reason = "NO_IMPROVEMENT"
-                    break
-                candidate_row = await self.repository.add_candidate(
-                    {
-                        "search_run_id": run_id,
-                        "sequence": sequence,
-                        "fingerprint": candidate.fingerprint,
-                        "display_name": candidate.display_name,
-                        "members": [
-                            {
-                                "strategyId": item.strategy_id,
-                                "strategyVersion": item.strategy_version,
-                                "parameters": item.parameters,
-                            }
-                            for item in candidate.members
-                        ],
-                        "status": "RUNNING",
-                        "created_at": self.clock.now(),
-                    }
-                )
-                await self.repository.patch(
-                    run_id, generated=sequence, running=1, current_candidate=candidate.display_name
-                )
-                await self._publish(run_id)
-                try:
-                    score, backtest_id, evaluation_id = await self._evaluate(
-                        row, candidate, sequence
+                if item.status not in ("COMPLETED", "FAILED"):
+                    if monotonic() - started >= row.timeout_seconds:
+                        reason = "TIMEOUT"
+                        break
+                    if stale >= row.no_improvement_limit:
+                        reason = "NO_IMPROVEMENT"
+                        break
+                    await self.repository.patch_candidate(item.id, status="RUNNING")
+                    await self.repository.patch(
+                        run_id, running=1, current_candidate=candidate.display_name
                     )
-                    await self.repository.patch_candidate(
-                        candidate_row.id,
-                        status="COMPLETED",
-                        score=score,
-                        backtest_run_id=backtest_id,
-                        evaluation_result_id=evaluation_id,
-                        completed_at=self.clock.now(),
-                    )
-                    succeeded = current.succeeded + 1
-                    if best is None or score > best:
-                        best, stale = score, 0
+                    await self._publish(run_id)
+                    try:
+                        score, backtest_id, evaluation_id = await self._evaluate(
+                            row, candidate, sequence
+                        )
+                        await self.repository.patch_candidate(
+                            item.id,
+                            status="COMPLETED",
+                            score=score,
+                            backtest_run_id=backtest_id,
+                            evaluation_result_id=evaluation_id,
+                            completed_at=self.clock.now(),
+                        )
+                        item.status, item.score = "COMPLETED", score
+                    except Exception as exc:
+                        await self.repository.patch_candidate(
+                            item.id,
+                            status="FAILED",
+                            failure_code=type(exc).__name__[:64],
+                            completed_at=self.clock.now(),
+                        )
+                        item.status = "FAILED"
+                if item.status == "COMPLETED":
+                    succeeded += 1
+                    if best is None or item.score > best:
+                        best, stale = item.score, 0
                         await self.repository.patch(
-                            run_id,
-                            succeeded=succeeded,
-                            running=0,
-                            top_score=score,
-                            top_candidate=candidate.display_name,
+                            run_id, top_score=best, top_candidate=candidate.display_name
                         )
                     else:
                         stale += 1
-                        await self.repository.patch(run_id, succeeded=succeeded, running=0)
-                except Exception as exc:
+                else:
+                    failed += 1
                     stale += 1
-                    await self.repository.patch_candidate(
-                        candidate_row.id,
-                        status="FAILED",
-                        failure_code=type(exc).__name__[:64],
-                        completed_at=self.clock.now(),
-                    )
-                    latest = await self.repository.get(run_id)
-                    await self.repository.patch(
-                        run_id, failed=(latest.failed if latest else 0) + 1, running=0
-                    )
+                await self.repository.patch(run_id, succeeded=succeeded, failed=failed, running=0)
                 await self._publish(run_id)
                 if sequence >= row.candidate_limit:
                     reason = "CANDIDATE_LIMIT"
-                    break
+            # A cancellation arriving during the final candidate must remain cancelled.
+            current = await self.repository.get(run_id)
+            if current is None or current.status == "CANCELLED":
+                return
+            for _, item in queue:
+                if item.status == "QUEUED":
+                    await self.repository.patch_candidate(
+                        item.id, status="CANCELLED", completed_at=self.clock.now()
+                    )
             await self.repository.patch(
                 run_id,
                 status="COMPLETED",
@@ -277,7 +330,10 @@ class StrategySearchService:
             configuration.root_definition_id, row.dataset_id, f"search-{row.id}-{sequence}"
         )
         definition, provenance = analysis.strategy_definition, analysis.context_provenance
-        job_id = uuid5(NAMESPACE_URL, f"search|{row.id}|{candidate.fingerprint}")
+        job_id = uuid5(
+            NAMESPACE_URL,
+            f"search|{row.id}|{candidate.fingerprint}|{provenance.context_fingerprint}",
+        )
         metadata = dataset.metadata
         run = await self.create_backtest.execute(
             BacktestConfiguration(
@@ -303,10 +359,11 @@ class StrategySearchService:
                 Decimal("0.0004"),
                 Decimal("0.0002"),
                 row.seed + sequence,
+                sentiment_provenance=provenance.sentiment,
             )
         )
         result = await self.execute_backtest.execute(
-            run.configuration.run_id, f"search-{row.id}-{sequence}"
+            run.configuration.run_id, f"search-{row.id}-{sequence}", resume_interrupted=True
         )
         evaluation = await self.evaluate_backtest.execute(
             result.id,
@@ -331,6 +388,8 @@ def search_run_payload(row: Any) -> dict[str, object]:
     return {
         "id": str(row.id),
         "type": "SEARCH",
+        "origin": row.origin,
+        "cycleIndex": row.cycle_index,
         "status": row.status,
         "datasetId": str(row.dataset_id),
         "strategyIds": list(row.strategy_ids),

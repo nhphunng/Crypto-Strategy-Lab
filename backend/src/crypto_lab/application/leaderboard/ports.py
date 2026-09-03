@@ -219,6 +219,7 @@ class MarkerView:
     tone: MarkerTone | None = None
     signal_id: UUID | None = None
     trade_id: UUID | None = None
+    candle_time: datetime | None = None
 
 
 @dataclass(frozen=True, slots=True)

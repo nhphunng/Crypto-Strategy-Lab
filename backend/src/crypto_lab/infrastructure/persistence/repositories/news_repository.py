@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 from sqlalchemy import ColumnElement, func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from crypto_lab.application.news.ports import NewsPage, NewsQuery, StoreNewsResult
+from crypto_lab.application.news.ports import NewsPage, NewsQuery, SentimentSummary, StoreNewsResult
 from crypto_lab.domain.news.item import NewsItem
 from crypto_lab.infrastructure.persistence.news_models import NewsItemRow
+from crypto_lab.infrastructure.persistence.sentiment_models import NewsSentimentAnalysisRow
 
 # Mutable columns refreshed on an identity conflict with changed content. Identity
 # (provider, provider_item_id), the row id, and published_at are never rewritten.
@@ -82,6 +85,18 @@ class SqlAlchemyNewsRepository:
         page_size = max(query.page_size, 1)
         offset = (max(query.page, 1) - 1) * page_size
         async with self._sessions() as session:
+            distribution = (
+                select(_latest_label().label("label"))
+                .select_from(NewsItemRow)
+                .where(*_query_conditions(replace(query, sentiment=None)))
+                .subquery()
+            )
+            count_rows = (
+                await session.execute(
+                    select(distribution.c.label, func.count()).group_by(distribution.c.label)
+                )
+            ).all()
+            counts: dict[str | None, int] = {label: count for label, count in count_rows}
             total = await session.scalar(
                 select(func.count()).select_from(NewsItemRow).where(*conditions)
             )
@@ -99,13 +114,37 @@ class SqlAlchemyNewsRepository:
             page=query.page,
             page_size=query.page_size,
             total=int(total or 0),
+            sentiment_summary=SentimentSummary(
+                positive=counts.get("POSITIVE", 0),
+                neutral=counts.get("NEUTRAL", 0),
+                negative=counts.get("NEGATIVE", 0),
+                pending=counts.get(None, 0),
+            ),
         )
+
+
+def _latest_label() -> ColumnElement[str]:
+    analysis = NewsSentimentAnalysisRow
+    return (
+        select(analysis.label)
+        .where(
+            analysis.news_id == NewsItemRow.id,
+            analysis.content_fingerprint == NewsItemRow.content_fingerprint,
+            analysis.status == "COMPLETED",
+        )
+        .order_by(analysis.analyzed_at.desc(), analysis.id.desc())
+        .limit(1)
+        .correlate(NewsItemRow)
+        .scalar_subquery()
+    )
 
 
 def _query_conditions(query: NewsQuery) -> tuple[ColumnElement[bool], ...]:
     conditions: list[ColumnElement[bool]] = []
     if query.coin:
         conditions.append(NewsItemRow.related_coins.any(query.coin))  # type: ignore[arg-type]
+    if query.sentiment:
+        conditions.append(_latest_label() == query.sentiment)
     if query.published_after is not None:
         conditions.append(NewsItemRow.published_at >= query.published_after)
     if query.published_before is not None:

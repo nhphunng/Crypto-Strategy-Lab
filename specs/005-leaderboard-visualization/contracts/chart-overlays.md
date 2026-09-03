@@ -61,6 +61,7 @@ Color/tone is supplementary. Label and shape must distinguish types in grayscale
 ## Alignment Rules
 
 - `time` and `price` are recorded source coordinates; the frontend MUST NOT snap them silently to a different Candle.
+- Optional `candleTime` identifies the matching Candle's opening time for chart placement. Trade executions at an exact Candle open or close may align to that Candle; an end-of-range exit at the close retains its original `time` and `price` in tooltips and trade details. No nearest-Candle approximation is allowed.
 - If a source timestamp has no Candle in the loaded range, return it in `unalignedMarkers` with a reason and show a partial-data notice.
 - Overlapping markers retain separate IDs/details and may be offset or clustered visually.
 - Selecting a Trade highlights both matching `ENTRY` and `EXIT`; keyboard focus provides the same detail as pointer selection.

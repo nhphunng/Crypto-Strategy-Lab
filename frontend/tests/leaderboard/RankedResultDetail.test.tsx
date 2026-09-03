@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { RankedResultDetail } from '../../src/features/leaderboard/components/RankedResultDetail'
+import { parseVisualization } from '../../src/features/leaderboard/schemas'
 import type { TradePage, VisualizationData } from '../../src/features/leaderboard/types'
 import { detailFixture, tradePageFixture, visualizationFixture } from './fixtures'
 
@@ -77,6 +78,26 @@ describe('RankedResultDetail', () => {
     await userEvent.click(screen.getByTestId('control-show-hold'))
 
     expect(screen.getByTestId('marker-signal-hold')).toHaveAttribute('data-marker-type', 'HOLD')
+  })
+
+  it('places a candle-close exit on its candle and keeps the recorded time in trade details', async () => {
+    const visualization = visualizationFixture()
+    const exit = visualization.markers.find((marker) => marker.id === 'trade-1-exit')!
+    exit.time = '2026-07-01T00:44:59.999Z'
+    exit.candleTime = '2026-07-01T00:30:00.000Z'
+    visualization.unalignedMarkers = []
+    const trades = tradePageFixture()
+    trades.items[0].exitTime = exit.time
+    renderDetail({ visualization: parseVisualization(visualization), trades })
+
+    const marker = await screen.findByTestId('marker-trade-1-exit')
+    expect(marker.querySelector('title')).toHaveTextContent(exit.time)
+    expect(marker.querySelector('title')).toHaveTextContent(exit.price!)
+    expect(screen.queryByTestId('state-unaligned-markers')).toBeNull()
+    await userEvent.click(await screen.findByTestId('row-trade-trade-1'))
+    expect(screen.getByTestId('chart-highlight')).toBeInTheDocument()
+    expect(screen.getByTestId('marker-trade-1-exit-selected')).toBeInTheDocument()
+    expect(screen.getByTestId('detail-selected-trade')).toHaveTextContent(exit.time)
   })
 
   it('reports an unaligned marker instead of placing it on a guessed Candle', async () => {

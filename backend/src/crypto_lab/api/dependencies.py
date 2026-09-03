@@ -130,7 +130,11 @@ from crypto_lab.infrastructure.security.source_content_protector import (
     LocalAesKeyProvider,
     SourceContentProtector,
 )
-from crypto_lab.infrastructure.sentiment.lexicon_analyzer import LexiconSentimentAnalyzer
+from crypto_lab.infrastructure.sentiment.finbert_analyzer import (
+    MODEL_ID,
+    MODEL_VERSION,
+    FinBertSentimentAnalyzer,
+)
 from crypto_lab.infrastructure.settings import Settings
 from crypto_lab.infrastructure.sources.web_source_adapter import SafeWebSourceAdapter
 
@@ -145,8 +149,8 @@ EVALUATION_POLICY = EvaluationPolicy(
     "1.0.0",
 )
 # The exact model identity NewsSentimentStrategy reads under -- must match
-# LexiconSentimentAnalyzer's own model_id/model_version.
-SENTIMENT_MODEL = ModelRef(model_id="lexicon-sentiment", model_version="1.0.0")
+# FinBertSentimentAnalyzer's own model_id/model_version.
+SENTIMENT_MODEL = ModelRef(model_id=MODEL_ID, model_version=MODEL_VERSION)
 BALANCED_SCORING_POLICY = ScoringPolicy(
     uuid5(NAMESPACE_URL, "crypto-lab/scoring/balanced-v1"),
     "balanced",
@@ -266,7 +270,7 @@ class Container:
     news_collection_loop: NewsCollectionLoop | None = None
     sentiment_repository: SqlAlchemySentimentAnalysisRepository | None = None
     sentiment_context_reader: SqlAlchemySentimentContextReader | None = None
-    sentiment_analyzer: LexiconSentimentAnalyzer | None = None
+    sentiment_analyzer: FinBertSentimentAnalyzer | None = None
     analyze_pending_news: AnalyzePendingNews | None = None
     sentiment_loop: SentimentAnalysisLoop | None = None
     search_repository: SqlAlchemySearchRepository | None = None
@@ -383,7 +387,7 @@ def build_container(settings: Settings | None = None) -> Container:
     strategy_registry = build_strategy_registry()
     sentiment_repository = SqlAlchemySentimentAnalysisRepository(database.sessions)
     sentiment_context_reader = SqlAlchemySentimentContextReader(database.sessions)
-    sentiment_analyzer = LexiconSentimentAnalyzer()
+    sentiment_analyzer = FinBertSentimentAnalyzer(settings.sentiment_model_path)
     strategy_registry.register(NewsSentimentStrategy(sentiment_context_reader, SENTIMENT_MODEL))
     strategy_discovery = DiscoverStrategies(strategy_registry)
     strategy_definitions = SqlAlchemyStrategyDefinitionRepository(database.sessions)
@@ -516,7 +520,7 @@ def build_container(settings: Settings | None = None) -> Container:
         stale_after_seconds=settings.provider_stale_after_seconds,
     )
     realtime_hub = RealtimeSelectionHub(realtime_provider)
-    leaderboard = build_leaderboard_container(database)
+    leaderboard = build_leaderboard_container(database, strategy_registry)
     search_repository = SqlAlchemySearchRepository(database.sessions)
     search_hub = SearchEventHub()
     strategy_search = StrategySearchService(
@@ -552,15 +556,8 @@ def build_container(settings: Settings | None = None) -> Container:
         settings,
         clock,
         datasets=datasets,
-        dataset_reader=backtest_datasets,
         discovery=strategy_discovery,
-        generator=RandomSearchGenerator(strategy_registry),
-        configurations=save_strategy_configuration,
-        analyzer=backtest_strategy_analyzer,
-        create_backtest=create_backtest,
-        execute_backtest=execute_backtest,
-        evaluate_backtest=evaluate_backtest,
-        ingestion=leaderboard.ingestion,
+        search=strategy_search,
     )
     return Container(
         settings=settings,
@@ -659,9 +656,6 @@ def _build_search_loop(
             interval_seconds=settings.search_loop_interval_seconds,
         ),
         clock=clock,
-        execution_policy=EXECUTION_POLICY,
-        evaluation_policy=EVALUATION_POLICY,
-        scoring_policy=BALANCED_SCORING_POLICY,
         **collaborators,
     )
     return SearchLoopRunner(

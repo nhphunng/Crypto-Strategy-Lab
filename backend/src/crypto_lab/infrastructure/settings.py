@@ -111,6 +111,7 @@ class Settings(BaseSettings):
     sentiment_analysis_enabled: bool = False
     sentiment_analysis_interval_seconds: float = Field(default=900, ge=60, le=86_400)
     sentiment_analysis_batch_size: int = Field(default=50, ge=1, le=500)
+    sentiment_model_path: str | None = None
     cors_allowed_origins: tuple[str, ...] = (
         "http://localhost:5173",
         "http://127.0.0.1:5173",

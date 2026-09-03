@@ -43,34 +43,30 @@ class SqlAlchemySentimentContextReader:
         coin = _coin_from_pair(pair)
         analysis = NewsSentimentAnalysisRow
         news = NewsItemRow
-        # Latest COMPLETED analysis per News item under this exact model,
-        # joined back to the item's publish time and coin relevance.
-        latest = (
-            select(analysis)
-            .distinct(analysis.news_id)
+        # Return version history through the decision boundary. The strategy
+        # chooses the latest version available at EACH candle, not today's latest.
+        statement = (
+            select(
+                news.published_at,
+                analysis.analyzed_at,
+                analysis.label,
+                analysis.score,
+                news.id,
+                analysis.id,
+                analysis.content_fingerprint,
+            )
+            .select_from(news)
+            .join(analysis, analysis.news_id == news.id)
             .where(
                 analysis.model_id == model.model_id,
                 analysis.model_version == model.model_version,
                 analysis.status == SentimentStatus.COMPLETED.value,
-            )
-            .order_by(analysis.news_id, analysis.analyzed_at.desc())
-            .subquery()
-        )
-        statement = (
-            select(
-                news.published_at,
-                latest.c.analyzed_at,
-                latest.c.label,
-                latest.c.score,
-            )
-            .select_from(news)
-            .join(latest, latest.c.news_id == news.id)
-            .where(
+                analysis.analyzed_at <= end_time,
                 news.related_coins.any(coin),  # type: ignore[arg-type]
                 news.published_at >= start_time,
                 news.published_at <= end_time,
             )
-            .order_by(news.published_at.asc())
+            .order_by(news.published_at.asc(), news.id, analysis.analyzed_at, analysis.id)
         )
         async with self._sessions() as session:
             rows = (await session.execute(statement)).all()
@@ -79,8 +75,11 @@ class SqlAlchemySentimentContextReader:
                 published_at=published_at,
                 analyzed_at=analyzed_at,
                 signed_score=_signed_score(SentimentLabel(label), score),
+                news_id=str(news_id),
+                analysis_id=str(analysis_id),
+                content_fingerprint=fingerprint,
             )
-            for published_at, analyzed_at, label, score in rows
+            for published_at, analyzed_at, label, score, news_id, analysis_id, fingerprint in rows
         )
 
 

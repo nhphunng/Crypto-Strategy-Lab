@@ -48,14 +48,8 @@ services:
     secrets:
       - source: llm_api_key
         target: CSL_LLM_API_KEY
-        uid: "65532"
-        gid: "65532"
-        mode: 0400
       - source: source_encryption_key
         target: CSL_SOURCE_ENCRYPTION_KEY_BASE64
-        uid: "65532"
-        gid: "65532"
-        mode: 0400
     volumes:
       - generated_strategy_artifacts:/var/lib/crypto-lab/generated-strategies
     networks:

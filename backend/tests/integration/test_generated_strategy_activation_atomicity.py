@@ -33,6 +33,9 @@ from crypto_lab.domain.strategy.provenance import (
 )
 from crypto_lab.domain.strategy.version import SemanticVersion
 from crypto_lab.infrastructure.database import Database
+from crypto_lab.infrastructure.persistence.repositories.leaderboard_repository import (
+    _strategy_names,
+)
 from crypto_lab.infrastructure.persistence.repositories.strategy_generation_repository import (
     SqlAlchemyStrategyGenerationRepository,
 )
@@ -243,5 +246,10 @@ async def test_successful_activation_persists_provenance_and_definition_together
         definition_row = await session.get(StrategyDefinitionRow, definition.id)
         assert definition_row is not None
         assert definition_row.generation_provenance_id == provenance.id
+
+        # Historical leaderboards retain generated names even when the runtime
+        # registry cannot load the generated executable after a restart.
+        names = await _strategy_names(session, [definition_row], registry=None)
+        assert names[definition.id] == draft.display_name
 
     await database.dispose()

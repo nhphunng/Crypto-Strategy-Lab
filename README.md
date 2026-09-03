@@ -171,6 +171,11 @@ Production dùng file Compose riêng và phải có đủ secret, migration, art
 docker compose --env-file .env.production -f docker-compose.prod.yml up -d --wait --wait-timeout 60
 ```
 
+Trong lần deploy chuyển đổi, CD tạo các file trên từ hai biến legacy
+`CSL_LLM_API_KEY` và `CSL_SOURCE_ENCRYPTION_KEY_BASE64` trong `.env.production` nếu file chưa tồn
+tại; giá trị không được in hoặc truyền vào environment của API. Sau lần deploy thành công đầu tiên,
+xóa hai biến legacy khỏi `.env.production`; các lần deploy tiếp theo chỉ dùng secret file.
+
 ## News collection
 
 News dùng adapter RSS/Atom phía server và lưu item vào PostgreSQL trước khi phục vụ qua `GET /api/v1/news`. Collector mặc định tắt để local/test không tự gọi feed công khai.

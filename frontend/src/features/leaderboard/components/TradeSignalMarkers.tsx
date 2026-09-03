@@ -3,7 +3,8 @@
  *
  * Every marker carries its own label and shape, so the categories stay
  * distinguishable in grayscale and for colour-vision deficiencies. Recorded
- * coordinates are used as-is; an unaligned marker is reported, never moved.
+ * prices and timestamps stay intact. The backend supplies the matching Candle's
+ * opening time for placement when execution happens at its close.
  */
 
 import type { ChartScale } from './RankedResultChart'
@@ -63,7 +64,7 @@ export function TradeSignalMarkers({
   return (
     <g data-testid="marker-layer">
       {visible.map((marker) => {
-        const x = scale.x(marker.time)
+        const x = scale.x(marker.candleTime ?? marker.time)
         if (x === null || marker.price === null) return null
         const baseY = scale.y(marker.price)
         // Overlapping markers keep separate ids and are offset, never merged.

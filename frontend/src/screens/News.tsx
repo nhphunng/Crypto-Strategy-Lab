@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { ArrowDownRight, ArrowUpRight, ChevronLeft, ChevronRight, Minus } from 'lucide-react'
-import type { NewsItem } from '../features/news/types'
+import type { NewsItem, NewsSentimentLabel, SentimentSummary } from '../features/news/types'
 import { PageHeader } from '../components/Shell'
 import {
   Button,
@@ -19,13 +19,16 @@ export type NewsProps = {
   status: NewsStatus
   items: NewsItem[]
   total: number
+  sentimentSummary?: SentimentSummary | null
   page: number
   pageSize: number
   coin: string
+  sentiment: NewsSentimentLabel | 'All'
   range: string
   errorMessage?: string
   onRetry: () => void
   onCoinChange: (coin: string) => void
+  onSentimentChange: (sentiment: NewsSentimentLabel | 'All') => void
   onRangeChange: (range: string) => void
   onPageChange: (page: number) => void
 }
@@ -89,21 +92,40 @@ function ScoreCell({ item }: { item: NewsItem }) {
   return <span className="font-mono text-[11px] text-faint">—</span>
 }
 
+function SentimentDistribution({ summary }: { summary: SentimentSummary }) {
+  const analyzed = summary.positive + summary.neutral + summary.negative
+  return (
+    <section aria-label="Sentiment distribution" className="flex flex-wrap items-center gap-x-6 gap-y-2 border-b border-subtle bg-surface px-4 py-3 text-sm">
+      <span className="text-dim">{analyzed} analyzed · {summary.pending} pending analysis</span>
+      {(['positive', 'neutral', 'negative'] as const).map((label) => (
+        <span key={label} className={SENTIMENT_META[label.toUpperCase() as NewsSentimentLabel].cls}>
+          {label[0].toUpperCase() + label.slice(1)} {analyzed ? `${(summary[label] / analyzed * 100).toFixed(1)}%` : '—'} ({summary[label]})
+        </span>
+      ))}
+      <span className="text-faint">All articles in the selected coin and date range</span>
+    </section>
+  )
+}
+
 export function News({
   status,
   items,
   total,
+  sentimentSummary,
   page,
   pageSize,
   coin,
+  sentiment,
   range,
   errorMessage,
   onRetry,
   onCoinChange,
+  onSentimentChange,
   onRangeChange,
   onPageChange,
 }: NewsProps) {
-  const [selected, setSelected] = useState<NewsItem | null>(null)
+  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const selected = items.find((item) => item.newsId === selectedId) ?? null
   const totalPages = Math.max(1, Math.ceil(total / pageSize))
   const showPagination = total > pageSize
 
@@ -120,8 +142,7 @@ export function News({
         <div className="h-8 w-px bg-subtle" />
         <div className="flex flex-col gap-0.5">
           <span className="text-[10px] font-semibold uppercase tracking-wide text-faint">Sentiment</span>
-          <Segmented ariaLabel="Sentiment filter" options={SENTIMENT_OPTIONS} value="All" onChange={() => {}} disabled />
-          <p className="text-[11px] leading-snug text-faint">{SENTIMENT_HELPER}</p>
+          <Segmented ariaLabel="Sentiment filter" options={SENTIMENT_OPTIONS} value={sentiment} onChange={(value) => onSentimentChange(value as NewsSentimentLabel | 'All')} />
         </div>
         <div className="h-8 w-px bg-subtle" />
         <div className="flex flex-col gap-0.5">
@@ -129,6 +150,10 @@ export function News({
           <Segmented ariaLabel="Date range" options={RANGE_OPTIONS} value={range} onChange={onRangeChange} />
         </div>
       </div>
+
+      {sentimentSummary && status !== 'loading' && status !== 'error' && (
+        <SentimentDistribution summary={sentimentSummary} />
+      )}
 
       {/* news table */}
       <div className="min-h-0 flex-1 overflow-auto bg-surface">
@@ -171,11 +196,11 @@ export function News({
                 {items.map((n) => (
                   <tr
                     key={n.newsId}
-                    onClick={() => setSelected(n)}
+                    onClick={() => setSelectedId(n.newsId)}
                     onKeyDown={(event) => {
                       if (event.key === 'Enter' || event.key === ' ') {
                         event.preventDefault()
-                        setSelected(n)
+                        setSelectedId(n.newsId)
                       }
                     }}
                     tabIndex={0}
@@ -225,7 +250,7 @@ export function News({
         )}
       </div>
 
-      <Drawer open={!!selected} onClose={() => setSelected(null)} title={selected?.title ?? ''} subtitle={selected ? `${selected.source} · ${formatPublishedAt(selected.publishedAt)}` : ''}>
+      <Drawer open={!!selected} onClose={() => setSelectedId(null)} title={selected?.title ?? ''} subtitle={selected ? `${selected.source} · ${formatPublishedAt(selected.publishedAt)}` : ''}>
         {selected && (
           <>
             <DrawerSection title="Article">
@@ -244,6 +269,7 @@ export function News({
                 <>
                   <div className="mb-2"><SentimentTag item={selected} /></div>
                   <KV k="Analyzed" v={formatPublishedAt(selected.sentiment.analyzedAt)} />
+                  <KV k="Model" v={`${selected.sentiment.modelId} · ${selected.sentiment.modelVersion}`} />
                   <KV k="Related coins" v={selected.relatedCoins.join(', ')} />
                 </>
               ) : (

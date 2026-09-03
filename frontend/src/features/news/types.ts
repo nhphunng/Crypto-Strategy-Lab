@@ -22,15 +22,24 @@ export type NewsItem = {
   sentiment: NewsSentiment | null
 }
 
+export type SentimentSummary = {
+  positive: number
+  neutral: number
+  negative: number
+  pending: number
+}
+
 export type NewsPage = {
   items: NewsItem[]
   page: number
   pageSize: number
   total: number
+  sentimentSummary?: SentimentSummary | null
 }
 
 export type NewsQuery = {
   coin?: string
+  sentiment?: NewsSentimentLabel
   publishedAfter?: string
   publishedBefore?: string
   page?: number

@@ -26,8 +26,8 @@ test('NC-US-01: News rows come from the API and never the legacy mock', async ({
   await expect(page.getByText(MOCK_HEADLINE)).toHaveCount(0)
   await expect(page.getByText(LEGACY_MODEL)).toHaveCount(0)
 
-  // Sentiment is honest: Task 3 always projects null -> "Pending analysis".
-  await expect(page.getByText('Pending analysis').first()).toBeVisible()
+  // The deterministic runner disables analysis, so this seeded item stays pending.
+  await expect(btcRow.getByText('Pending analysis')).toBeVisible()
 })
 
 test('NC-US-02: coin filter narrows rows to the selected coin', async ({ page }) => {
@@ -66,7 +66,7 @@ test('NC-US-04: drawer shows source, content, and related coins', async ({ page 
   await expect(drawer).toBeVisible()
   await expect(drawer.getByText('Demo Feed').first()).toBeVisible()
   await expect(drawer.getByText(/Seeded BTC summary/)).toBeVisible()
-  // Task 3 has no sentiment model, so the analysis section is honest about it.
+  // This fixture has not been analyzed; the drawer must not invent model output.
   await expect(
     drawer.getByText('Available after sentiment analysis completes'),
   ).toBeVisible()

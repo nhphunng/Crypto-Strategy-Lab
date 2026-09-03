@@ -140,6 +140,18 @@ services:
       CSL_DATABASE_URL: ${CSL_DATABASE_URL}
       CSL_BINANCE_BASE_URL: ${CSL_BINANCE_BASE_URL:-https://api.binance.com}
       CSL_ENVIRONMENT: production
+      CSL_SEARCH_LOOP_ENABLED: "${CSL_SEARCH_LOOP_ENABLED:-true}"
+      CSL_SEARCH_LOOP_PAIR: "${CSL_SEARCH_LOOP_PAIR:-BTCUSDT}"
+      CSL_SEARCH_LOOP_TIMEFRAME: "${CSL_SEARCH_LOOP_TIMEFRAME:-15m}"
+      CSL_SEARCH_LOOP_CANDLES: "${CSL_SEARCH_LOOP_CANDLES:-500}"
+      CSL_SEARCH_LOOP_CANDIDATES_PER_CYCLE: "${CSL_SEARCH_LOOP_CANDIDATES_PER_CYCLE:-10}"
+      CSL_SEARCH_LOOP_MINIMUM_SIZE: "${CSL_SEARCH_LOOP_MINIMUM_SIZE:-2}"
+      CSL_SEARCH_LOOP_MAXIMUM_SIZE: "${CSL_SEARCH_LOOP_MAXIMUM_SIZE:-4}"
+      CSL_SEARCH_LOOP_BASE_SEED: "${CSL_SEARCH_LOOP_BASE_SEED:-424242}"
+      CSL_SEARCH_LOOP_INTERVAL_SECONDS: "${CSL_SEARCH_LOOP_INTERVAL_SECONDS:-1800}"
+      CSL_SENTIMENT_ANALYSIS_ENABLED: "${CSL_SENTIMENT_ANALYSIS_ENABLED:-true}"
+      CSL_SENTIMENT_ANALYSIS_INTERVAL_SECONDS: "${CSL_SENTIMENT_ANALYSIS_INTERVAL_SECONDS:-60}"
+      CSL_SENTIMENT_ANALYSIS_BATCH_SIZE: "${CSL_SENTIMENT_ANALYSIS_BATCH_SIZE:-50}"
       CSL_LLM_ENDPOINT: "${CSL_LLM_ENDPOINT:?Set the approved LLM endpoint in .env.production}"
       CSL_LLM_PROVIDER: ${CSL_LLM_PROVIDER:-configured-provider}
       CSL_LLM_MODEL_ID: "${CSL_LLM_MODEL_ID:?Set the approved LLM model ID in .env.production}"
@@ -172,14 +184,8 @@ services:
     secrets:
       - source: llm_api_key
         target: CSL_LLM_API_KEY
-        uid: "65532"
-        gid: "65532"
-        mode: 0400
       - source: source_encryption_key
         target: CSL_SOURCE_ENCRYPTION_KEY_BASE64
-        uid: "65532"
-        gid: "65532"
-        mode: 0400
 
     volumes:
       - generated_strategy_artifacts:/var/lib/crypto-lab/generated-strategies

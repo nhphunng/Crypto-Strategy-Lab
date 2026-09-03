@@ -14,25 +14,19 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from dataclasses import dataclass, field, replace
+from dataclasses import asdict, dataclass, field, replace
 from datetime import datetime, timedelta
 from decimal import Decimal
 from enum import StrEnum
 from typing import Any, Protocol
 from uuid import NAMESPACE_URL, UUID, uuid5
 
-from crypto_lab.application.strategies.save_configuration import (
-    SaveStrategyConfigurationCommand,
-    StrategyCombinationInput,
-    StrategyConfigurationMemberInput,
-)
+from crypto_lab.application.search_service import StrategySearchService
+from crypto_lab.domain.backtest.configuration import canonical_hash
 from crypto_lab.domain.market_data.candle import MarketSelection
 from crypto_lab.domain.market_data.dataset import DatasetStatus
 from crypto_lab.domain.market_data.ranges import TimeRange
 from crypto_lab.domain.market_data.timeframe import Timeframe
-from crypto_lab.domain.search import RandomSearchGenerator, StrategyCandidate
-from crypto_lab.domain.strategy.configuration import CombinationMethod
-from crypto_lab.domain.strategy.signal import SignalAction
 
 logger = logging.getLogger("crypto_lab.auto_evaluation")
 search_loop_logger = logging.getLogger("crypto_lab.search_loop")
@@ -278,6 +272,7 @@ class AutoEvaluationPipeline:
             settings.fee_rate,
             settings.slippage_rate,
             settings.random_seed,
+            sentiment_provenance=analysis.context_provenance.sentiment,
         )
 
 
@@ -327,16 +322,6 @@ def utc_window_end(clock: Any, timeframe: Timeframe) -> datetime:
     return timeframe.floor(clock.now())
 
 
-# ---------------------------------------------------------------------------
-# Search loop: a background process that continuously *discovers* new
-# strategy combinations (via the random search generator) instead of merely
-# re-backtesting already-registered strategies. It shares the auto-evaluation
-# module's idioms (deterministic identity via uuid5, catch-log-continue
-# failure isolation, start/stop as an asyncio.Task) but is additive: nothing
-# above this point is modified by it.
-# ---------------------------------------------------------------------------
-
-
 class SearchLoopStatus(StrEnum):
     RUNNING = "RUNNING"
     PAUSED = "PAUSED"
@@ -370,10 +355,11 @@ class SearchLoopCycleReport:
     failed: int = 0
     top_score: Decimal | None = None
     top_candidate: str | None = None
+    error: str | None = None
 
     @property
     def completed(self) -> bool:
-        return self.dataset_id is not None and not self.dataset_building
+        return self.dataset_id is not None and not self.dataset_building and self.error is None
 
 
 @dataclass(slots=True)
@@ -404,135 +390,85 @@ class SearchLoopStats:
 
 
 class SearchLoopPipeline:
-    """One cycle: generate genuinely new candidates, backtest, evaluate, rank.
-
-    Unlike AutoEvaluationPipeline (which replays the fixed set of registered
-    strategies), this pulls fresh combinations from RandomSearchGenerator on
-    every cycle. ``run_cycle`` is a pure function of ``cycle_index`` plus
-    whatever is currently in the registry/dataset -- it holds no mutable
-    instance state that affects identity -- so re-running the same index
-    resolves to the same run/job/evaluation identity instead of duplicating
-    work. That is what the idempotency test asserts.
-    """
+    """Schedule durable search runs through the shared generator and executor."""
 
     def __init__(
         self,
         *,
         settings: SearchLoopSettings,
         datasets: Any,
-        dataset_reader: Any,
         discovery: Any,
-        generator: RandomSearchGenerator,
-        configurations: Any,
-        analyzer: Any,
-        create_backtest: Any,
-        execute_backtest: Any,
-        evaluate_backtest: Any,
-        ingestion: Any,
+        search: StrategySearchService,
         clock: Any,
-        execution_policy: PolicyBundle,
-        evaluation_policy: PolicyBundle,
-        scoring_policy: PolicyBundle,
     ) -> None:
         self._settings = settings
         self._datasets = datasets
-        self._dataset_reader = dataset_reader
         self._discovery = discovery
-        self._generator = generator
-        self._configurations = configurations
-        self._analyzer = analyzer
-        self._create_backtest = create_backtest
-        self._execute_backtest = execute_backtest
-        self._evaluate_backtest = evaluate_backtest
-        self._ingestion = ingestion
+        self._search = search
         self._clock = clock
-        self._execution_policy = execution_policy
-        self._evaluation_policy = evaluation_policy
-        self._scoring_policy = scoring_policy
+        self._loop_key = canonical_hash(asdict(settings))
+
+    async def restore(self) -> int:
+        runs = await self._search.repository.background_runs(self._loop_key)
+        if not runs:
+            return 0
+        latest = runs[-1]
+        return int(latest.cycle_index) + (latest.status not in ("QUEUED", "RUNNING"))
+
+    async def snapshot(self) -> SearchLoopStats:
+        runs = await self._search.repository.background_runs(self._loop_key)
+        latest = runs[-1] if runs else None
+        return SearchLoopStats(
+            cycles_completed=sum(row.status == "COMPLETED" for row in runs),
+            candidates_generated=sum(row.generated for row in runs),
+            candidates_succeeded=sum(row.succeeded for row in runs),
+            candidates_failed=sum(row.failed for row in runs),
+            last_cycle_at=latest.completed_at if latest else None,
+            last_error=latest.failure_detail if latest else None,
+        )
 
     async def run_cycle(
         self, cycle_index: int, *, request_id: str | None = None
     ) -> SearchLoopCycleReport:
-        req_id = request_id or f"search-loop-{cycle_index}"
-        dataset_id, building = await self._ensure_dataset(req_id)
-        if dataset_id is None or building:
-            return SearchLoopCycleReport(cycle_index, dataset_id, building)
-
-        dataset = await self._dataset_reader.get_complete(dataset_id)
-        if dataset is None:
-            return SearchLoopCycleReport(cycle_index, dataset_id, False)
-
-        strategy_ids = tuple(entry.strategy_id for entry in self._discovery.list())
-        seed = self._settings.base_seed + cycle_index
-        try:
-            candidates = self._generator.generate(
-                strategy_ids,
-                self._settings.minimum_size,
-                self._settings.maximum_size,
-                self._settings.candidates_per_cycle,
-                seed,
-                dataset.metadata.candle_count,
+        runs = await self._search.repository.background_runs(self._loop_key)
+        existing = next((row for row in runs if row.cycle_index == cycle_index), None)
+        if existing is not None:
+            dataset_id = existing.dataset_id
+        else:
+            dataset_id, building = await self._ensure_dataset(
+                request_id or f"search-loop-{cycle_index}"
             )
-        except ValueError as error:
-            search_loop_logger.warning(
-                "search_loop_generation_failed",
-                extra={"fields": {"cycle": cycle_index, "reason": str(error)[:200]}},
-            )
-            return SearchLoopCycleReport(cycle_index, dataset_id, False)
-
-        generated = 0
-        succeeded = 0
-        failed = 0
-        top_score: Decimal | None = None
-        top_candidate: str | None = None
-        for sequence, candidate in enumerate(candidates, 1):
-            generated += 1
-            try:
-                score = await self._evaluate(
-                    dataset, dataset_id, candidate, cycle_index, seed, sequence, req_id
-                )
-            except Exception as error:  # one bad candidate must not stop the cycle
-                failed += 1
-                search_loop_logger.warning(
-                    "search_loop_candidate_failed",
-                    extra={
-                        "fields": {
-                            "cycle": cycle_index,
-                            "fingerprint": candidate.fingerprint,
-                            "reason": type(error).__name__,
-                            "detail": str(error)[:200],
-                        }
-                    },
-                )
-                continue
-            succeeded += 1
-            if top_score is None or score > top_score:
-                top_score, top_candidate = score, candidate.display_name
-
-        search_loop_logger.info(
-            "search_loop_cycle_completed",
-            extra={
-                "fields": {
-                    "cycle": cycle_index,
-                    "dataset_id": str(dataset_id),
-                    "generated": generated,
-                    "succeeded": succeeded,
-                    "failed": failed,
-                }
-            },
+            if dataset_id is None or building:
+                return SearchLoopCycleReport(cycle_index, dataset_id, building)
+        settings = self._settings
+        run = await self._search.create(
+            run_id=uuid5(SEARCH_LOOP_NAMESPACE, f"{self._loop_key}|{cycle_index}"),
+            origin="BACKGROUND",
+            loop_key=self._loop_key,
+            cycle_index=cycle_index,
+            dataset_id=dataset_id,
+            strategy_ids=tuple(entry.strategy_id for entry in self._discovery.list()),
+            minimum_size=settings.minimum_size,
+            maximum_size=settings.maximum_size,
+            candidate_limit=settings.candidates_per_cycle,
+            timeout_seconds=max(60, int(settings.interval_seconds)),
+            no_improvement_limit=settings.candidates_per_cycle,
+            seed=settings.base_seed + cycle_index,
         )
+        run = await self._search.wait(run.id)
         return SearchLoopCycleReport(
             cycle_index,
             dataset_id,
             False,
-            generated,
-            succeeded,
-            failed,
-            top_score,
-            top_candidate,
+            run.generated,
+            run.succeeded,
+            run.failed,
+            run.top_score,
+            run.top_candidate,
+            run.failure_detail
+            if run.status == "FAILED"
+            else ("Search was cancelled" if run.status == "CANCELLED" else None),
         )
-
-    # -- steps ---------------------------------------------------------------
 
     async def _ensure_dataset(self, request_id: str) -> tuple[UUID | None, bool]:
         """Materialize the configured window of closed Candles."""
@@ -563,82 +499,6 @@ class SearchLoopPipeline:
         end = timeframe.floor(self._clock.now())
         start = end - timedelta(seconds=timeframe.seconds * settings.candles)
         return TimeRange(start, end)
-
-    async def _evaluate(
-        self,
-        dataset: Any,
-        dataset_id: UUID,
-        candidate: StrategyCandidate,
-        cycle_index: int,
-        seed: int,
-        sequence: int,
-        request_id: str,
-    ) -> Decimal:
-        from crypto_lab.domain.backtest.configuration import BacktestConfiguration
-
-        configuration = await self._configurations.execute(
-            SaveStrategyConfigurationCommand(
-                display_name=candidate.display_name,
-                provider=dataset.metadata.selection.provider,
-                pair=dataset.metadata.selection.pair,
-                timeframe=dataset.metadata.selection.timeframe.value,
-                members=tuple(
-                    StrategyConfigurationMemberInput(
-                        item.strategy_id, item.strategy_version, item.parameters, None
-                    )
-                    for item in candidate.members
-                ),
-                combination=StrategyCombinationInput(
-                    CombinationMethod.MAJORITY, SignalAction.HOLD, Decimal("0.3"), Decimal("-0.3")
-                ),
-            )
-        )
-        analysis = await self._analyzer.analyze(
-            configuration.root_definition_id, dataset_id, request_id
-        )
-        definition, provenance = analysis.strategy_definition, analysis.context_provenance
-        # Deterministic identity keyed only by (cycle_index, candidate fingerprint),
-        # so re-running the same cycle resolves the same run/job instead of
-        # producing duplicates.
-        job_id = uuid5(SEARCH_LOOP_NAMESPACE, f"cycle|{cycle_index}|{candidate.fingerprint}")
-        metadata = dataset.metadata
-        run = await self._create_backtest.execute(
-            BacktestConfiguration(
-                uuid5(job_id, "run"),
-                job_id,
-                metadata.id,
-                metadata.schema_version,
-                metadata.checksum,
-                metadata.selection.provider,
-                metadata.selection.pair,
-                metadata.selection.timeframe,
-                metadata.time_range.start_time,
-                metadata.time_range.end_time,
-                definition.id,
-                definition.strategy_id,
-                str(definition.strategy_version),
-                str(analysis.contract_version),
-                definition.parameters.canonical_fingerprint,
-                provenance.context_fingerprint,
-                self._execution_policy.id,
-                str(self._execution_policy.version),
-                Decimal("10000"),
-                Decimal("0.0004"),
-                Decimal("0.0002"),
-                seed + sequence,
-            )
-        )
-        result = await self._execute_backtest.execute(run.configuration.run_id, request_id)
-        evaluation = await self._evaluate_backtest.execute(
-            result.id,
-            self._evaluation_policy.id,
-            str(self._evaluation_policy.version),
-            self._scoring_policy.id,
-            str(self._scoring_policy.version),
-        )
-        await self._ingestion.on_evaluation_completed(evaluation.id, request_id=request_id)
-        score: Decimal = evaluation.score
-        return score
 
 
 @dataclass(slots=True)
@@ -685,36 +545,47 @@ class SearchLoopRunner:
     def status(self) -> SearchLoopStats:
         return replace(self._stats, status=self._status)
 
+    async def snapshot(self) -> SearchLoopStats:
+        if isinstance(self.pipeline, SearchLoopPipeline):
+            persisted = await self.pipeline.snapshot()
+            return replace(
+                persisted,
+                status=self._status,
+                last_error=self._stats.last_error or persisted.last_error,
+            )
+        return self.status()
+
     async def _run(self) -> None:
+        restored = False
         while True:
             if self._status is SearchLoopStatus.PAUSED:
                 await asyncio.sleep(self.retry_seconds)
                 continue
             delay = self.interval_seconds
             try:
+                if not restored and isinstance(self.pipeline, SearchLoopPipeline):
+                    self._cycle_index = await self.pipeline.restore()
+                    self._stats = await self.pipeline.snapshot()
+                    restored = True
                 report = await self.pipeline.run_cycle(
                     self._cycle_index, request_id=f"search-loop-{self._cycle_index}"
                 )
-                self._stats.cycles_completed += 1
+                self._stats.cycles_completed += int(report.completed)
                 self._stats.candidates_generated += report.generated
                 self._stats.candidates_succeeded += report.succeeded
                 self._stats.candidates_failed += report.failed
                 self._stats.last_cycle_at = self.clock.now()
-                self._stats.last_error = None
+                self._stats.last_error = report.error
                 if not report.completed:
                     # A building/unavailable dataset is expected on a cold
                     # start; retry sooner.
                     delay = self.retry_seconds
-                # The cycle index always advances, even after a building
-                # dataset: re-running the SAME index only ever happens
-                # explicitly (e.g. in a test), never through the loop's own
-                # forward progression.
-                self._cycle_index += 1
+                if report.completed or report.error:
+                    self._cycle_index += 1
             except asyncio.CancelledError:  # pragma: no cover - shutdown path
                 raise
             except Exception as exc:
                 search_loop_logger.warning("search_loop_cycle_failed", exc_info=False)
                 self._stats.last_error = str(exc)[:500]
                 delay = self.retry_seconds
-                self._cycle_index += 1
             await asyncio.sleep(delay)

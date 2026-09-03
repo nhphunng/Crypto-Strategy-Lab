@@ -30,6 +30,15 @@ class NewsQuery:
     published_before: datetime | None = None
     page: int = 1
     page_size: int = 50
+    sentiment: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class SentimentSummary:
+    positive: int = 0
+    neutral: int = 0
+    negative: int = 0
+    pending: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -38,6 +47,7 @@ class NewsPage:
     page: int
     page_size: int
     total: int
+    sentiment_summary: SentimentSummary | None = None
 
 
 @dataclass(frozen=True, slots=True)

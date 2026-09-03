@@ -31,7 +31,7 @@ def run_alembic(command: str, revision: str) -> None:
             command,
             revision,
         ],
-        cwd=REPO_ROOT,
+        cwd=CONFIG.parent,
         env=environment,
         check=True,
         capture_output=True,
@@ -126,10 +126,10 @@ async def test_head_repairs_legacy_strategy_search_database_without_news_items()
 def test_alembic_has_one_head() -> None:
     result = subprocess.run(
         [sys.executable, "-m", "alembic", "-c", str(CONFIG), "heads"],
-        cwd=REPO_ROOT,
+        cwd=CONFIG.parent,
         check=True,
         capture_output=True,
         text=True,
     )
     heads = [line for line in result.stdout.splitlines() if line.strip().endswith("(head)")]
-    assert heads == ["20260901_011_news_sentiment (head)"]
+    assert heads == ["20260903_012_sentiment_search (head)"]

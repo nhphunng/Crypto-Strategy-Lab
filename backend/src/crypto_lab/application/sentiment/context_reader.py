@@ -15,6 +15,9 @@ class SentimentDataPoint:
     published_at: datetime
     analyzed_at: datetime
     signed_score: Decimal  # already in [-1, 1]; sign encodes label direction
+    news_id: str | None = None
+    analysis_id: str | None = None
+    content_fingerprint: str | None = None
 
 
 class SentimentContextReader(Protocol):

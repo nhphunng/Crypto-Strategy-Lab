@@ -11,6 +11,7 @@ from uuid import UUID
 from crypto_lab.domain.backtest.errors import BacktestError, BacktestErrorCode, BacktestIssue
 from crypto_lab.domain.market_data.candle import canonical_decimal, exact_decimal, format_utc_millis
 from crypto_lab.domain.market_data.timeframe import Timeframe, require_utc
+from crypto_lab.domain.sentiment.provenance import SentimentProvenance
 
 DECIMAL_QUANTUM = Decimal("0.000000000000000001")
 
@@ -108,6 +109,7 @@ class BacktestConfiguration:
     fee_rate: Decimal
     slippage_rate: Decimal
     random_seed: int
+    sentiment_provenance: tuple[SentimentProvenance, ...] = ()
 
     def __post_init__(self) -> None:
         issues: list[BacktestIssue] = []
@@ -177,27 +179,28 @@ class BacktestConfiguration:
 
     @property
     def input_fingerprint(self) -> str:
-        return canonical_hash(
-            {
-                "contractVersion": self.contract_version,
-                "contextFingerprint": self.context_fingerprint,
-                "datasetChecksum": self.dataset_checksum,
-                "datasetId": str(self.dataset_id),
-                "datasetSchemaVersion": self.dataset_schema_version,
-                "endTime": format_utc_millis(self.end_time),
-                "executionConfig": self.execution_config,
-                "executionPolicyId": str(self.execution_policy_id),
-                "executionPolicyVersion": self.execution_policy_version,
-                "pair": self.pair,
-                "parameterFingerprint": self.parameter_fingerprint,
-                "provider": self.provider,
-                "startTime": format_utc_millis(self.start_time),
-                "strategyDefinitionId": str(self.strategy_definition_id),
-                "strategyId": self.strategy_id,
-                "strategyVersion": self.strategy_version,
-                "timeframe": self.timeframe.value,
-            }
-        )
+        payload: dict[str, object] = {
+            "contractVersion": self.contract_version,
+            "contextFingerprint": self.context_fingerprint,
+            "datasetChecksum": self.dataset_checksum,
+            "datasetId": str(self.dataset_id),
+            "datasetSchemaVersion": self.dataset_schema_version,
+            "endTime": format_utc_millis(self.end_time),
+            "executionConfig": self.execution_config,
+            "executionPolicyId": str(self.execution_policy_id),
+            "executionPolicyVersion": self.execution_policy_version,
+            "pair": self.pair,
+            "parameterFingerprint": self.parameter_fingerprint,
+            "provider": self.provider,
+            "startTime": format_utc_millis(self.start_time),
+            "strategyDefinitionId": str(self.strategy_definition_id),
+            "strategyId": self.strategy_id,
+            "strategyVersion": self.strategy_version,
+            "timeframe": self.timeframe.value,
+        }
+        if self.sentiment_provenance:
+            payload["sentiment"] = [item.to_payload() for item in self.sentiment_provenance]
+        return canonical_hash(payload)
 
 
 @dataclass(frozen=True, slots=True)

@@ -106,6 +106,7 @@ class FakeDefinitions:
 @dataclass
 class FakeProvenance:
     context_fingerprint: str = DIGEST
+    sentiment: tuple = ()
 
 
 @dataclass
