@@ -23,9 +23,13 @@ function pct(n: number) {
 function MarketRow({
   m,
   onPick,
+  marketValues,
+  showMockValues,
 }: {
   m: MarketInfo
   onPick: () => void
+  marketValues?: { price: number; change24h: number }
+  showMockValues: boolean
 }) {
   const { watchlist, toggleWatch, market } = useStore()
   const fav = watchlist.includes(m.pair)
@@ -58,15 +62,17 @@ function MarketRow({
           </div>
           <div className="truncate text-[11px] text-faint">{m.name} priced in {m.quote}</div>
         </div>
-        {m.available ? (
+        {m.available && (marketValues !== undefined || showMockValues) ? (
           <div className="text-right">
             <div className="font-mono text-[12px] tabular-nums text-ink">
-              {m.price.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+              {(marketValues?.price ?? m.price).toLocaleString('en-US', { minimumFractionDigits: 2 })}
             </div>
-            <div className={cn('font-mono text-[11px] tabular-nums', m.change24h >= 0 ? 'text-pos' : 'text-neg')}>
-              {pct(m.change24h)}
+            <div className={cn('font-mono text-[11px] tabular-nums', (marketValues?.change24h ?? m.change24h) >= 0 ? 'text-pos' : 'text-neg')}>
+              {pct(marketValues?.change24h ?? m.change24h)}
             </div>
           </div>
+        ) : m.available ? (
+          <span className="text-[10px] text-faint">Select to load</span>
         ) : (
           <span className="rounded-[3px] border border-subtle bg-workspace px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-faint">
             Coming later
@@ -83,10 +89,18 @@ export function MarketSelector({
   trigger,
   align = 'left',
   width = 320,
+  availablePairs,
+  marketValues,
+  showMockValues = true,
+  loading = false,
 }: {
   trigger: (props: { onClick: () => void; open: boolean }) => ReactNode
   align?: 'left' | 'right'
   width?: number
+  availablePairs?: readonly string[]
+  marketValues?: Readonly<Record<string, { price: number; change24h: number }>>
+  showMockValues?: boolean
+  loading?: boolean
 }) {
   const { setMarket, watchlist, toast } = useStore()
   const { market: marketService } = useServices()
@@ -115,7 +129,13 @@ export function MarketSelector({
     m.base.toLowerCase().includes(query) ||
     m.name.toLowerCase().includes(query)
 
-  const filtered = marketService.listMarkets(query).filter(match)
+  const markets = availablePairs === undefined
+    ? marketService.listMarkets(query)
+    : availablePairs
+        .map((pair) => marketService.getMarket(pair))
+        .filter((item): item is MarketInfo => item !== undefined)
+        .map((item) => ({ ...item, available: true }))
+  const filtered = markets.filter(match)
   const watched = filtered.filter((m) => watchlist.includes(m.pair))
   const others = filtered.filter((m) => !watchlist.includes(m.pair))
 
@@ -160,7 +180,13 @@ export function MarketSelector({
                   Watchlist
                 </div>
                 {watched.map((m) => (
-                  <MarketRow key={m.pair} m={m} onPick={() => pick(m)} />
+                  <MarketRow
+                    key={m.pair}
+                    m={m}
+                    onPick={() => pick(m)}
+                    marketValues={marketValues?.[m.pair]}
+                    showMockValues={showMockValues}
+                  />
                 ))}
               </>
             )}
@@ -170,16 +196,26 @@ export function MarketSelector({
                   All markets
                 </div>
                 {others.map((m) => (
-                  <MarketRow key={m.pair} m={m} onPick={() => pick(m)} />
+                  <MarketRow
+                    key={m.pair}
+                    m={m}
+                    onPick={() => pick(m)}
+                    marketValues={marketValues?.[m.pair]}
+                    showMockValues={showMockValues}
+                  />
                 ))}
               </>
             )}
             {filtered.length === 0 && (
-              <p className="px-2 py-6 text-center text-[12px] text-faint">No markets match “{q}”.</p>
+              <p className="px-2 py-6 text-center text-[12px] text-faint">
+                {loading ? 'Loading supported markets…' : `No markets match “${q}”.`}
+              </p>
             )}
           </div>
           <div className="border-t border-subtle px-3 py-2 text-[11px] leading-relaxed text-faint">
-            Supported live prototype pairs: BTC / USDT, ETH / USDT, and SOL / USDT.
+            {availablePairs === undefined
+              ? 'Configured market contexts.'
+              : 'Supported pairs reported by the backend.'}
           </div>
         </div>
       )}
