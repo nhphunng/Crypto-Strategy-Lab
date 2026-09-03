@@ -99,6 +99,28 @@ def create_app(container: Container | None = None) -> FastAPI:
             status_code=200 if healthy else 503,
         )
 
+    @app.get("/health/ready/strategy-generation", include_in_schema=False)
+    async def strategy_generation_ready(request: Request) -> JSONResponse:
+        container = request.app.state.container
+        configured = all(
+            component is not None
+            for component in (
+                container.strategy_generation_repository,
+                container.strategy_generation,
+                container.strategy_activation,
+                container.generated_artifacts,
+                container.generated_runtime,
+            )
+        )
+        if not configured:
+            return JSONResponse({"status": "DOWN"}, status_code=503)
+        assert container.generated_runtime is not None
+        healthy = await container.generated_runtime.ready()
+        return JSONResponse(
+            {"status": "UP" if healthy else "DOWN"},
+            status_code=200 if healthy else 503,
+        )
+
     return app
 
 

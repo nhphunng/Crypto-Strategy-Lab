@@ -2,7 +2,6 @@ import {
   CandlestickChart,
   History,
   Newspaper,
-  ServerCog,
   Trophy,
   Workflow,
   type LucideIcon,
@@ -16,7 +15,6 @@ export const NAV_ITEMS: { page: Exclude<Page, 'landing'>; label: string; icon: L
   { page: 'backtests', label: 'Backtests', icon: History },
   { page: 'leaderboard', label: 'Leaderboard', icon: Trophy },
   { page: 'news', label: 'News & Sentiment', icon: Newspaper },
-  { page: 'operations', label: 'Operations', icon: ServerCog },
 ]
 
 export const PAGE_PATHS: Record<Page, string> = {

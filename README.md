@@ -119,23 +119,26 @@ docker compose down
 ### 5. Bật Generated Strategy an toàn
 
 Profile mặc định không nhận LLM secret và vì vậy fail closed. Để bật User Stories 5–7, lấy
-credential thật của provider và tạo một wrapping key 256-bit:
+credential thật của provider và tạo một wrapping key 256-bit. Lưu hai giá trị nhạy cảm trong
+thư mục `.runtime-secrets/` đã được Git ignore; không đặt giá trị secret trực tiếp trong `.env`:
 
 ```bash
-openssl rand -base64 32
+mkdir -p .runtime-secrets
+openssl rand -base64 32 > .runtime-secrets/source_encryption_key
+# Lưu provider API key vào .runtime-secrets/llm_api_key bằng secret manager/editor an toàn.
 ```
 
-Thêm credential và output của lệnh trên trực tiếp vào file `.env` local đã được Git ignore. Không
-commit, log, đưa các giá trị này xuống browser, hoặc sao chép chúng vào source/test fixture:
+File `.env` chỉ chứa cấu hình không nhạy cảm và đường dẫn tới hai secret file. Không commit, log,
+đưa secret xuống browser, hoặc sao chép chúng vào source/test fixture:
 
 ```dotenv
 CSL_LLM_ENDPOINT=https://provider.example/v1/strategy-generation
 CSL_LLM_PROVIDER=approved-provider
 CSL_LLM_MODEL_ID=approved-model
 CSL_LLM_MODEL_VERSION=provider-version
-CSL_LLM_API_KEY=<provider-api-key>
+CSL_LLM_API_KEY_HOST_FILE=.runtime-secrets/llm_api_key
 CSL_LLM_DATA_POLICY_CONFIRMED=true
-CSL_SOURCE_ENCRYPTION_KEY_BASE64=<base64-output-of-openssl-rand>
+CSL_SOURCE_ENCRYPTION_KEY_HOST_FILE=.runtime-secrets/source_encryption_key
 CSL_SOURCE_ENCRYPTION_KEY_ID=deployment-key-v1
 ```
 
@@ -149,10 +152,25 @@ docker compose \
   up --build -d
 ```
 
-Compose chỉ truyền hai secret từ `.env` vào trusted API process. Profile vẫn dùng volume artifact mã
+Compose mount hai secret thành file chỉ đọc trong trusted API process. Profile vẫn dùng volume artifact mã
 hóa mode `0700` và một Docker daemon chuyên biệt không chứa application secrets. API không mount
 Docker socket của host; mỗi sandbox invocation nhận `Env: []` và vẫn là ephemeral, non-root,
 networkless, read-only, capability-free, resource-bounded theo ADR-006.
+
+Production dùng duy nhất file Compose production; startup và CD sẽ fail nếu thiếu secret file,
+cấu hình LLM, migration, artifact storage, hoặc sandbox readiness:
+
+```bash
+docker compose \
+  --env-file .env.production \
+  -f docker-compose.prod.yml \
+  up -d --wait --wait-timeout 60
+```
+
+Trong lần deploy chuyển đổi, CD tạo các file trên từ hai biến legacy
+`CSL_LLM_API_KEY` và `CSL_SOURCE_ENCRYPTION_KEY_BASE64` trong `.env.production` nếu file chưa tồn
+tại; giá trị không được in hoặc truyền vào environment của API. Sau lần deploy thành công đầu tiên,
+xóa hai biến legacy khỏi `.env.production`; các lần deploy tiếp theo chỉ dùng secret file.
 
 `CSL_LLM_PROVIDER` chọn dialect: chứa `openai`/`gpt` sẽ nói contract OpenAI Chat Completions,
 chứa `gemini`/`google` sẽ nói contract Gemini `generateContent`, giá trị khác dùng contract

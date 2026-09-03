@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import {
   CandlestickChart,
   ChevronDown,
@@ -12,71 +12,59 @@ import {
   Trophy,
   Workflow,
 } from 'lucide-react'
-import { useStore, type ConnState } from '../lib/store'
+import { useStore } from '../lib/store'
 import { NAV_ITEMS } from '../config'
-import { useServices } from '../services/registry'
+import { useTopBarMarketData } from '../features/market-chart/hooks/useTopBarMarketData'
+import type { ConnectionState } from '../features/market-chart/types'
 import { cn, IconBtn, LearnTooltip, Segmented, Toggle } from './ui'
 import { CoinIcon, MarketSelector } from './MarketSelector'
 import { CommandPalette } from './CommandPalette'
 
-const CONN_META: Record<ConnState, { label: string; color: string; spin?: boolean; pulse?: boolean }> = {
-  live: { label: 'Live', color: 'text-pos', pulse: true },
-  reconnecting: { label: 'Reconnecting', color: 'text-warn', spin: true },
-  stale: { label: 'Stale · 18s', color: 'text-warn' },
+const CONN_META: Record<ConnectionState, { label: string; color: string; pulse?: boolean }> = {
+  LIVE: { label: 'Live', color: 'text-pos', pulse: true },
+  LOADING: { label: 'Loading', color: 'text-faint' },
+  RECONNECTING: { label: 'Reconnecting', color: 'text-warn', pulse: true },
+  STALE: { label: 'Stale', color: 'text-warn' },
+  ERROR: { label: 'Error', color: 'text-neg' },
+  RELEASED: { label: 'Offline', color: 'text-faint' },
 }
 
-function ConnectionStatus() {
-  const { conn, setConn } = useStore()
-  const [open, setOpen] = useState(false)
-  const m = CONN_META[conn]
+function ConnectionStatus({ state, onRetry }: { state: ConnectionState; onRetry: () => void }) {
+  const m = CONN_META[state]
+  const canRetry = state === 'ERROR' || state === 'STALE' || state === 'RECONNECTING'
   return (
-    <div className="relative">
-      <button
-        onClick={() => setOpen((o) => !o)}
-        className="flex items-center gap-1.5 rounded-[5px] border border-subtle bg-workspace px-2 py-1 text-[12px] hover:bg-surface-hover"
-        title="Provider: Binance · toggle demo connection state"
-      >
-        <span
-          className={cn(
-            'h-1.5 w-1.5 rounded-full bg-current',
-            m.color,
-            m.pulse && 'csl-pulse',
-          )}
-        />
-        <span className={cn('font-medium', m.color)}>{m.label}</span>
-      </button>
-      {open && (
-        <>
-          <div className="fixed inset-0 z-20" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 z-30 mt-1 w-40 rounded-[8px] border border-line bg-surface p-1 shadow-xl">
-            <div className="px-2 py-1 text-[10px] uppercase tracking-wide text-faint">Demo state</div>
-            {(['live', 'reconnecting', 'stale'] as ConnState[]).map((c) => (
-              <button
-                key={c}
-                onClick={() => {
-                  setConn(c)
-                  setOpen(false)
-                }}
-                className={cn(
-                  'flex w-full items-center gap-2 rounded-[4px] px-2 py-1.5 text-left text-[12px] hover:bg-surface-hover',
-                  conn === c ? 'text-ink' : 'text-dim',
-                )}
-              >
-                <span className={cn('h-1.5 w-1.5 rounded-full bg-current', CONN_META[c].color)} />
-                {CONN_META[c].label}
-              </button>
-            ))}
-          </div>
-        </>
+    <button
+      type="button"
+      onClick={canRetry ? onRetry : undefined}
+      className={cn(
+        'flex items-center gap-1.5 rounded-[5px] border border-subtle bg-workspace px-2 py-1 text-[12px]',
+        canRetry && 'hover:bg-surface-hover',
       )}
-    </div>
+      title={canRetry ? 'Retry the market-data connection' : `Market data: ${m.label}`}
+    >
+      <span className={cn('h-1.5 w-1.5 rounded-full bg-current', m.color, m.pulse && 'csl-pulse')} />
+      <span className={cn('font-medium', m.color)}>{m.label}</span>
+    </button>
   )
 }
 
 function TopBar({ onOpenCommandPalette }: { onOpenCommandPalette: () => void }) {
-  const { navigate, showExplain, toggleExplain, market, reconnect } = useStore()
-  const { operations } = useServices()
-  const pos = market.change24h >= 0
+  const { navigate, showExplain, toggleExplain, market } = useStore()
+  const summary = useTopBarMarketData(market.pair)
+  const [now, setNow] = useState(() => new Date())
+  const marketValues = useMemo(
+    () => summary.price === null || summary.change24h === null
+      ? {}
+      : { [market.pair]: { price: summary.price, change24h: summary.change24h } },
+    [market.pair, summary.change24h, summary.price],
+  )
+  const pos = (summary.change24h ?? 0) >= 0
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(new Date()), 1_000)
+    return () => window.clearInterval(timer)
+  }, [])
+
   return (
     <header className="flex h-12 shrink-0 items-center gap-3 border-b border-line bg-canvas px-3">
       <button onClick={() => navigate('landing')} className="flex items-center gap-2">
@@ -90,6 +78,10 @@ function TopBar({ onOpenCommandPalette }: { onOpenCommandPalette: () => void }) 
 
       {/* global market selector */}
       <MarketSelector
+        availablePairs={summary.pairs}
+        marketValues={marketValues}
+        showMockValues={false}
+        loading={summary.pairsLoading}
         trigger={({ onClick, open }) => (
           <button
             onClick={onClick}
@@ -109,11 +101,12 @@ function TopBar({ onOpenCommandPalette }: { onOpenCommandPalette: () => void }) 
       {/* price */}
       <div className="flex items-baseline gap-2">
         <span className="font-mono text-[13px] font-semibold tabular-nums text-ink">
-          {market.price.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+          {summary.price === null
+            ? '—'
+            : summary.price.toLocaleString('en-US', { minimumFractionDigits: 2 })}
         </span>
         <span className={cn('font-mono text-[12px] tabular-nums', pos ? 'text-pos' : 'text-neg')}>
-          {pos ? '+' : ''}
-          {market.change24h}%
+          {summary.change24h === null ? '—' : `${pos ? '+' : ''}${summary.change24h.toFixed(2)}%`}
         </span>
       </div>
 
@@ -136,9 +129,11 @@ function TopBar({ onOpenCommandPalette }: { onOpenCommandPalette: () => void }) 
           <span>Search</span>
           <kbd className="rounded-[3px] border border-subtle bg-surface px-1 font-mono text-[10px]">⌘K</kbd>
         </button>
-        <ConnectionStatus />
-        <span className="hidden font-mono text-[11px] text-faint xl:inline">{operations.now()}</span>
-        <IconBtn title="Reconnect" onClick={reconnect} aria-label="Reconnect market data">
+        <ConnectionStatus state={summary.connectionState} onRetry={summary.retry} />
+        <span className="hidden font-mono text-[11px] text-faint xl:inline">
+          {now.toLocaleTimeString([], { hour12: false })}
+        </span>
+        <IconBtn title="Reconnect" onClick={summary.retry} aria-label="Reconnect market data">
           <RefreshCw size={14} />
         </IconBtn>
       </div>

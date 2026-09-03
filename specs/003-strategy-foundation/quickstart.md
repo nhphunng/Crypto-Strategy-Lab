@@ -31,9 +31,11 @@ Install the locked backend dependencies, apply migrations, and load deterministi
 
 ### Secure generated-strategy deployment
 
-Live generation uses the additive `docker-compose.generated.yml` profile. Configure the provider
-credential as `CSL_LLM_API_KEY` and a base64-encoded 256-bit source/artifact wrapping key as
-`CSL_SOURCE_ENCRYPTION_KEY_BASE64` directly in the local Git-ignored `.env`. Also configure the
+Production generation is included directly in `docker-compose.prod.yml`; local generated-strategy
+development may use the additive `docker-compose.generated.yml` profile. Store the provider
+credential and a base64-encoded 256-bit source/artifact wrapping key in the Git-ignored files
+`.runtime-secrets/llm_api_key` and `.runtime-secrets/source_encryption_key`. Configure only their
+host paths plus the
 non-secret provider/model fields and explicitly set `CSL_LLM_DATA_POLICY_CONFIRMED=true` only after
 the provider satisfies the approved no-training/minimum-retention policy. Never commit, log, return,
 or place these secret values in prompts, generated artifacts, or test fixtures.
@@ -50,9 +52,9 @@ CSL_LLM_ENDPOINT=https://provider.example/v1/strategy-generation
 CSL_LLM_PROVIDER=approved-provider
 CSL_LLM_MODEL_ID=approved-model
 CSL_LLM_MODEL_VERSION=provider-version
-CSL_LLM_API_KEY=<provider-api-key>
+CSL_LLM_API_KEY_HOST_FILE=.runtime-secrets/llm_api_key
 CSL_LLM_DATA_POLICY_CONFIRMED=true
-CSL_SOURCE_ENCRYPTION_KEY_BASE64=<base64-encoded-32-byte-key>
+CSL_SOURCE_ENCRYPTION_KEY_HOST_FILE=.runtime-secrets/source_encryption_key
 CSL_SOURCE_ENCRYPTION_KEY_ID=deployment-key-v1
 ```
 

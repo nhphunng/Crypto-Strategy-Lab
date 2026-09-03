@@ -41,12 +41,15 @@ services:
       CSL_LLM_PROVIDER: ${CSL_LLM_PROVIDER:-configured-provider}
       CSL_LLM_MODEL_ID: ${CSL_LLM_MODEL_ID:-}
       CSL_LLM_MODEL_VERSION: ${CSL_LLM_MODEL_VERSION:-}
-      CSL_LLM_API_KEY: "${CSL_LLM_API_KEY:?Set CSL_LLM_API_KEY in the Git-ignored .env file}"
       CSL_LLM_DATA_POLICY_CONFIRMED: "${CSL_LLM_DATA_POLICY_CONFIRMED:?Acknowledge the provider data policy in the Git-ignored .env file}"
-      CSL_SOURCE_ENCRYPTION_KEY_BASE64: "${CSL_SOURCE_ENCRYPTION_KEY_BASE64:?Set a base64-encoded 256-bit key in the Git-ignored .env file}"
       CSL_SOURCE_ENCRYPTION_KEY_ID: ${CSL_SOURCE_ENCRYPTION_KEY_ID:-deployment-key-v1}
       CSL_GENERATED_ARTIFACT_ROOT: /var/lib/crypto-lab/generated-strategies
       CSL_STRATEGY_SANDBOX_ENGINE_URL: http://sandbox-docker:2375
+    secrets:
+      - source: llm_api_key
+        target: CSL_LLM_API_KEY
+      - source: source_encryption_key
+        target: CSL_SOURCE_ENCRYPTION_KEY_BASE64
     volumes:
       - generated_strategy_artifacts:/var/lib/crypto-lab/generated-strategies
     networks:
@@ -57,6 +60,12 @@ services:
         condition: service_completed_successfully
       sandbox-docker:
         condition: service_healthy
+
+secrets:
+  llm_api_key:
+    file: ${CSL_LLM_API_KEY_HOST_FILE:-.runtime-secrets/llm_api_key}
+  source_encryption_key:
+    file: ${CSL_SOURCE_ENCRYPTION_KEY_HOST_FILE:-.runtime-secrets/source_encryption_key}
 
 volumes:
   generated_strategy_artifacts:
