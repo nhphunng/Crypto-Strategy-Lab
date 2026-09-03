@@ -15,7 +15,7 @@ test("propagates pair and timeframe context across realtime chart lifecycles", a
   const firstBtcGenerations: Record<string, number> = {};
   const historyRequests: Selection[] = [];
   const historyOpenTimes = new Map<string, string>();
-  let socket: WebSocketRoute | undefined;
+  const sockets = new Set<WebSocketRoute>();
   let eventSequence = 0;
 
   const selection = (pair: string, timeframe: string): Selection => ({
@@ -49,8 +49,7 @@ test("propagates pair and timeframe context across realtime chart lifecycles", a
       .map(([slotId]) => slotId)
       .sort();
     if (slotIds.length === 0) return;
-    socket?.send(
-      JSON.stringify({
+    const message = JSON.stringify({
         eventType: "SUBSCRIPTION_STATE_CHANGED",
         version: "1",
         eventId: `pair-e2e-state-${++eventSequence}`,
@@ -64,8 +63,8 @@ test("propagates pair and timeframe context across realtime chart lifecycles", a
           state: "LIVE",
           attempt: 0,
         },
-      }),
-    );
+      });
+    for (const activeSocket of sockets) activeSocket.send(message);
   };
   const sendCandle = (
     selected: Selection,
@@ -78,8 +77,7 @@ test("propagates pair and timeframe context across realtime chart lifecycles", a
         .map(([slotId]) => [slotId, generations.get(slotId) ?? 0]),
     ),
   ) => {
-    socket?.send(
-      JSON.stringify({
+    const message = JSON.stringify({
         eventType: "CANDLE_UPDATED",
         version: "1",
         eventId: `pair-e2e-candle-${++eventSequence}`,
@@ -90,8 +88,8 @@ test("propagates pair and timeframe context across realtime chart lifecycles", a
           revision,
           candle: candle(selected, close, openTime),
         },
-      }),
-    );
+      });
+    for (const activeSocket of sockets) activeSocket.send(message);
   };
   const subscribeCommands = () =>
     commands.filter((command) => command.eventType === "SUBSCRIBE_MARKET_DATA");
@@ -156,7 +154,7 @@ test("propagates pair and timeframe context across realtime chart lifecycles", a
     });
   });
   await page.routeWebSocket("**/ws/v1/market-data", (webSocket) => {
-    socket = webSocket;
+    sockets.add(webSocket);
     webSocket.onMessage((message) => {
       const command = JSON.parse(String(message)) as Record<string, unknown>;
       commands.push(command);
@@ -186,7 +184,7 @@ test("propagates pair and timeframe context across realtime chart lifecycles", a
   });
 
   await page.goto("/market");
-  await expect.poll(() => (socket === undefined ? 0 : 1)).toBe(1);
+  await expect.poll(() => sockets.size).toBe(2);
   await expect(page.locator("#status-chart-slot-1")).toContainText("Live");
   await page.locator("#btn-add-chart").click();
   await expect(page.locator("#status-chart-slot-2")).toContainText("Live");
@@ -196,15 +194,18 @@ test("propagates pair and timeframe context across realtime chart lifecycles", a
   await dashboardPair.selectOption("ETHUSDT");
   await expect(page.locator("#chart-ethusdt-5m-slot-1")).toBeVisible();
   await expect(page.locator("#chart-ethusdt-5m-slot-2")).toBeVisible();
-  await expect.poll(() => historyCount("ETHUSDT", "5m")).toBe(1);
+  // The two dashboard slots share one history query. The independently scoped
+  // Topbar summary owns a second 5m history query for its rolling 24h window.
+  await expect.poll(() => historyCount("ETHUSDT", "5m")).toBe(2);
   await expect.poll(
     () =>
       subscribeCommands().filter((command) => {
         const selected = commandSelection(command);
         return selected?.pair === "ETHUSDT" && selected.timeframe === "5m";
       }).length,
-  ).toBe(2);
+  ).toBe(3);
   expect([...bindings.values()]).toEqual([
+    selection("ETHUSDT", "5m"),
     selection("ETHUSDT", "5m"),
     selection("ETHUSDT", "5m"),
   ]);
@@ -241,12 +242,12 @@ test("propagates pair and timeframe context across realtime chart lifecycles", a
   await dashboardPair.selectOption("SOLUSDT");
   await expect(page.locator("#chart-solusdt-1h-slot-1")).toBeVisible();
   await expect(page.locator("#chart-solusdt-5m-slot-2")).toBeVisible();
-  await expect.poll(() => historyCount("SOLUSDT")).toBe(2);
+  await expect.poll(() => historyCount("SOLUSDT")).toBe(3);
   await expect.poll(
     () =>
       subscribeCommands().filter((command) => commandSelection(command)?.pair === "SOLUSDT")
         .length,
-  ).toBe(2);
+  ).toBe(3);
   const solSummary = page.locator(
     "#chart-solusdt-1h-slot-1 [aria-label='Latest Candle summary']",
   );
