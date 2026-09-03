@@ -68,6 +68,12 @@ jobs:
           git fetch origin main
           git reset --hard origin/main
 
+          # Materialize the two runtime-only files before Compose can recreate
+          # the API. Existing files win; legacy .env.production values are
+          # migrated without being printed or exported to the service.
+          python3 .github/scripts/prepare-production-secrets.py \
+            --env-file .env.production
+
           docker compose \
             --env-file .env.production \
             -f docker-compose.prod.yml \

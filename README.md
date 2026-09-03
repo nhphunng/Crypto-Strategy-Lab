@@ -167,6 +167,11 @@ docker compose \
   up -d --wait --wait-timeout 60
 ```
 
+Trong lần deploy chuyển đổi, CD tạo các file trên từ hai biến legacy
+`CSL_LLM_API_KEY` và `CSL_SOURCE_ENCRYPTION_KEY_BASE64` trong `.env.production` nếu file chưa tồn
+tại; giá trị không được in hoặc truyền vào environment của API. Sau lần deploy thành công đầu tiên,
+xóa hai biến legacy khỏi `.env.production`; các lần deploy tiếp theo chỉ dùng secret file.
+
 `CSL_LLM_PROVIDER` chọn dialect: chứa `openai`/`gpt` sẽ nói contract OpenAI Chat Completions,
 chứa `gemini`/`google` sẽ nói contract Gemini `generateContent`, giá trị khác dùng contract
 provider-neutral gốc (dành cho fixture xác định hoặc provider có proxy tương thích). Cả ba đường

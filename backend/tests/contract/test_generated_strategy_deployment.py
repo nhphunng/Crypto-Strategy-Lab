@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import base64
+import stat
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -125,7 +128,7 @@ def test_production_compose_uses_file_secrets_storage_and_dedicated_engine() -> 
         "CSL_LLM_API_KEY",
         "CSL_SOURCE_ENCRYPTION_KEY_BASE64",
     }
-    assert all(secret["mode"] == 0o400 for secret in api["secrets"])
+    assert all(set(secret) == {"source", "target"} for secret in api["secrets"])
     assert api["volumes"] == [
         "generated_strategy_artifacts:/var/lib/crypto-lab/generated-strategies"
     ]
@@ -145,6 +148,65 @@ def test_cd_uses_single_production_compose_and_checks_generation_readiness() -> 
     assert "docker-compose.generated.yml" not in workflow
     assert workflow.count("-f docker-compose.prod.yml") >= 4
     assert "/health/ready/strategy-generation" in workflow
+    assert "prepare-production-secrets.py" in workflow
+
+
+def test_cd_secret_preparation_migrates_legacy_values_without_leaking_them(
+    tmp_path: Path,
+) -> None:
+    root = Path(__file__).parents[3]
+    env_file = tmp_path / ".env.production"
+    env_file.write_text(
+        "\n".join(
+            (
+                "CSL_LLM_API_KEY=not-a-real-provider-key",
+                f"CSL_SOURCE_ENCRYPTION_KEY_BASE64={base64.b64encode(b'k' * 32).decode()}",
+            )
+        ),
+        encoding="utf-8",
+    )
+
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(root / ".github/scripts/prepare-production-secrets.py"),
+            "--project-root",
+            str(tmp_path),
+            "--env-file",
+            str(env_file),
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    llm_key = tmp_path / ".runtime-secrets/llm_api_key"
+    encryption_key = tmp_path / ".runtime-secrets/source_encryption_key"
+    assert llm_key.read_text(encoding="utf-8").strip() == "not-a-real-provider-key"
+    assert base64.b64decode(encryption_key.read_text().strip(), validate=True) == b"k" * 32
+    assert stat.S_IMODE(llm_key.parent.stat().st_mode) == 0o700
+    assert stat.S_IMODE(llm_key.stat().st_mode) == 0o444
+    assert stat.S_IMODE(encryption_key.stat().st_mode) == 0o444
+    assert "not-a-real-provider-key" not in completed.stdout
+
+    env_file.write_text(
+        "CSL_LLM_API_KEY=replacement-must-not-overwrite-existing-file\n",
+        encoding="utf-8",
+    )
+    subprocess.run(
+        [
+            sys.executable,
+            str(root / ".github/scripts/prepare-production-secrets.py"),
+            "--project-root",
+            str(tmp_path),
+            "--env-file",
+            str(env_file),
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    assert llm_key.read_text(encoding="utf-8").strip() == "not-a-real-provider-key"
 
 
 def test_dotenv_secrets_and_artifacts_are_excluded_from_git_and_image_context() -> None:
